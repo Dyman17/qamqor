@@ -31,3 +31,4 @@ export class UpdateDeviceDto {
   @IsString()
   secretKey?: string;
 }
+

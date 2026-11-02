@@ -78,3 +78,4 @@ export class DevicesController {
     return this.devicesService.deleteDevice(user.id, farmId, deviceId);
   }
 }
+

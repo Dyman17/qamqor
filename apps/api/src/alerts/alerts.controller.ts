@@ -68,3 +68,4 @@ export class AlertsController {
     return this.alertsService.updateAlertStatus(user.id, farmId, alertId, status);
   }
 }
+

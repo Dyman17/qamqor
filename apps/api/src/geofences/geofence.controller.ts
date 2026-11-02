@@ -78,3 +78,4 @@ export class GeofenceController {
     return this.geofenceService.deleteGeofence(user.id, farmId, geofenceId);
   }
 }
+

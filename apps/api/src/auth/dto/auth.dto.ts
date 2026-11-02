@@ -30,3 +30,4 @@ export class LoginUserDto implements LoginDto {
   @IsNotEmpty({ message: 'Пароль обязателен' })
   password!: string;
 }
+

@@ -77,3 +77,4 @@ export class UpdateAnimalInputDto {
   @IsString()
   activeGeofenceId?: string | null;
 }
+

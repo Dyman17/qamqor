@@ -8,3 +8,4 @@ import { AnimalsService } from './animals.service';
   exports: [AnimalsService],
 })
 export class AnimalsModule {}
+

@@ -41,3 +41,4 @@ export class UpdateGeofenceInputDto {
     coordinates: number[][][];
   };
 }
+

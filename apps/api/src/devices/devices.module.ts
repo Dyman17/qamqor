@@ -8,3 +8,4 @@ import { DevicesService } from './devices.service';
   exports: [DevicesService],
 })
 export class DevicesModule {}
+

@@ -9,6 +9,8 @@ import { GeofenceModule } from './geofences/geofence.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { CameraModule } from './camera/camera.module';
+import { MockModule } from './mock/mock.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AlertsModule,
     TelemetryModule,
     AnalyticsModule,
+    CameraModule,
+    MockModule,
   ],
 })
 export class AppModule {}

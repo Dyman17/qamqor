@@ -47,3 +47,4 @@ export class FarmsController {
     return this.farmsService.updateFarm(user.id, farmId, dto);
   }
 }
+

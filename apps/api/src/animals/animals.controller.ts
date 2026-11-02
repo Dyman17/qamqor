@@ -104,3 +104,4 @@ export class AnimalsController {
     return this.animalsService.deleteAnimal(user.id, farmId, animalId);
   }
 }
+
