@@ -135,7 +135,7 @@ export class GeofenceService {
   async createGeofence(userId: string, farmId: string, dto: CreateGeofenceInputDto) {
     await this.verifyFarmAccess(userId, farmId);
 
-    return this.prisma.geofence.create({
+    const geofence = await this.prisma.geofence.create({
       data: {
         farmId,
         name: dto.name.trim(),
@@ -144,6 +144,15 @@ export class GeofenceService {
         polygonJson: dto.polygonJson as any,
       },
     });
+
+    if (dto.animalIds && Array.isArray(dto.animalIds) && dto.animalIds.length > 0) {
+      await this.prisma.animal.updateMany({
+        where: { id: { in: dto.animalIds }, farmId },
+        data: { activeGeofenceId: geofence.id },
+      });
+    }
+
+    return this.getGeofenceById(userId, farmId, geofence.id);
   }
 
   async updateGeofence(
@@ -162,7 +171,7 @@ export class GeofenceService {
       throw new NotFoundException('Геозона не найдена');
     }
 
-    return this.prisma.geofence.update({
+    const updated = await this.prisma.geofence.update({
       where: { id: geofenceId },
       data: {
         ...(dto.name && { name: dto.name.trim() }),
@@ -171,6 +180,23 @@ export class GeofenceService {
         ...(dto.polygonJson && { polygonJson: dto.polygonJson as any }),
       },
     });
+
+    if (dto.animalIds && Array.isArray(dto.animalIds)) {
+      // Unassign existing
+      await this.prisma.animal.updateMany({
+        where: { activeGeofenceId: geofenceId, farmId },
+        data: { activeGeofenceId: null },
+      });
+      // Assign new
+      if (dto.animalIds.length > 0) {
+        await this.prisma.animal.updateMany({
+          where: { id: { in: dto.animalIds }, farmId },
+          data: { activeGeofenceId: geofenceId },
+        });
+      }
+    }
+
+    return this.getGeofenceById(userId, farmId, geofenceId);
   }
 
   async deleteGeofence(userId: string, farmId: string, geofenceId: string) {

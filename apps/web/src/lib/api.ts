@@ -187,10 +187,22 @@ export class ApiClient {
     return this.request<any[]>('/geofences');
   }
 
-  public static async createGeofence(data: { name: string; description?: string; color?: string; polygonJson: any }) {
+  public static async createGeofence(data: {
+    name: string;
+    description?: string;
+    color?: string;
+    polygonJson: any;
+    animalIds?: string[];
+  }) {
     return this.request<any>('/geofences', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  public static async deleteGeofence(id: string) {
+    return this.request<any>(`/geofences/${id}`, {
+      method: 'DELETE',
     });
   }
 

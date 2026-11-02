@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class CreateGeofenceInputDto {
   @IsString()
@@ -19,6 +19,10 @@ export class CreateGeofenceInputDto {
     type: 'Polygon';
     coordinates: number[][][]; // [[[lng, lat], [lng, lat], ...]]
   };
+
+  @IsOptional()
+  @IsArray()
+  animalIds?: string[];
 }
 
 export class UpdateGeofenceInputDto {
@@ -40,5 +44,8 @@ export class UpdateGeofenceInputDto {
     type: 'Polygon';
     coordinates: number[][][];
   };
-}
 
+  @IsOptional()
+  @IsArray()
+  animalIds?: string[];
+}
