@@ -1,0 +1,54 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from '../../lib/auth-context';
+import { Sidebar } from '../../components/layout/Sidebar';
+import { Header } from '../../components/layout/Header';
+import { MockControlModal } from '../../components/common/MockControlModal';
+import { ApiClient } from '../../lib/api';
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
+  const [isMockModalOpen, setIsMockModalOpen] = useState(false);
+  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
+
+  const fetchAlertCount = async () => {
+    try {
+      const stats = await ApiClient.getAlertStats();
+      setActiveAlertsCount(stats.activeTotal);
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchAlertCount();
+    const timer = setInterval(fetchAlertCount, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen bg-slate-50">
+      <Sidebar activeAlertsCount={activeAlertsCount} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header
+          activeAlertsCount={activeAlertsCount}
+          onOpenMockPanel={() => setIsMockModalOpen(true)}
+        />
+        <main className="flex-1 p-6 md:p-8 overflow-y-auto">{children}</main>
+      </div>
+
+      <MockControlModal
+        isOpen={isMockModalOpen}
+        onClose={() => setIsMockModalOpen(false)}
+        onDataChanged={fetchAlertCount}
+      />
+    </div>
+  );
+}
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </AuthProvider>
+  );
+}
+
