@@ -1,0 +1,61 @@
+services:
+  # ---------------------------------------------
+  # 1. Backend REST API & Ingestion Service
+  # ---------------------------------------------
+  - type: web
+    name: qamqor-api
+    runtime: node
+    plan: starter
+    region: frankfurt
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/api run build
+    startCommand: pnpm --filter @qamqor/api run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: qamqor-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DEVICE_MASTER_SECRET
+        generateValue: true
+      - key: DEFAULT_TELEMETRY_INTERVAL_SECONDS
+        value: 300
+      - key: EMERGENCY_TELEMETRY_INTERVAL_SECONDS
+        value: 60
+
+  # ---------------------------------------------
+  # 2. Next.js Web Frontend & Farmer Dashboard
+  # ---------------------------------------------
+  - type: web
+    name: qamqor-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/web run build
+    startCommand: pnpm --filter @qamqor/web run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: qamqor-api
+          type: web
+          property: host
+
+databases:
+  # ---------------------------------------------
+  # 3. PostgreSQL Database with PostGIS
+  # ---------------------------------------------
+  - name: qamqor-db
+    databaseName: qamqor_db
+    user: qamqor
+    plan: starter
+    region: frankfurt
+    postgresMajorVersion: 16
+
