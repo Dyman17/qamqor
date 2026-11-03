@@ -1,43 +1,55 @@
 'use client';
 
 import React, { useEffect, useRef, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { ApiClient } from '../../../lib/api';
 import {
   Radio,
   Battery,
   AlertTriangle,
-  MapPin,
   PenTool,
-  Check,
   X,
   Undo2,
   Trash2,
   Volume2,
   VolumeX,
-  Activity,
   Layers,
   Signal,
-  CheckCircle2,
-  ShieldCheck,
-  ShieldAlert,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
-function LiveMapContent() {
-  const searchParams = useSearchParams();
-  const urlAnimalId = searchParams.get('animalId');
+interface DeviceStatus {
+  deviceId: string;
+  isOnline: boolean;
+  status: 'ONLINE' | 'OFFLINE';
+  secondsSinceLastPing: number | null;
+  lastHeartbeatAt: string | null;
+  battery: number | null;
+  signal: number | null;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  buzzer: boolean;
+}
 
+function LiveMapContent() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<{ [key: string]: any }>({});
+  const markerRef = useRef<any>(null);
 
-  const [animals, setAnimals] = useState<any[]>([]);
+  const [device, setDevice] = useState<DeviceStatus>({
+    deviceId: 'QAM-0001',
+    isOnline: false,
+    status: 'OFFLINE',
+    secondsSinceLastPing: null,
+    lastHeartbeatAt: null,
+    battery: null,
+    signal: null,
+    lastLatitude: null,
+    lastLongitude: null,
+    buzzer: false,
+  });
+
   const [geofences, setGeofences] = useState<any[]>([]);
-  const [selectedAnimal, setSelectedAnimal] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Hardware Buzzer State
-  const [buzzerActive, setBuzzerActive] = useState<boolean>(false);
   const [buzzerLoading, setBuzzerLoading] = useState<boolean>(false);
   const [buzzerMessage, setBuzzerMessage] = useState<string | null>(null);
 
@@ -45,68 +57,51 @@ function LiveMapContent() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawPoints, setDrawPoints] = useState<number[][]>([]);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [newGeofenceName, setNewGeofenceName] = useState('Жайлау №2');
-  const [newGeofenceDesc, setNewGeofenceDesc] = useState('Зона контролируемого выпаса');
+  const [newGeofenceName, setNewGeofenceName] = useState('Пастбище 1');
+  const [newGeofenceDesc, setNewGeofenceDesc] = useState('');
   const [newGeofenceColor, setNewGeofenceColor] = useState('#10b981');
   const [savingGeofence, setSavingGeofence] = useState(false);
-  const [statusNotification, setStatusNotification] = useState<string | null>(null);
 
-  // 1. Fetch live data & sync buzzer status
-  const fetchData = async () => {
+  // 1. Fetch real hardware device status & geofences
+  const fetchLiveStatus = async () => {
     try {
-      const [animalsData, geofencesData, buzzerData] = await Promise.all([
-        ApiClient.listAnimals().catch(() => []),
+      const [devStatus, geofencesData] = await Promise.all([
+        ApiClient.getDeviceStatus('QAM-0001').catch(() => null),
         ApiClient.listGeofences().catch(() => []),
-        ApiClient.getBuzzer('QAM-0001').catch(() => ({ buzzer: false })),
       ]);
 
-      setAnimals(animalsData || []);
-      setGeofences(geofencesData || []);
-      if (buzzerData && typeof buzzerData.buzzer === 'boolean') {
-        setBuzzerActive(buzzerData.buzzer);
+      if (devStatus) {
+        setDevice(devStatus);
       }
-
-      setSelectedAnimal((prev: any) => {
-        if (urlAnimalId) {
-          const match = (animalsData || []).find((a: any) => a.id === urlAnimalId);
-          if (match) return match;
-        }
-        if (prev) {
-          const updated = (animalsData || []).find((a: any) => a.id === prev.id);
-          return updated || prev;
-        }
-        return (animalsData || [])[0] || null;
-      });
+      setGeofences(geofencesData || []);
     } catch (e) {
       console.error('Fetch error:', e);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const timer = setInterval(fetchData, 4000);
+    fetchLiveStatus();
+    const timer = setInterval(fetchLiveStatus, 2500);
     return () => clearInterval(timer);
   }, []);
 
   // 2. Hardware Buzzer Toggle Handler
   const handleToggleBuzzer = async () => {
     setBuzzerLoading(true);
-    const targetState = !buzzerActive;
+    const targetState = !device.buzzer;
     try {
-      const res = await ApiClient.setBuzzer(targetState, 'QAM-0001');
-      setBuzzerActive(targetState);
+      await ApiClient.setBuzzer(targetState, 'QAM-0001');
+      setDevice((prev) => ({ ...prev, buzzer: targetState }));
       setBuzzerMessage(
         targetState
-          ? '🚨 Зуммер ВКЛЮЧЕН! ESP32 начнет непрерывно пищать при следующем запросе.'
-          : '🔇 Зуммер ВЫКЛЮЧЕН. Звуковой сигнал на ESP32 остановлен.',
+          ? '🚨 Зуммер ВКЛЮЧЕН! ESP32 запищит при следующем пинге (в течение 3-5 сек).'
+          : '🔇 Зуммер ВЫКЛЮЧЕН. Команда остановки отправлена.',
       );
       setTimeout(() => setBuzzerMessage(null), 5000);
-      fetchData();
+      fetchLiveStatus();
     } catch (err: any) {
       console.error('Buzzer error:', err);
-      setBuzzerMessage('❌ Ошибка отправки команды на сервер');
+      setBuzzerMessage('❌ Ошибка отправки команды');
       setTimeout(() => setBuzzerMessage(null), 4000);
     } finally {
       setBuzzerLoading(false);
@@ -177,7 +172,7 @@ function LiveMapContent() {
     };
   }, [isDrawing]);
 
-  // 4. Render Geofence Polygons
+  // 4. Render Geofence Polygons from DB
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -277,56 +272,53 @@ function LiveMapContent() {
     }
   }, [drawPoints]);
 
-  // 6. Render Animal / Collar Markers
+  // 6. Render ONLY the Real Collar on the Map (if coordinates exist!)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
+    if (device.lastLatitude == null || device.lastLongitude == null) {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      return;
+    }
+
     import('maplibre-gl').then((maplibreglModule) => {
       const maplibregl = maplibreglModule.default;
+      const lat = device.lastLatitude!;
+      const lng = device.lastLongitude!;
+      const isBreached = device.buzzer;
 
-      animals.forEach((animal) => {
-        const lat = animal.lastLatitude ?? 43.6501;
-        const lng = animal.lastLongitude ?? 51.1572;
-        const isBreached = animal.isOutsideGeofence || buzzerActive;
-        const isSelected = selectedAnimal?.id === animal.id;
-
-        if (markersRef.current[animal.id]) {
-          markersRef.current[animal.id].setLngLat([lng, lat]);
-          const el = markersRef.current[animal.id].getElement();
-          if (el) {
-            el.className = `custom-marker ${isBreached ? 'breach-marker' : 'normal-marker'} ${isSelected ? 'selected-marker' : ''}`;
-          }
-        } else {
-          const el = document.createElement('div');
-          el.className = `custom-marker ${isBreached ? 'breach-marker' : 'normal-marker'} ${isSelected ? 'selected-marker' : ''}`;
-
-          el.innerHTML = `
-            <div class="relative flex items-center justify-center cursor-pointer">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform hover:scale-110 ${
-                isBreached ? 'bg-rose-600 ring-4 ring-rose-500/30 animate-pulse' : 'bg-emerald-600 ring-2 ring-emerald-400'
-              }">
-                ${animal.species === 'CAMEL' ? 'CAM' : animal.species === 'HORSE' ? 'HRS' : 'COW'}
-              </div>
-              <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900/90 text-[10px] text-white border border-slate-700 font-mono shadow">
-                ${animal.name} (${animal.device?.deviceId || 'QAM'})
-              </div>
+      if (markerRef.current) {
+        markerRef.current.setLngLat([lng, lat]);
+      } else {
+        const el = document.createElement('div');
+        el.className = 'custom-device-marker';
+        el.innerHTML = `
+          <div class="relative flex items-center justify-center cursor-pointer">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform hover:scale-110 ${
+              isBreached
+                ? 'bg-rose-600 ring-4 ring-rose-500/40 animate-pulse'
+                : 'bg-emerald-600 ring-2 ring-emerald-400'
+            }">
+              ESP
             </div>
-          `;
+            <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900 text-[10px] text-white border border-slate-700 font-mono shadow">
+              ${device.deviceId}
+            </div>
+          </div>
+        `;
 
-          el.addEventListener('click', () => {
-            setSelectedAnimal(animal);
-          });
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .addTo(map);
 
-          const marker = new maplibregl.Marker({ element: el })
-            .setLngLat([lng, lat])
-            .addTo(map);
-
-          markersRef.current[animal.id] = marker;
-        }
-      });
+        markerRef.current = marker;
+      }
     });
-  }, [animals, selectedAnimal?.id, buzzerActive]);
+  }, [device.lastLatitude, device.lastLongitude, device.buzzer]);
 
   // 7. Save Geofence Handler
   const handleSaveGeofence = async (e: React.FormEvent) => {
@@ -352,84 +344,49 @@ function LiveMapContent() {
         color: newGeofenceColor,
       });
 
-      setStatusNotification(`Геозона «${newGeofenceName}» успешно сохранена в базе`);
       setIsSaveModalOpen(false);
       setIsDrawing(false);
       setDrawPoints([]);
-      fetchData();
+      fetchLiveStatus();
     } catch (err) {
       console.error('Failed to create geofence:', err);
-      setStatusNotification('Ошибка сохранения геозоны на сервере');
     } finally {
       setSavingGeofence(false);
-      setTimeout(() => setStatusNotification(null), 4000);
     }
   };
 
-  const activeDevice = selectedAnimal?.device || {
-    deviceId: 'QAM-0001',
-    status: 'ONLINE',
-    battery: 92,
-    signal: -72,
-    lastHeartbeatAt: new Date().toISOString(),
-  };
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
-      {/* 1. TOP ACTION BAR: BIG BUZZER TOGGLE & GEOFENCE ACTIONS */}
+    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden font-mono text-xs">
+      {/* 1. TOP BAR: DIRECT BUZZER TOGGLE & GEOFENCE ACTIONS */}
       <div className="h-16 px-4 md:px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-20">
-        {/* Left: Device selector */}
-        <div className="flex items-center gap-3 overflow-x-auto py-1">
-          <span className="text-[11px] font-mono uppercase text-slate-400 shrink-0">Ошейник:</span>
-          {animals.length > 0 ? (
-            animals.map((a) => {
-              const isSelected = selectedAnimal?.id === a.id;
-              const isBreach = a.isOutsideGeofence || (isSelected && buzzerActive);
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    setSelectedAnimal(a);
-                    if (mapInstanceRef.current) {
-                      mapInstanceRef.current.flyTo({
-                        center: [a.lastLongitude ?? 51.1572, a.lastLatitude ?? 43.6501],
-                        zoom: 15,
-                        duration: 600,
-                      });
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-colors ${
-                    isSelected
-                      ? isBreach
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
-                  }`}
-                >
-                  <span>{a.name}</span>
-                  <span className="text-[10px] opacity-80">({a.device?.deviceId || 'QAM'})</span>
-                  {isBreach && <AlertTriangle className="w-3.5 h-3.5 text-white animate-pulse" />}
-                </button>
-              );
-            })
+        {/* Device Status Badge */}
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-slate-200 text-sm">{device.deviceId}</span>
+          {device.isOnline ? (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              В СЕТИ ({device.secondsSinceLastPing != null ? `${device.secondsSinceLastPing}с назад` : 'только что'})
+            </span>
           ) : (
-            <span className="text-xs text-slate-400 font-mono">QAM-0001 (Подключен по Wi-Fi)</span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-rose-400" />
+              НЕ В СЕТИ (нет связи с ESP32)
+            </span>
           )}
         </div>
 
-        {/* Center/Right: THE MAIN BUZZER BUTTON */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={handleToggleBuzzer}
             disabled={buzzerLoading}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-mono font-bold tracking-wide transition-all shadow-lg ${
-              buzzerActive
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold tracking-wide transition-all shadow-lg ${
+              device.buzzer
                 ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse ring-4 ring-rose-500/40'
                 : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold'
             } disabled:opacity-50`}
-            title="Прямое управление зуммером ошейника ESP32"
           >
-            {buzzerActive ? (
+            {device.buzzer ? (
               <>
                 <Volume2 className="w-5 h-5 fill-current animate-bounce" />
                 <span>🚨 ЗУММЕР ВКЛЮЧЕН (ПИЩИТ) — ВЫКЛЮЧИТЬ</span>
@@ -448,10 +405,10 @@ function LiveMapContent() {
                 setIsDrawing(true);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-md text-xs font-mono font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded text-xs transition-colors"
             >
               <PenTool className="w-3.5 h-3.5" />
-              <span>Разметить пастбище</span>
+              <span>Разметить зону</span>
             </button>
           ) : (
             <button
@@ -459,7 +416,7 @@ function LiveMapContent() {
                 setIsDrawing(false);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-xs font-mono"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs"
             >
               <X className="w-3.5 h-3.5" />
               <span>Отмена</span>
@@ -468,15 +425,15 @@ function LiveMapContent() {
         </div>
       </div>
 
-      {/* Buzzer Feedback Notification Banner */}
+      {/* Notification banner */}
       {buzzerMessage && (
-        <div className="bg-slate-900 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-xs font-mono text-amber-300">
+        <div className="bg-slate-900 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-xs text-amber-300">
           <span>{buzzerMessage}</span>
           <button onClick={() => setBuzzerMessage(null)} className="text-slate-400 hover:text-white">✕</button>
         </div>
       )}
 
-      {/* 2. MAP & HARDWARE STATUS WORKSPACE */}
+      {/* 2. MAP & REAL HARDWARE TELEMETRY */}
       <div className="flex-1 flex relative overflow-hidden">
         {/* Map Canvas */}
         <div
@@ -487,7 +444,7 @@ function LiveMapContent() {
         {/* Drawing Controls Floating Banner */}
         {isDrawing && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 max-w-md w-full px-4">
-            <div className="bg-slate-950/95 backdrop-blur-sm rounded-md p-3 text-white shadow-xl border border-amber-500/50 flex items-center justify-between gap-3 text-xs font-mono">
+            <div className="bg-slate-950/95 backdrop-blur-sm rounded p-3 text-white shadow-xl border border-amber-500/50 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
                 <PenTool className="w-4 h-4 text-amber-400" />
                 <div>
@@ -522,37 +479,33 @@ function LiveMapContent() {
         )}
 
         {/* 3. DOCKED RIGHT PANEL: REAL ESP32 HARDWARE STATUS */}
-        <div className="w-80 md:w-88 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto font-mono text-xs">
+        <div className="w-80 md:w-88 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-emerald-400" />
               <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
-                Ошейник ESP32
+                Ошейник {device.deviceId}
               </span>
             </div>
-            <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              В СЕТИ
-            </span>
+            {device.isOnline ? (
+              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                В СЕТИ
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">
+                НЕ В СЕТИ
+              </span>
+            )}
           </div>
 
-          {/* Active Collar Data Card */}
-          <div className="my-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200">
-                {selectedAnimal ? `${selectedAnimal.name} (${selectedAnimal.tagNumber})` : 'Верблюд «Ақтабан»'}
-              </span>
-              <span className="text-[11px] font-bold text-emerald-400">
-                {activeDevice.deviceId || 'QAM-0001'}
-              </span>
-            </div>
-
+          {/* Real Device Data */}
+          <div className="my-3 p-3 rounded bg-slate-900 border border-slate-800 space-y-2.5">
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                <span className="text-slate-400 block text-[10px]">ЗАРЯД АКБ</span>
+                <span className="text-slate-400 block text-[10px]">АККУМУЛЯТОР</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
                   <Battery className="w-3.5 h-3.5" />
-                  {activeDevice.battery ?? 92}%
+                  {device.battery != null ? `${device.battery}%` : '—'}
                 </span>
               </div>
 
@@ -560,24 +513,32 @@ function LiveMapContent() {
                 <span className="text-slate-400 block text-[10px]">СИГНАЛ WI-FI</span>
                 <span className="text-slate-200 font-bold flex items-center gap-1 mt-0.5">
                   <Signal className="w-3.5 h-3.5 text-blue-400" />
-                  {activeDevice.signal ?? -72} dBm
+                  {device.signal != null ? `${device.signal} dBm` : '—'}
                 </span>
               </div>
             </div>
 
-            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Статус зуммера:</span>
-                <span className={`font-bold ${buzzerActive ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
-                  {buzzerActive ? '🔊 АКТИВЕН (ПИЩИТ)' : '🔇 ВЫКЛЮЧЕН'}
+            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Состояние зуммера:</span>
+                <span className={`font-bold ${device.buzzer ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
+                  {device.buzzer ? '🔊 ПИЩИТ (ВКЛ)' : '🔇 ВЫКЛЮЧЕН'}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between">
                 <span className="text-slate-400">Последний опрос:</span>
                 <span className="text-slate-300">
-                  {activeDevice.lastHeartbeatAt
-                    ? new Date(activeDevice.lastHeartbeatAt).toLocaleTimeString('ru-RU')
-                    : 'Только что'}
+                  {device.lastHeartbeatAt
+                    ? new Date(device.lastHeartbeatAt).toLocaleTimeString('ru-RU')
+                    : 'Нет данных'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">GPS Координаты:</span>
+                <span className="text-slate-300">
+                  {device.lastLatitude != null && device.lastLongitude != null
+                    ? `${device.lastLatitude.toFixed(4)}, ${device.lastLongitude.toFixed(4)}`
+                    : 'Ожидание фиксации GPS'}
                 </span>
               </div>
             </div>
@@ -588,7 +549,7 @@ function LiveMapContent() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-[11px] text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-slate-400" />
-                АКТИВНЫЕ ПАСТБИЩА ({geofences.length})
+                ГЕОЗОНЫ ({geofences.length})
               </span>
             </div>
 
@@ -597,7 +558,7 @@ function LiveMapContent() {
                 geofences.map((gf) => (
                   <div
                     key={gf.id}
-                    className="p-2.5 rounded-md bg-slate-900 border border-slate-800 flex items-center justify-between text-xs"
+                    className="p-2.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between text-xs"
                   >
                     <div>
                       <div className="font-bold text-slate-200 flex items-center gap-1.5">
@@ -607,26 +568,26 @@ function LiveMapContent() {
                         />
                         {gf.name}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{gf.description || 'Контроль выпаса'}</div>
+                      {gf.description && <div className="text-[10px] text-slate-400 mt-0.5">{gf.description}</div>}
                     </div>
 
                     <button
                       onClick={async () => {
-                        if (confirm(`Удалить пастбище «${gf.name}»?`)) {
+                        if (confirm(`Удалить зону «${gf.name}»?`)) {
                           await ApiClient.deleteGeofence(gf.id);
-                          fetchData();
+                          fetchLiveStatus();
                         }
                       }}
                       className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
-                      title="Удалить пастбище"
+                      title="Удалить"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))
               ) : (
-                <div className="py-6 text-center text-slate-400 text-xs">
-                  Пастбища пока не созданы. Нажмите «Разметить пастбище» вверху.
+                <div className="py-6 text-center text-slate-500 text-xs">
+                  Зоны пока не размечены.
                 </div>
               )}
             </div>
@@ -637,18 +598,18 @@ function LiveMapContent() {
       {/* Save Geofence Modal */}
       {isSaveModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-md w-full max-w-md p-5 text-xs font-mono shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded w-full max-w-md p-5 text-xs shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <PenTool className="w-4 h-4 text-emerald-400" />
-                Сохранение границ пастбища
+                Сохранение геозоны
               </h3>
               <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleSaveGeofence} className="space-y-4 pt-4">
               <div>
-                <label className="block text-slate-400 mb-1">Название пастбища</label>
+                <label className="block text-slate-400 mb-1">Название геозоны</label>
                 <input
                   type="text"
                   value={newGeofenceName}
@@ -659,7 +620,7 @@ function LiveMapContent() {
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Описание</label>
+                <label className="block text-slate-400 mb-1">Описание (опционально)</label>
                 <input
                   type="text"
                   value={newGeofenceDesc}
@@ -669,7 +630,7 @@ function LiveMapContent() {
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Цвет границы</label>
+                <label className="block text-slate-400 mb-1">Цвет контура</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -694,7 +655,7 @@ function LiveMapContent() {
                   disabled={savingGeofence}
                   className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
                 >
-                  {savingGeofence ? 'Сохранение...' : 'Сохранить пастбище'}
+                  {savingGeofence ? 'Сохранение...' : 'Сохранить'}
                 </button>
               </div>
             </form>
@@ -707,7 +668,7 @@ function LiveMapContent() {
 
 export default function MapPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-mono text-xs">Загрузка карты...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-mono text-xs">Загрузка...</div>}>
       <LiveMapContent />
     </Suspense>
   );

@@ -334,5 +334,22 @@ export class ApiClient {
       method: 'GET',
     });
   }
+
+  public static async getDeviceStatus(deviceId: string = 'QAM-0001') {
+    return this.request<{
+      deviceId: string;
+      isOnline: boolean;
+      status: 'ONLINE' | 'OFFLINE';
+      secondsSinceLastPing: number | null;
+      lastHeartbeatAt: string | null;
+      battery: number | null;
+      signal: number | null;
+      lastLatitude: number | null;
+      lastLongitude: number | null;
+      buzzer: boolean;
+    }>(`/device/status/${deviceId}`, {
+      method: 'GET',
+    });
+  }
 }
 

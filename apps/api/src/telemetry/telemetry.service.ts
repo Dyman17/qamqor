@@ -51,6 +51,53 @@ export class TelemetryService {
     return o;
   }
 
+  async getDeviceLiveStatus(deviceId: string = 'QAM-0001') {
+    const [device, latestTelemetry] = await Promise.all([
+      this.prisma.device.findUnique({
+        where: { deviceId },
+      }),
+      this.prisma.telemetry.findFirst({
+        where: { deviceId },
+        orderBy: { timestamp: 'desc' },
+      }),
+    ]);
+
+    if (!device) {
+      return {
+        deviceId,
+        isOnline: false,
+        status: 'OFFLINE',
+        secondsSinceLastPing: null,
+        lastHeartbeatAt: null,
+        battery: null,
+        signal: null,
+        lastLatitude: null,
+        lastLongitude: null,
+        buzzer: false,
+      };
+    }
+
+    const now = Date.now();
+    const lastPing = device.lastHeartbeatAt ? new Date(device.lastHeartbeatAt).getTime() : 0;
+    // Real online check: online only if ping arrived within the last 15 seconds!
+    const isOnline = lastPing > 0 && (now - lastPing) < 15000;
+    const override = this.getManualOverride(deviceId);
+    const buzzer = override?.active ? override.isOutside : false;
+
+    return {
+      deviceId: device.deviceId,
+      isOnline,
+      status: isOnline ? 'ONLINE' : 'OFFLINE',
+      secondsSinceLastPing: lastPing > 0 ? Math.round((now - lastPing) / 1000) : null,
+      lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() || null,
+      battery: device.battery,
+      signal: device.signal,
+      lastLatitude: latestTelemetry?.latitude ?? null,
+      lastLongitude: latestTelemetry?.longitude ?? null,
+      buzzer,
+    };
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly geofenceService: GeofenceService,

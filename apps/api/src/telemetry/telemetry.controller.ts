@@ -73,5 +73,16 @@ export class TelemetryController {
       buzzer: override?.active ? override.isOutside : false,
     };
   }
+
+  @Get('status')
+  getStatusDefault() {
+    return this.telemetryService.getDeviceLiveStatus('QAM-0001');
+  }
+
+  @Get('status/:deviceId')
+  getStatus(@Param('deviceId') paramDeviceId: string) {
+    const deviceId = paramDeviceId || 'QAM-0001';
+    return this.telemetryService.getDeviceLiveStatus(deviceId);
+  }
 }
 
