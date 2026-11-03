@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Radio,
+  Zap,
 } from 'lucide-react';
 
 interface MockControlModalProps {
@@ -38,8 +39,8 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
   const loadAnimals = async () => {
     try {
       const data = await ApiClient.listAnimals();
-      setAnimals(data);
-      if (data.length > 0 && !selectedAnimalId) {
+      setAnimals(data || []);
+      if (data && data.length > 0 && !selectedAnimalId) {
         setSelectedAnimalId(data[0].id);
         if (data[0].lastLatitude) setLat(data[0].lastLatitude.toFixed(6));
         if (data[0].lastLongitude) setLng(data[0].lastLongitude.toFixed(6));
@@ -70,7 +71,14 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
         longitude: parseFloat(lng),
         battery,
       });
-      setStatusMessage({ type: 'success', text: res.message });
+
+      const collar = res.collarResponse;
+      setStatusMessage({
+        type: 'success',
+        text: collar?.vibrate
+          ? 'Телеметрия принята: ВЫХОД ЗА ПЕРИМЕТР (активирован вибромотор 3000 мс)'
+          : 'Телеметрия принята: скот внутри пастбища (нормальный режим)',
+      });
       onDataChanged?.();
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: e.message });
@@ -85,9 +93,10 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
     setStatusMessage(null);
     try {
       const res = await ApiClient.simulateBreach(selectedAnimalId);
-      setStatusMessage({ type: 'success', text: res.message });
-      if (res.newState?.latitude) setLat(res.newState.latitude.toFixed(6));
-      if (res.newState?.longitude) setLng(res.newState.longitude.toFixed(6));
+      setStatusMessage({
+        type: 'success',
+        text: 'Имитация побега: координаты вынесены за границу, вибромотор ошейника включен!',
+      });
       onDataChanged?.();
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: e.message });
@@ -102,24 +111,10 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
     setStatusMessage(null);
     try {
       const res = await ApiClient.simulateReturn(selectedAnimalId);
-      setStatusMessage({ type: 'success', text: res.message });
-      if (res.newState?.latitude) setLat(res.newState.latitude.toFixed(6));
-      if (res.newState?.longitude) setLng(res.newState.longitude.toFixed(6));
-      onDataChanged?.();
-    } catch (e: any) {
-      setStatusMessage({ type: 'error', text: e.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInjectPhoto = async () => {
-    if (!selectedAnimalId) return;
-    setLoading(true);
-    setStatusMessage(null);
-    try {
-      const res = await ApiClient.injectPhoto(selectedAnimalId);
-      setStatusMessage({ type: 'success', text: `📸 Снимок с ошейника успешно получен и сохранён!` });
+      setStatusMessage({
+        type: 'success',
+        text: 'Скот возвращен в периметр: вибромотор выключен, интервал 300с.',
+      });
       onDataChanged?.();
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: e.message });
@@ -131,37 +126,44 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="bg-slate-900 rounded-md max-w-md w-full shadow-2xl border border-slate-800 overflow-hidden font-mono text-xs text-slate-100">
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-amber-600 to-amber-700 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 text-amber-200" />
+        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-amber-400" />
             <div>
-              <div className="font-bold text-base leading-tight">Эмулятор сигналов ошейника</div>
-              <div className="text-xs text-amber-100">Тестирование сайта без физического ESP32</div>
+              <div className="font-bold text-xs uppercase tracking-wider text-slate-200">
+                Эмулятор сигналов ошейника
+              </div>
+              <div className="text-[10px] text-slate-400 font-normal">
+                Тестирование реакции сервера и вибромотора
+              </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-amber-100 hover:text-white rounded-lg hover:bg-amber-800/50">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 space-y-4">
           {/* Status Message */}
           {statusMessage && (
             <div
-              className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
+              className={`p-2.5 rounded text-xs flex items-center gap-2 ${
                 statusMessage.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-red-50 text-red-800 border border-red-200'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
               }`}
             >
               {statusMessage.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               )}
               <span>{statusMessage.text}</span>
             </div>
@@ -169,88 +171,77 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
 
           {/* Animal selection */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-              Выберите животное для теста:
+            <label className="block text-[11px] text-slate-400 uppercase mb-1">
+              Выберите животное:
             </label>
             <select
               value={selectedAnimalId}
               onChange={(e) => handleAnimalSelect(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-amber-400 text-xs"
             >
               {animals.map((a) => (
                 <option key={a.id} value={a.id}>
-                  [{a.species}] {a.name} ({a.tagNumber}) • Ошейник {a.device?.deviceId || 'нет'} •{' '}
-                  {a.isOutsideGeofence ? 'ВНЕ ПАСТБИЩА' : 'Внутри'}
+                  [{a.species}] {a.name} ({a.tagNumber}) • Ошейник {a.device?.deviceId || 'нет'}
                 </option>
               ))}
             </select>
           </div>
 
           {/* Quick 1-Click Simulation Buttons */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Быстрые сценарии в 1 клик:
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
+          <div className="space-y-1.5">
+            <div className="text-[10px] text-slate-400 uppercase">Сценарии тестирования:</div>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleSimulateBreach}
                 disabled={loading}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors disabled:opacity-40"
               >
-                <AlertTriangle className="w-4 h-4 text-red-200" />
-                <span>Смоделировать побег</span>
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Имитация побега</span>
               </button>
               <button
                 onClick={handleSimulateReturn}
                 disabled={loading}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-colors disabled:opacity-40"
               >
-                <RotateCcw className="w-4 h-4 text-emerald-200" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span>Вернуть в загон</span>
               </button>
             </div>
-            <button
-              onClick={handleInjectPhoto}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
-            >
-              <Camera className="w-4 h-4 text-amber-400" />
-              <span>Смоделировать снимок с камеры ошейника</span>
-            </button>
           </div>
 
           {/* Manual coordinate inputs */}
-          <div className="border-t border-slate-200 pt-4 space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Или введите координаты вручную:
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="border-t border-slate-800 pt-3 space-y-2.5">
+            <div className="text-[10px] text-slate-400 uppercase">Ручной ввод координат GPS:</div>
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Широта (Lat):</label>
+                <label className="block text-[10px] text-slate-400 mb-0.5">Широта (Lat):</label>
                 <input
                   type="text"
                   value={lat}
                   onChange={(e) => setLat(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-medium focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full px-2 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs focus:border-amber-400 outline-none"
                   placeholder="43.6501"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Долгота (Lng):</label>
+                <label className="block text-[10px] text-slate-400 mb-0.5">Долгота (Lng):</label>
                 <input
                   type="text"
                   value={lng}
                   onChange={(e) => setLng(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-medium focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full px-2 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs focus:border-amber-400 outline-none"
                   placeholder="51.1572"
                 />
               </div>
             </div>
 
             <div>
-              <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                <span>Заряд батареи:</span>
-                <span className={battery <= 15 ? 'text-red-600 font-bold' : 'text-emerald-700'}>{battery}%</span>
+              <div className="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                <span>Батарея:</span>
+                <span className={battery <= 15 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                  {battery}%
+                </span>
               </div>
               <input
                 type="range"
@@ -258,22 +249,17 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
                 max="100"
                 value={battery}
                 onChange={(e) => setBattery(parseInt(e.target.value, 10))}
-                className="w-full accent-amber-600 cursor-pointer"
+                className="w-full accent-emerald-500 cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] text-slate-400">
-                <span>5% (критический)</span>
-                <span>15% (тревога)</span>
-                <span>100% (полный)</span>
-              </div>
             </div>
 
             <button
               onClick={handleManualInject}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors disabled:opacity-40"
             >
-              <Send className="w-4 h-4" />
-              <span>{loading ? 'Отправка в API...' : 'Отправить эти данные в систему'}</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>{loading ? 'Отправка...' : 'Отправить телеметрию в систему'}</span>
             </button>
           </div>
         </div>
@@ -281,4 +267,3 @@ export function MockControlModal({ isOpen, onClose, onDataChanged }: MockControl
     </div>
   );
 }
-

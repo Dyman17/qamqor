@@ -4,12 +4,9 @@ import React, { useEffect, useRef, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ApiClient } from '../../../lib/api';
 import {
-  Compass,
   Radio,
   Battery,
   AlertTriangle,
-  RotateCcw,
-  Layers,
   MapPin,
   PenTool,
   Check,
@@ -25,6 +22,9 @@ import {
   CheckCheck,
   MousePointerClick,
   Activity,
+  Layers,
+  Signal,
+  RotateCcw,
 } from 'lucide-react';
 
 function LiveMapContent() {
@@ -51,7 +51,7 @@ function LiveMapContent() {
   const [drawPoints, setDrawPoints] = useState<number[][]>([]); // Array of [lng, lat]
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [newGeofenceName, setNewGeofenceName] = useState('Жайлау №2');
-  const [newGeofenceDesc, setNewGeofenceDesc] = useState('Зона безопасного выпаса');
+  const [newGeofenceDesc, setNewGeofenceDesc] = useState('Зона контролируемого выпаса');
   const [newGeofenceColor, setNewGeofenceColor] = useState('#10b981');
   const [savingGeofence, setSavingGeofence] = useState(false);
   const [statusNotification, setStatusNotification] = useState<string | null>(null);
@@ -63,10 +63,9 @@ function LiveMapContent() {
         ApiClient.listAnimals(),
         ApiClient.listGeofences(),
       ]);
-      setAnimals(animalsData);
-      setGeofences(geofencesData);
+      setAnimals(animalsData || []);
+      setGeofences(geofencesData || []);
 
-      // Default select first animal or matched from URL
       setSelectedAnimal((prev: any) => {
         if (urlAnimalId) {
           const match = animalsData.find((a: any) => a.id === urlAnimalId);
@@ -91,7 +90,7 @@ function LiveMapContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // Update mock response state whenever selected animal changes
+  // Update response state whenever selected animal changes
   useEffect(() => {
     if (selectedAnimal) {
       const isOutside = selectedAnimal.isOutsideGeofence;
@@ -103,8 +102,8 @@ function LiveMapContent() {
         vibrateDurationMs: isOutside ? 3000 : 0,
         buzzer: isOutside,
         warningMessage: isOutside
-          ? '🚨 GEOFENCE_BREACH: Скот вышел за пределы пастбища! Включена вибрация ошейника.'
-          : '✅ Внутри границ пастбища. Вибрация выключена.',
+          ? 'GEOFENCE_BREACH: Скот вышел за пределы пастбища. Вибрация активна.'
+          : 'Внутри границ пастбища. Вибрация выключена.',
         nextInterval: isOutside ? 60 : 300,
         configVersion: 1,
       });
@@ -210,7 +209,7 @@ function LiveMapContent() {
           source: sourceId,
           paint: {
             'fill-color': gf.color || '#10b981',
-            'fill-opacity': 0.22,
+            'fill-opacity': 0.18,
           },
         });
 
@@ -220,8 +219,8 @@ function LiveMapContent() {
           source: sourceId,
           paint: {
             'line-color': gf.color || '#10b981',
-            'line-width': 3.5,
-            'line-dasharray': [2, 1],
+            'line-width': 2.5,
+            'line-dasharray': [3, 2],
           },
         });
       }
@@ -234,7 +233,7 @@ function LiveMapContent() {
     }
   }, [geofences]);
 
-  // 4. Update Animal Markers
+  // 4. Update Animal Markers with clean SVG badges
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -248,33 +247,32 @@ function LiveMapContent() {
         const isBreached = animal.isOutsideGeofence;
         const isSelected = selectedAnimal?.id === animal.id;
 
-        let marker = markersRef.current[animal.id];
-
-        const speciesIcons: Record<string, string> = {
-          HORSE: '🐎',
-          CAMEL: '🐫',
-          CATTLE: '🐄',
-          SHEEP: '🐑',
-          GOAT: '🐐',
+        const speciesCodeMap: Record<string, string> = {
+          HORSE: 'ЖЫЛ',
+          CAMEL: 'ТҮЙ',
+          CATTLE: 'СИЫ',
+          SHEEP: 'ҚОЙ',
+          GOAT: 'ЕШК',
         };
-        const icon = speciesIcons[animal.species] || '📍';
+        const speciesLabel = speciesCodeMap[animal.species] || 'МРС';
+
+        let marker = markersRef.current[animal.id];
 
         if (!marker) {
           const el = document.createElement('div');
           el.className = 'cursor-pointer select-none';
 
           el.innerHTML = `
-            <div class="relative group">
-              <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-2xl border-2 transition-transform transform hover:scale-125 ${
+            <div class="relative group flex flex-col items-center">
+              <div class="w-9 h-9 rounded-md flex items-center justify-center font-mono font-bold text-xs shadow-lg border transition-all ${
                 isBreached
-                  ? 'bg-red-600 border-white text-white breach-pulse vibrate-active'
-                  : 'bg-emerald-600 border-white text-white'
-              } ${isSelected ? 'ring-4 ring-amber-400' : ''}">
-                ${icon}
+                  ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
+                  : 'bg-slate-900 border-emerald-500 text-emerald-400'
+              } ${isSelected ? 'ring-2 ring-amber-400 scale-110' : ''}">
+                ${speciesLabel}
               </div>
-              <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/95 text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow whitespace-nowrap border border-slate-700 flex items-center gap-1">
-                ${isBreached ? '<span class="text-amber-400">⚡</span>' : ''}
-                ${animal.name}
+              <div class="mt-1 bg-slate-950 text-slate-200 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-800 whitespace-nowrap flex items-center gap-1 shadow">
+                <span class="${isBreached ? 'text-rose-400 font-bold' : 'text-slate-400'}">${animal.name}</span>
               </div>
             </div>
           `;
@@ -283,7 +281,7 @@ function LiveMapContent() {
             if (isDrawing) return;
             e.stopPropagation();
             setSelectedAnimal(animal);
-            map.flyTo({ center: [lng, lat], zoom: 15, duration: 800 });
+            map.flyTo({ center: [lng, lat], zoom: 15, duration: 600 });
           });
 
           marker = new maplibregl.Marker({ element: el })
@@ -294,20 +292,20 @@ function LiveMapContent() {
         } else {
           marker.setLngLat([lng, lat]);
           const el = marker.getElement();
-          const innerDiv = el.querySelector('.relative > div');
-          if (innerDiv) {
-            innerDiv.className = `w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-2xl border-2 transition-transform transform hover:scale-125 ${
+          const badgeDiv = el.querySelector('.relative > div');
+          if (badgeDiv) {
+            badgeDiv.className = `w-9 h-9 rounded-md flex items-center justify-center font-mono font-bold text-xs shadow-lg border transition-all ${
               isBreached
-                ? 'bg-red-600 border-white text-white breach-pulse vibrate-active'
-                : 'bg-emerald-600 border-white text-white'
-            } ${isSelected ? 'ring-4 ring-amber-400' : ''}`;
+                ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
+                : 'bg-slate-900 border-emerald-500 text-emerald-400'
+            } ${isSelected ? 'ring-2 ring-amber-400 scale-110' : ''}`;
           }
         }
       });
     });
   }, [animals, selectedAnimal?.id, isDrawing]);
 
-  // 5. Click on Map Handler (Drawing mode OR Teleport Animal to coordinate)
+  // 5. Map Click Handler
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -316,13 +314,11 @@ function LiveMapContent() {
       const clickLng = parseFloat(e.lngLat.lng.toFixed(6));
       const clickLat = parseFloat(e.lngLat.lat.toFixed(6));
 
-      // In drawing mode: add point to polygon vertices
       if (isDrawing) {
         setDrawPoints((prev) => [...prev, [clickLng, clickLat]]);
         return;
       }
 
-      // Normal mode: Move selected animal to clicked point and test collar response!
       if (!selectedAnimal) return;
 
       setIsSimulating(true);
@@ -347,8 +343,8 @@ function LiveMapContent() {
 
         setStatusNotification(
           res.collarResponse?.vibrate
-            ? '⚡ Ошейник вышел за границу: ВИБРАЦИЯ АКТИВИРОВАНА!'
-            : '✅ Ошейник внутри пастбища: Вибрация отключена.',
+            ? 'Ошейник вышел за границу: ВИБРАЦИЯ АКТИВИРОВАНА'
+            : 'Скот внутри пастбища: нормальный режим'
         );
 
         await fetchData();
@@ -363,119 +359,80 @@ function LiveMapContent() {
     return () => {
       map.off('click', handleMapClick);
     };
-  }, [isDrawing, selectedAnimal]);
+  }, [selectedAnimal?.id, isDrawing]);
 
-  // 6. Interactive Drawing Preview Layers
+  // 6. Draw Preview on Map
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const sourcePointsId = 'drawing-points-source';
-    const sourceLineId = 'drawing-line-source';
-    const sourcePolyId = 'drawing-poly-source';
+    const sourceId = 'draw-preview-source';
+    const lineLayerId = 'draw-preview-line';
+    const pointLayerId = 'draw-preview-points';
 
-    const removeDrawingLayers = () => {
-      if (map.getLayer('drawing-points-layer')) map.removeLayer('drawing-points-layer');
-      if (map.getLayer('drawing-line-layer')) map.removeLayer('drawing-line-layer');
-      if (map.getLayer('drawing-poly-layer')) map.removeLayer('drawing-poly-layer');
-      if (map.getSource(sourcePointsId)) map.removeSource(sourcePointsId);
-      if (map.getSource(sourceLineId)) map.removeSource(sourceLineId);
-      if (map.getSource(sourcePolyId)) map.removeSource(sourcePolyId);
-    };
-
-    if (!isDrawing || drawPoints.length === 0) {
-      removeDrawingLayers();
+    if (drawPoints.length === 0) {
+      if (map.getLayer(pointLayerId)) map.removeLayer(pointLayerId);
+      if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
       return;
     }
 
-    removeDrawingLayers();
-
-    // Vertices
-    map.addSource(sourcePointsId, {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: drawPoints.map((pt, i) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: pt },
-          properties: { index: i + 1 },
-        })),
-      },
-    });
-
-    map.addLayer({
-      id: 'drawing-points-layer',
-      type: 'circle',
-      source: sourcePointsId,
-      paint: {
-        'circle-radius': 7,
-        'circle-color': '#d97706',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff',
-      },
-    });
-
-    // Perimeter Line
-    if (drawPoints.length >= 2) {
-      map.addSource(sourceLineId, {
-        type: 'geojson',
-        data: {
+    const geojsonData: any = {
+      type: 'FeatureCollection',
+      features: [
+        {
           type: 'Feature',
           geometry: {
             type: 'LineString',
             coordinates: drawPoints,
           },
         },
-      });
+        ...drawPoints.map((pt) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: pt },
+        })),
+      ],
+    };
+
+    if (!map.getSource(sourceId)) {
+      map.addSource(sourceId, { type: 'geojson', data: geojsonData });
 
       map.addLayer({
-        id: 'drawing-line-layer',
+        id: lineLayerId,
         type: 'line',
-        source: sourceLineId,
+        source: sourceId,
         paint: {
-          'line-color': '#d97706',
-          'line-width': 3,
+          'line-color': '#f59e0b',
+          'line-width': 2.5,
           'line-dasharray': [2, 1],
         },
       });
-    }
-
-    // Semi-Transparent Polygon
-    if (drawPoints.length >= 3) {
-      const closedCoords = [...drawPoints, drawPoints[0]];
-      map.addSource(sourcePolyId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: [closedCoords],
-          },
-        },
-      });
 
       map.addLayer({
-        id: 'drawing-poly-layer',
-        type: 'fill',
-        source: sourcePolyId,
+        id: pointLayerId,
+        type: 'circle',
+        source: sourceId,
+        filter: ['==', '$type', 'Point'],
         paint: {
-          'fill-color': newGeofenceColor || '#10b981',
-          'fill-opacity': 0.28,
+          'circle-radius': 5,
+          'circle-color': '#f59e0b',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
         },
       });
+    } else {
+      map.getSource(sourceId).setData(geojsonData);
     }
-  }, [drawPoints, isDrawing, newGeofenceColor]);
+  }, [drawPoints]);
 
-  // Quick Action: Simulate Breach
+  // Quick action: breach
   const handleSimulateBreach = async () => {
     if (!selectedAnimal) return;
     setIsSimulating(true);
     try {
       const res = await ApiClient.simulateBreach(selectedAnimal.id);
-      if (res.collarResponse) {
-        setEsp32Response(res.collarResponse);
-      }
-      setStatusNotification('⚡ ТРЕВОГА: Скот выведен за пределы пастбища! Ошейник вибрирует.');
+      if (res.collarResponse) setEsp32Response(res.collarResponse);
+      setStatusNotification('Имитация побега: ошейник включил вибрацию 3000 мс');
       await fetchData();
     } catch (e: any) {
       alert(`Ошибка: ${e.message}`);
@@ -484,16 +441,14 @@ function LiveMapContent() {
     }
   };
 
-  // Quick Action: Simulate Return
+  // Quick action: return
   const handleSimulateReturn = async () => {
     if (!selectedAnimal) return;
     setIsSimulating(true);
     try {
       const res = await ApiClient.simulateReturn(selectedAnimal.id);
-      if (res.collarResponse) {
-        setEsp32Response(res.collarResponse);
-      }
-      setStatusNotification('✅ Животное вернулось в загон. Вибрация ошейника выключена.');
+      if (res.collarResponse) setEsp32Response(res.collarResponse);
+      setStatusNotification('Скот возвращен в загон: вибрация выключена');
       await fetchData();
     } catch (e: any) {
       alert(`Ошибка: ${e.message}`);
@@ -516,11 +471,11 @@ function LiveMapContent() {
           type: 'Polygon',
           coordinates: [closedCoordinates],
         },
-        animalIds: animals.map((a) => a.id), // Bind all animals to the active pasture
+        animalIds: animals.map((a) => a.id),
       };
 
       const created = await ApiClient.createGeofence(payload);
-      setStatusNotification(`Пастбище «${created.name}» создано и активировано для скота!`);
+      setStatusNotification(`Пастбище «${created.name}» создано и привязано к стаду`);
       setIsSaveModalOpen(false);
       setIsDrawing(false);
       setDrawPoints([]);
@@ -552,101 +507,81 @@ function LiveMapContent() {
   const isVibrating = esp32Response?.vibrate || selectedAnimal?.isOutsideGeofence;
 
   return (
-    <div className="relative h-[calc(100vh-7rem)] -m-6 md:-m-8 flex flex-col overflow-hidden bg-slate-900 text-slate-100 font-sans">
-      {/* 1. TOP LIVE CONTROLS & VIBRATION STATUS BAR */}
-      <div className="h-16 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between shrink-0 z-30 shadow-md">
-        {/* Left: Livestock Selector */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs uppercase font-bold text-slate-400">Животное:</span>
-            <div className="flex items-center gap-1.5">
-              {animals.map((a) => {
-                const isSelected = selectedAnimal?.id === a.id;
-                const isBreach = a.isOutsideGeofence;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => {
-                      if (isDrawing) return;
-                      setSelectedAnimal(a);
-                      if (mapInstanceRef.current && a.lastLatitude) {
-                        mapInstanceRef.current.flyTo({
-                          center: [a.lastLongitude, a.lastLatitude],
-                          zoom: 15,
-                        });
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      isSelected
-                        ? isBreach
-                          ? 'bg-red-600 text-white ring-2 ring-red-400 shadow-lg shadow-red-900/50'
-                          : 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-lg shadow-emerald-900/50'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    <span>
-                      {a.species === 'CAMEL'
-                        ? '🐫'
-                        : a.species === 'HORSE'
-                        ? '🐎'
-                        : a.species === 'CATTLE'
-                        ? '🐄'
-                        : '🐑'}
-                    </span>
-                    <span>{a.name}</span>
-                    {isBreach && <span className="text-amber-300">⚡</span>}
-                  </button>
-                );
-              })}
-            </div>
+    <div className="relative flex-1 flex flex-col h-full bg-slate-950 text-slate-100 font-sans">
+      {/* 1. TOP CONTROL BAR */}
+      <div className="h-14 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-30">
+        {/* Left: Animal tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto py-1">
+          <span className="text-[11px] font-mono uppercase text-slate-400 shrink-0">Стадо:</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {animals.map((a) => {
+              const isSelected = selectedAnimal?.id === a.id;
+              const isBreach = a.isOutsideGeofence;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => {
+                    if (isDrawing) return;
+                    setSelectedAnimal(a);
+                    if (mapInstanceRef.current && a.lastLatitude) {
+                      mapInstanceRef.current.flyTo({
+                        center: [a.lastLongitude, a.lastLatitude],
+                        zoom: 15,
+                        duration: 600,
+                      });
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors ${
+                    isSelected
+                      ? isBreach
+                        ? 'bg-rose-600 text-white font-bold shadow-sm'
+                        : 'bg-emerald-600 text-white font-bold shadow-sm'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                  }`}
+                >
+                  <span>{a.name}</span>
+                  {isBreach && <AlertTriangle className="w-3 h-3 text-rose-200" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Center: Live Collar Vibration Status Badge */}
-        <div className="flex items-center gap-3">
+        {/* Center: Live Collar Status */}
+        <div className="hidden lg:flex items-center gap-3">
           {isVibrating ? (
-            <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-red-600 text-white font-black text-xs shadow-xl shadow-red-900/60 ring-2 ring-red-400 animate-pulse">
-              <Zap className="w-4 h-4 fill-amber-300 text-amber-300 vibrate-active" />
-              <div className="flex flex-col">
-                <span className="tracking-wider uppercase">ВЫХОД ЗА ЗОНУ • ВИБРАЦИЯ ВКЛЮЧЕНА</span>
-                <span className="text-[10px] font-normal text-red-100">
-                  ESP32 мотор: 3000 мс | Зуммер: ВКЛ | Опрос: 60с
-                </span>
-              </div>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono">
+              <Zap className="w-3.5 h-3.5 fill-current animate-pulse text-rose-400" />
+              <span>ВЫХОД ЗА ЗОНУ • ВИБРАЦИЯ 3000 мс</span>
             </div>
           ) : (
-            <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-emerald-950/80 border border-emerald-600/50 text-emerald-400 font-bold text-xs">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <div className="flex flex-col">
-                <span>ВНУТРИ ПАСТБИЩА • ВИБРАЦИЯ ВЫКЛ</span>
-                <span className="text-[10px] font-normal text-slate-400">
-                  ESP32 режим: Deep Sleep (300с)
-                </span>
-              </div>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>ВНУТРИ ПАСТБИЩА • НОРМА</span>
             </div>
           )}
         </div>
 
-        {/* Right: Quick Test Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right: Quick Test Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleSimulateReturn}
             disabled={isSimulating || !selectedAnimal}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 shadow"
-            title="Переместить внутрь геозоны (вибрация отключится)"
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-md text-xs font-mono transition-colors disabled:opacity-40"
+            title="Переместить скот внутрь геозоны"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Внутрь зоны (Норма)</span>
+            <span className="hidden sm:inline">Внутрь зоны</span>
           </button>
 
           <button
             onClick={handleSimulateBreach}
             disabled={isSimulating || !selectedAnimal}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 shadow-lg shadow-red-900/40"
-            title="Вывести за границу (активирует вибрацию)"
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-500/30 rounded-md text-xs font-mono transition-colors disabled:opacity-40"
+            title="Вывести скот за пределы (активирует вибромотор)"
           >
             <Zap className="w-3.5 h-3.5 fill-current" />
-            <span>Вывести за геозону (Вибрация!)</span>
+            <span className="hidden sm:inline">Побег (Тест)</span>
           </button>
 
           {!isDrawing ? (
@@ -655,10 +590,10 @@ function LiveMapContent() {
                 setIsDrawing(true);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold transition-all shadow"
+              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-md text-xs font-mono transition-colors"
             >
               <PenTool className="w-3.5 h-3.5" />
-              <span>Нарисовать геозону</span>
+              <span className="hidden sm:inline">Нарисовать геозону</span>
             </button>
           ) : (
             <button
@@ -666,7 +601,7 @@ function LiveMapContent() {
                 setIsDrawing(false);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold"
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-xs font-mono"
             >
               <X className="w-3.5 h-3.5" />
               <span>Отмена</span>
@@ -675,69 +610,65 @@ function LiveMapContent() {
         </div>
       </div>
 
-      {/* 2. MAIN WORKSPACE: MAP & LIVE ESP32 JSON INSPECTOR */}
+      {/* 2. MAP & TELEMETRY WORKSPACE */}
       <div className="flex-1 flex relative overflow-hidden">
-        {/* Map Container */}
+        {/* Map Canvas */}
         <div
           ref={mapContainerRef}
           className={`flex-1 w-full h-full relative ${isDrawing ? 'cursor-crosshair' : 'cursor-pointer'}`}
         />
 
-        {/* Floating Tooltip: Click to move */}
+        {/* Floating Tooltip */}
         {!isDrawing && selectedAnimal && (
-          <div className="absolute top-4 left-4 z-20 pointer-events-none">
-            <div className="bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/80 text-slate-300 text-[11px] flex items-center gap-2 shadow-lg">
+          <div className="absolute top-3 left-3 z-20 pointer-events-none">
+            <div className="bg-slate-950/90 backdrop-blur-sm px-2.5 py-1 rounded-md border border-slate-800 text-slate-300 text-xs font-mono flex items-center gap-2 shadow">
               <MousePointerClick className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Кликните в любое место на карте, чтобы мгновенно переместить животное</span>
+              <span>Кликните по карте, чтобы переместить животное</span>
             </div>
           </div>
         )}
 
         {/* Drawing Controls Floating Banner */}
         {isDrawing && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-md w-full px-4 animate-in slide-in-from-top duration-200">
-            <div className="bg-slate-950/95 backdrop-blur-md rounded-2xl p-4 text-white shadow-2xl border border-amber-500/60 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
-                  <PenTool className="w-4 h-4" />
-                </div>
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 max-w-md w-full px-4">
+            <div className="bg-slate-950/95 backdrop-blur-sm rounded-md p-3 text-white shadow-xl border border-amber-500/50 flex items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <PenTool className="w-4 h-4 text-amber-400" />
                 <div>
-                  <div className="text-xs font-bold text-amber-300 uppercase">
-                    Выделение границы
-                  </div>
-                  <div className="text-xs text-slate-300">
-                    Кликайте точки на карте: <span className="font-mono font-bold text-amber-400">{drawPoints.length}</span> (мин. 3)
+                  <div className="text-amber-400 font-bold">Разметка границы пастбища</div>
+                  <div className="text-slate-400 text-[11px]">
+                    Точек: <span className="text-white font-bold">{drawPoints.length}</span> (мин. 3)
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setDrawPoints((prev) => prev.slice(0, prev.length - 1))}
                   disabled={drawPoints.length === 0}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs disabled:opacity-40"
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs disabled:opacity-40"
                   title="Отменить точку"
                 >
-                  <Undo2 className="w-4 h-4" />
+                  <Undo2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => {
                     if (drawPoints.length >= 3) setIsSaveModalOpen(true);
                   }}
                   disabled={drawPoints.length < 3}
-                  className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-black text-xs disabled:opacity-40 shadow"
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs disabled:opacity-40 shadow"
                 >
-                  Завершить
+                  Сохранить
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Status Notification Toast */}
+        {/* Status Toast */}
         {statusNotification && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 max-w-lg w-full px-4 animate-in fade-in duration-200">
-            <div className="bg-slate-950 text-white rounded-2xl p-3.5 shadow-2xl border border-slate-700 flex items-center justify-between gap-3 text-xs font-bold">
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 max-w-lg w-full px-4">
+            <div className="bg-slate-900 text-slate-200 rounded-md p-2.5 shadow-xl border border-slate-700 flex items-center justify-between gap-3 text-xs font-mono">
               <span>{statusNotification}</span>
               <button
                 onClick={() => setStatusNotification(null)}
@@ -749,111 +680,111 @@ function LiveMapContent() {
           </div>
         )}
 
-        {/* 3. DOCKED RIGHT PANEL: LIVE ESP32 JSON VIEWER */}
-        <div className="w-96 bg-slate-950/95 backdrop-blur-md border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto">
+        {/* 3. DOCKED RIGHT PANEL: TELEMETRY & HARDWARE MONITOR */}
+        <div className="w-80 md:w-96 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto font-mono text-xs">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-emerald-400" />
               <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
                 ESP32 Ingestion Gateway
               </span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              200 OK
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              HTTP 200 OK
             </span>
           </div>
 
           {/* Active Collar Status Card */}
-          <div className="my-3 p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+          <div className="my-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200">
                 {selectedAnimal ? `${selectedAnimal.name} (${selectedAnimal.tagNumber})` : 'Ошейник'}
               </span>
-              <span className="text-[11px] font-mono text-slate-400">
+              <span className="text-[11px] text-emerald-400">
                 {selectedAnimal?.device?.deviceId || 'QAM-0001'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-              <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-                <span className="text-[10px] text-slate-400 block">Вибратор (ESP32):</span>
+            <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+              <div className="p-2 rounded bg-slate-950 border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Вибромотор (GPIO):</span>
                 <span
-                  className={`font-black text-xs flex items-center gap-1 ${
-                    isVibrating ? 'text-red-400 vibrate-active' : 'text-emerald-400'
+                  className={`font-bold flex items-center gap-1 mt-0.5 ${
+                    isVibrating ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
                   }`}
                 >
-                  <Zap className="w-3.5 h-3.5 fill-current" />
-                  {isVibrating ? 'АКТИВЕН (3 сек)' : 'ВЫКЛЮЧЕН'}
+                  <Zap className="w-3 h-3 fill-current" />
+                  {isVibrating ? 'АКТИВЕН (3000 мс)' : 'ВЫКЛЮЧЕН'}
                 </span>
               </div>
 
-              <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-                <span className="text-[10px] text-slate-400 block">Зуммер (Piezo):</span>
+              <div className="p-2 rounded bg-slate-950 border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Зуммер (Piezo):</span>
                 <span
-                  className={`font-black text-xs flex items-center gap-1 ${
-                    isVibrating ? 'text-amber-400' : 'text-slate-500'
+                  className={`font-bold flex items-center gap-1 mt-0.5 ${
+                    isVibrating ? 'text-amber-400' : 'text-slate-400'
                   }`}
                 >
-                  {isVibrating ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  {isVibrating ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
                   {isVibrating ? 'СИГНАЛ ВКЛ' : 'ВЫКЛ'}
                 </span>
               </div>
             </div>
 
-            <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Батарея ошейника:</span>
-              <span className="font-bold text-slate-200 flex items-center gap-1">
+            <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1">
                 <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                {selectedAnimal?.device?.battery || 90}%
+                {selectedAnimal?.device?.battery || 90}% заряд
+              </span>
+              <span className="flex items-center gap-1">
+                <Signal className="w-3.5 h-3.5 text-slate-400" />
+                -75 dBm (LTE)
               </span>
             </div>
           </div>
 
-          {/* JSON Response Code Box */}
+          {/* JSON Telemetry Response Box */}
           <div className="flex-1 flex flex-col min-h-[220px]">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-slate-400">
-                JSON ответ на ошейник (POST /telemetry):
-              </span>
+            <div className="flex items-center justify-between mb-1 text-[11px]">
+              <span className="text-slate-400">Ответ сервера (POST /telemetry):</span>
               <button
                 onClick={copyJsonResponse}
-                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800 transition-colors"
+                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 transition-colors"
                 title="Скопировать JSON"
               >
                 {copied ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? 'Скопировано!' : 'Копировать'}</span>
+                <span>{copied ? 'Скопировано' : 'JSON'}</span>
               </button>
             </div>
 
-            <div className="flex-1 p-3 rounded-2xl bg-slate-900 border border-slate-800 font-mono text-[11px] leading-relaxed text-emerald-400 overflow-x-auto select-all">
+            <div className="flex-1 p-2.5 rounded-md bg-slate-900 border border-slate-800 text-[11px] leading-relaxed text-emerald-400 overflow-x-auto select-all font-mono">
               <pre>{JSON.stringify(esp32Response || {}, null, 2)}</pre>
             </div>
           </div>
 
-          {/* Active Pastures mini list */}
+          {/* Pastures List */}
           {geofences.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-slate-800 text-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Размеченные геозоны:</span>
-                <span className="text-[10px] text-emerald-400 font-bold">{geofences.length} активна</span>
+            <div className="mt-3 pt-2.5 border-t border-slate-800 text-xs">
+              <div className="flex items-center justify-between mb-1.5 text-[11px]">
+                <span className="text-slate-400 uppercase font-mono">Геозоны ({geofences.length}):</span>
               </div>
-              <div className="space-y-1.5 max-h-28 overflow-y-auto">
+              <div className="space-y-1 max-h-24 overflow-y-auto">
                 {geofences.map((gf) => (
                   <div
                     key={gf.id}
-                    className="flex items-center justify-between bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800 text-[11px]"
+                    className="flex items-center justify-between bg-slate-900 px-2 py-1 rounded border border-slate-800 text-[11px]"
                   >
-                    <div className="flex items-center gap-2 truncate">
+                    <div className="flex items-center gap-1.5 truncate">
                       <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: gf.color || '#10b981' }}
-                      ></span>
-                      <span className="font-semibold text-slate-200 truncate">{gf.name}</span>
+                      />
+                      <span className="text-slate-200 truncate">{gf.name}</span>
                     </div>
                     <button
                       onClick={() => handleDeleteGeofence(gf.id, gf.name)}
-                      className="text-slate-500 hover:text-red-400 p-1"
+                      className="text-slate-400 hover:text-rose-400 p-0.5"
                       title="Удалить пастбище"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -868,40 +799,40 @@ function LiveMapContent() {
 
       {/* SAVE GEOFENCE MODAL */}
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-800 space-y-4 text-white">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                <Trees className="w-5 h-5" />
-                <span>Сохранение геозоны пастбища</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-md max-w-sm w-full p-4 shadow-2xl border border-slate-800 space-y-3 text-white text-xs font-mono">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <Trees className="w-4 h-4" />
+                <span>Новая геозона пастбища</span>
               </div>
               <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-400 hover:text-white">
                 ✕
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
+            <div className="space-y-3">
               <div>
-                <label className="block font-bold text-slate-300 mb-1">Название пастбища *</label>
+                <label className="block text-slate-400 mb-1">Название пастбища *</label>
                 <input
                   type="text"
                   value={newGeofenceName}
                   onChange={(e) => setNewGeofenceName(e.target.value)}
-                  placeholder="Например: Основное пастбище (Загон №1)"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Пастбище (Загон №1)"
+                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded text-white outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 mb-1">Цвет границы на карте</label>
-                <div className="flex items-center gap-3">
+                <label className="block text-slate-400 mb-1">Цвет границы</label>
+                <div className="flex items-center gap-2">
                   {['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'].map((col) => (
                     <button
                       key={col}
                       type="button"
                       onClick={() => setNewGeofenceColor(col)}
-                      className={`w-7 h-7 rounded-full border-2 transition-transform ${
-                        newGeofenceColor === col ? 'scale-125 border-white shadow-lg' : 'border-slate-700'
+                      className={`w-6 h-6 rounded border transition-transform ${
+                        newGeofenceColor === col ? 'scale-110 border-white ring-1 ring-white' : 'border-slate-700'
                       }`}
                       style={{ backgroundColor: col }}
                     />
@@ -909,11 +840,11 @@ function LiveMapContent() {
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3">
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-4 py-2 text-slate-400 hover:text-white rounded-xl font-bold"
+                  className="px-3 py-1.5 text-slate-400 hover:text-white rounded"
                 >
                   Отмена
                 </button>
@@ -921,9 +852,9 @@ function LiveMapContent() {
                   type="button"
                   onClick={handleSaveGeofence}
                   disabled={savingGeofence}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/40 transition-all disabled:opacity-50"
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold disabled:opacity-40"
                 >
-                  {savingGeofence ? 'Сохранение...' : '💾 Сохранить и привязать скот'}
+                  {savingGeofence ? 'Сохранение...' : 'Сохранить геозону'}
                 </button>
               </div>
             </div>
@@ -938,8 +869,8 @@ export default function LiveMapPage() {
   return (
     <Suspense
       fallback={
-        <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-          Загрузка карты...
+        <div className="h-full flex items-center justify-center text-slate-400 text-xs font-mono">
+          Инициализация гео-карты...
         </div>
       }
     >

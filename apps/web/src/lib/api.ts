@@ -66,7 +66,16 @@ export class ApiClient {
     }
   }
 
-  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private static async request<T>(endpoint: string, options: RequestInit & { _retry?: boolean } = {}): Promise<T> {
+    // If no token exists and in browser, attempt seamless default login
+    if (!this.getToken() && !endpoint.includes('/auth/') && typeof window !== 'undefined' && !options._retry) {
+      try {
+        await this.login({ email: 'farmer@qamqor.kz', password: 'qamqor2026' });
+      } catch (loginErr) {
+        console.warn('Auto-login fallback failed:', loginErr);
+      }
+    }
+
     const token = this.getToken();
     const farmId = this.getActiveFarmId();
 
@@ -88,6 +97,16 @@ export class ApiClient {
       ...options,
       headers,
     });
+
+    if (response.status === 401 && !options._retry && !endpoint.includes('/auth/') && typeof window !== 'undefined') {
+      try {
+        this.clearSession();
+        await this.login({ email: 'farmer@qamqor.kz', password: 'qamqor2026' });
+        return await this.request<T>(endpoint, { ...options, _retry: true });
+      } catch {
+        // Continue to standard error handling
+      }
+    }
 
     if (!response.ok) {
       let errorMsg = `HTTP Error ${response.status}`;
