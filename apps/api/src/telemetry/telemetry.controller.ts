@@ -59,8 +59,13 @@ export class TelemetryController {
     };
   }
 
-  @Get('buzzer/:deviceId?')
-  getBuzzerState(@Param('deviceId') paramDeviceId?: string) {
+  @Get('buzzer')
+  getBuzzerDefault() {
+    return this.getBuzzerState('QAM-0001');
+  }
+
+  @Get('buzzer/:deviceId')
+  getBuzzerState(@Param('deviceId') paramDeviceId: string) {
     const deviceId = paramDeviceId || 'QAM-0001';
     const override = this.telemetryService.getManualOverride(deviceId);
     return {
