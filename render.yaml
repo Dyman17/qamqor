@@ -5,11 +5,11 @@ services:
   - type: web
     name: qamqor-api
     runtime: node
-    plan: starter # Можно сменить на free для бесплатного тарифа
-    region: frankfurt
+    plan: free
+    region: oregon
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/api run prisma:generate && pnpm --filter @qamqor/api run build
-    preDeployCommand: pnpm --filter @qamqor/api run prisma:db:push && pnpm --filter @qamqor/api run prisma:seed
+    preDeployCommand: pnpm --filter @qamqor/api run prisma:db:push
     startCommand: pnpm --filter @qamqor/api run start:prod
     envVars:
       - key: NODE_ENV
@@ -17,9 +17,7 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: qamqor-db
-          property: connectionString
+        value: postgresql://sananeke_db_iu3u_user:JwMbfldl0LAiA8Rw3YNCvK7d0AkIaOdP@dpg-dbfouacs728c738ijs2g-a/sananeke_db_iu3u?schema=qamqor
       - key: JWT_SECRET
         generateValue: true
       - key: DEVICE_MASTER_SECRET
@@ -35,8 +33,8 @@ services:
   - type: web
     name: qamqor-web
     runtime: node
-    plan: starter # Можно сменить на free для бесплатного тарифа
-    region: frankfurt
+    plan: free
+    region: oregon
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/web run build
     startCommand: pnpm --filter @qamqor/web run start
@@ -48,14 +46,3 @@ services:
           name: qamqor-api
           type: web
           property: host
-
-databases:
-  # ---------------------------------------------
-  # 3. PostgreSQL Database
-  # ---------------------------------------------
-  - name: qamqor-db
-    databaseName: qamqor_db
-    user: qamqor
-    plan: starter # На Render базы Starter стоят $7/мес; бесплатная база действует 30 дней (plan: free)
-    region: frankfurt
-    postgresMajorVersion: 16
