@@ -2,7 +2,38 @@
  * Qamqor API Client
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function resolveApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    let url = envUrl.trim().replace(/\/+$/, '');
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+      url = `https://${url}`;
+    }
+    if (!url.endsWith('/api/v1')) {
+      url = `${url}/api/v1`;
+    }
+    return url;
+  }
+
+  // If in browser without custom public API url, use relative proxy path
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+
+  // In Node.js SSR
+  const internal = process.env.INTERNAL_API_URL;
+  if (internal) {
+    let url = internal.trim().replace(/\/+$/, '');
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `http://${url}:10000`;
+    }
+    return `${url}/api/v1`;
+  }
+
+  return 'http://localhost:4000/api/v1';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiClient {
   private static getToken(): string | null {

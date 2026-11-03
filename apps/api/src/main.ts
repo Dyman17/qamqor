@@ -21,8 +21,8 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
-  logger.log(`🛰️ Qamqor Ingestion & REST API running on port ${port}`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`🛰️ Qamqor Ingestion & REST API running on port ${port} (0.0.0.0)`);
   logger.log(`📡 ESP32 Endpoint ready at POST http://localhost:${port}/api/v1/device/telemetry`);
 }
 

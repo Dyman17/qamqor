@@ -5,10 +5,11 @@ services:
   - type: web
     name: qamqor-api
     runtime: node
-    plan: starter
+    plan: starter # Можно сменить на free для бесплатного тарифа
     region: frankfurt
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/api run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/api run prisma:generate && pnpm --filter @qamqor/api run build
+    preDeployCommand: pnpm --filter @qamqor/api run prisma:db:push && pnpm --filter @qamqor/api run prisma:seed
     startCommand: pnpm --filter @qamqor/api run start:prod
     envVars:
       - key: NODE_ENV
@@ -34,7 +35,7 @@ services:
   - type: web
     name: qamqor-web
     runtime: node
-    plan: starter
+    plan: starter # Можно сменить на free для бесплатного тарифа
     region: frankfurt
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/web run build
@@ -42,7 +43,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NEXT_PUBLIC_API_URL
+      - key: INTERNAL_API_URL
         fromService:
           name: qamqor-api
           type: web
@@ -50,12 +51,11 @@ services:
 
 databases:
   # ---------------------------------------------
-  # 3. PostgreSQL Database with PostGIS
+  # 3. PostgreSQL Database
   # ---------------------------------------------
   - name: qamqor-db
     databaseName: qamqor_db
     user: qamqor
-    plan: starter
+    plan: starter # На Render базы Starter стоят $7/мес; бесплатная база действует 30 дней (plan: free)
     region: frankfurt
     postgresMajorVersion: 16
-
