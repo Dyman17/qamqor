@@ -40,6 +40,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://qamqor-api.onrender.com/api/v1
       - key: INTERNAL_API_URL
         fromService:
           name: qamqor-api

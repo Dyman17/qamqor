@@ -91,6 +91,14 @@ export class MockService {
       },
     );
 
+    // Save manual override so any subsequent ESP32 requests reflect this manual test!
+    this.telemetryService.setManualOverride(device.deviceId, {
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      isOutside: response.vibrate || false,
+      active: true,
+    });
+
     // Fetch updated animal state
     const updatedAnimal = await this.prisma.animal.findUnique({
       where: { id: animal.id },

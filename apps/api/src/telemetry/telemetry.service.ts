@@ -12,9 +12,44 @@ import { DeviceTelemetryDto } from './dto/device-telemetry.dto';
 import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
 import { DeviceStatus, GeofenceStatus } from '@qamqor/shared';
 
+export interface DeviceOverride {
+  latitude: number;
+  longitude: number;
+  isOutside: boolean;
+  active: boolean;
+  expiresAt: number;
+}
+
 @Injectable()
 export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
+  private static overrides = new Map<string, DeviceOverride>();
+
+  public setManualOverride(
+    deviceId: string,
+    override: Omit<DeviceOverride, 'expiresAt'>,
+    durationMs: number = 30 * 60 * 1000,
+  ) {
+    TelemetryService.overrides.set(deviceId, {
+      ...override,
+      expiresAt: Date.now() + durationMs,
+    });
+    this.logger.log(`Manual override active for ${deviceId}: outside=${override.isOutside}`);
+  }
+
+  public clearManualOverride(deviceId: string) {
+    TelemetryService.overrides.delete(deviceId);
+  }
+
+  public getManualOverride(deviceId: string): DeviceOverride | null {
+    const o = TelemetryService.overrides.get(deviceId);
+    if (!o) return null;
+    if (Date.now() > o.expiresAt) {
+      TelemetryService.overrides.delete(deviceId);
+      return null;
+    }
+    return o;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,7 +131,14 @@ export class TelemetryService {
       10,
     );
 
-    if (device.animal && device.animal.activeGeofence) {
+    const override = this.getManualOverride(device.deviceId);
+    if (override && override.active) {
+      isOutside = override.isOutside;
+      if (isOutside) {
+        nextInterval = emergencyInterval;
+      }
+      this.logger.log(`Collar ping from ${device.deviceId} controlled by WEBSITE OVERRIDE (outside=${isOutside})`);
+    } else if (device.animal && device.animal.activeGeofence) {
       const evaluation = this.geofenceService.evaluateLocation(
         {
           latitude: dto.latitude,

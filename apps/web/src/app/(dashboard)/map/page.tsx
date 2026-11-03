@@ -45,6 +45,8 @@ function LiveMapContent() {
   const [lastRequestPayload, setLastRequestPayload] = useState<any>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [manualLat, setManualLat] = useState('43.6501');
+  const [manualLng, setManualLng] = useState('51.1572');
 
   // Geofence Polygon Drawing State
   const [isDrawing, setIsDrawing] = useState(false);
@@ -116,6 +118,9 @@ function LiveMapContent() {
         accuracy: 3.5,
         timestamp: new Date().toISOString(),
       });
+
+      if (selectedAnimal.lastLatitude) setManualLat(selectedAnimal.lastLatitude.toFixed(6));
+      if (selectedAnimal.lastLongitude) setManualLng(selectedAnimal.lastLongitude.toFixed(6));
     }
   }, [selectedAnimal?.id, selectedAnimal?.isOutsideGeofence]);
 
@@ -457,6 +462,41 @@ function LiveMapContent() {
     }
   };
 
+  // Manual Coordinate Injection from site
+  const handleApplyManualCoordinates = async () => {
+    if (!selectedAnimal) return;
+    const latNum = parseFloat(manualLat);
+    const lngNum = parseFloat(manualLng);
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      alert('Введите корректные числовые координаты (например: 43.6501 и 51.1572)');
+      return;
+    }
+    setIsSimulating(true);
+    try {
+      const res = await ApiClient.injectTelemetry({
+        animalId: selectedAnimal.id,
+        latitude: latNum,
+        longitude: lngNum,
+        battery: selectedAnimal.device?.battery || 90,
+        accuracy: 3.0,
+      });
+      if (res.collarResponse) setEsp32Response(res.collarResponse);
+      setStatusNotification(
+        res.collarResponse?.vibrate
+          ? `🚨 Точка [${latNum}, ${lngNum}] вне зоны: СКОТ СБЕЖАЛ! На ESP32 включен баззер.`
+          : `✅ Точка [${latNum}, ${lngNum}] в зоне: скот в безопасности. Баззер выключен.`
+      );
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo({ center: [lngNum, latNum], zoom: 15, duration: 600 });
+      }
+      await fetchData();
+    } catch (err: any) {
+      alert(`Ошибка применения координат: ${err.message}`);
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
   // Save Drawn Geofence
   const handleSaveGeofence = async () => {
     if (drawPoints.length < 3 || !newGeofenceName.trim()) return;
@@ -742,6 +782,45 @@ function LiveMapContent() {
                 -75 dBm (LTE)
               </span>
             </div>
+          </div>
+
+          {/* Manual Coordinate Control (Test without physical ESP32) */}
+          <div className="mb-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-slate-300 uppercase">Ручной ввод GPS координат:</span>
+              <span className="text-[10px] text-amber-400">Тест без ESP</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-0.5">Широта (Lat):</label>
+                <input
+                  type="text"
+                  value={manualLat}
+                  onChange={(e) => setManualLat(e.target.value)}
+                  className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 outline-none focus:border-emerald-500 font-mono"
+                  placeholder="43.6501"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-0.5">Долгота (Lng):</label>
+                <input
+                  type="text"
+                  value={manualLng}
+                  onChange={(e) => setManualLng(e.target.value)}
+                  className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 outline-none focus:border-emerald-500 font-mono"
+                  placeholder="51.1572"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleApplyManualCoordinates}
+              disabled={isSimulating || !selectedAnimal}
+              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-xs font-mono transition-colors disabled:opacity-40"
+            >
+              {isSimulating ? 'Проверка зоны...' : 'Применить координаты к скоту'}
+            </button>
           </div>
 
           {/* JSON Telemetry Response Box */}

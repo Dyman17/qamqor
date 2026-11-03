@@ -15,9 +15,13 @@ function resolveApiBaseUrl(): string {
     return url;
   }
 
-  // If in browser without custom public API url, use relative proxy path
+  // In browser: detect localhost vs production Render
   if (typeof window !== 'undefined') {
-    return '/api/v1';
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:4000/api/v1';
+    }
+    return 'https://qamqor-api.onrender.com/api/v1';
   }
 
   // In Node.js SSR
@@ -30,7 +34,7 @@ function resolveApiBaseUrl(): string {
     return `${url}/api/v1`;
   }
 
-  return 'http://localhost:4000/api/v1';
+  return 'https://qamqor-api.onrender.com/api/v1';
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
