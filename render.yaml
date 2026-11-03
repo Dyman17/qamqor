@@ -9,8 +9,7 @@ services:
     region: oregon
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @qamqor/shared run build && pnpm --filter @qamqor/contracts run build && pnpm --filter @qamqor/api run prisma:generate && pnpm --filter @qamqor/api run build
-    preDeployCommand: pnpm --filter @qamqor/api run prisma:db:push
-    startCommand: pnpm --filter @qamqor/api run start:prod
+    startCommand: pnpm --filter @qamqor/api run prisma:db:push && pnpm --filter @qamqor/api run start:prod
     envVars:
       - key: NODE_ENV
         value: production
