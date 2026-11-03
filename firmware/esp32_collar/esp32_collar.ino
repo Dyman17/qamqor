@@ -102,7 +102,8 @@ void updateBuzzer() {
 // ==========================================
 void sendCoordinatesToServer(double lat, double lng, float accuracy) {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("❌ Ошибка: Wi-Fi не подключен!");
+    Serial.println("❌ Ошибка: Wi-Fi не подключен! Переподключаюсь...");
+    WiFi.reconnect();
     return;
   }
 
@@ -132,7 +133,7 @@ void sendCoordinatesToServer(double lat, double lng, float accuracy) {
   String requestBody;
   serializeJson(doc, requestBody);
 
-  Serial.println("\n📡 Отправка данных на сервер...");
+  Serial.println("\n📡 Отправка телеметрии на сервер...");
   Serial.print("   Payload: ");
   Serial.println(requestBody);
 
@@ -149,17 +150,17 @@ void sendCoordinatesToServer(double lat, double lng, float accuracy) {
     if (!error) {
       bool inFence = resDoc["inFence"] | true;
       bool vibrate = resDoc["vibrate"] | false;
-      int nextSec  = resDoc["nextInterval"] | 5;
+      bool buzzer  = resDoc["buzzer"] | false;
 
       // ОБНОВЛЯЕМ РЕЖИМ ТРЕВОГИ:
-      if (!inFence || vibrate) {
-        Serial.println("🚨 ВНИМАНИЕ: СКОТ ВНЕ ПАСТБИЩА! ВКЛЮЧАЕМ ЗУММЕР!");
+      if (!inFence || vibrate || buzzer) {
+        Serial.println("🚨 СКОТ ВНЕ ПАСТБИЩА ИЛИ ВЕБ-ТЕСТ! ВКЛЮЧАЕМ ЗУММЕР (БЕЗ ОСТАНОВКИ)!");
         isAlarmActive = true;
-        sendIntervalMs = 4000; // Учащаем отправку при тревоге (каждые 4 сек)
+        sendIntervalMs = 3000; // Быстрый опрос раз в 3 сек во время тревоги
       } else {
         Serial.println("✅ Скот внутри пастбища. Зуммер выключен.");
         isAlarmActive = false;
-        sendIntervalMs = 8000; // Стандартный опрос раз в 8 сек
+        sendIntervalMs = 5000; // Опрос раз в 5 сек
       }
     }
   } else {
@@ -219,36 +220,33 @@ void setup() {
 // LOOP
 // ==========================================
 void loop() {
-  // 1. Постоянно читаем входящий поток от GPS
+  // 1. Непрерывно слушаем входящий поток от GPS модуля (не блокирует)
   while (gpsSerial.available() > 0) {
     gps.encode(gpsSerial.read());
   }
 
-  // 2. Обновляем звук зуммера (без блокирующих задержек!)
+  // 2. Обновляем звук зуммера (не блокирует, прерывистый писк пока активна тревога)
   updateBuzzer();
 
-  // 3. Периодическая отправка координат на сервер
+  // 3. Отправка телеметрии на сервер (работает ВСЕГДА, даже в помещении без спутников!)
   unsigned long now = millis();
   if (now - lastSendTime >= sendIntervalMs) {
     lastSendTime = now;
 
-    double lat = 0.0;
-    double lng = 0.0;
+    double lat = 43.6501; // Дефолтная координата базы (внутри пастбища)
+    double lng = 51.1572;
     float accuracy = 5.0;
 
     if (gps.location.isValid()) {
       lat = gps.location.lat();
       lng = gps.location.lng();
       accuracy = gps.hdop.isValid() ? (gps.hdop.hdop() * 2.0) : 4.0;
-      Serial.printf("📍 GPS Fix: Lat=%.6f, Lng=%.6f, Satellites=%d\n", lat, lng, gps.satellites.value());
-      sendCoordinatesToServer(lat, lng, accuracy);
+      Serial.printf("📍 [GPS FIX] Спутников: %d | Lat=%.6f, Lng=%.6f\n", gps.satellites.value(), lat, lng);
     } else {
-      Serial.println("⏳ Поиск спутников GPS... (если внутри здания, выйдите к окну)");
-      // ДЛЯ ТЕСТА (если нет видимости спутников дома):
-      // Раскомментируйте строку ниже, чтобы отправить тестовую точку в степи:
-      // sendCoordinatesToServer(43.6501, 51.1572, 3.0); // Внутри зоны
-      // sendCoordinatesToServer(43.6890, 51.1890, 3.0); // Снаружи (вызовет писк!)
+      Serial.println("🏢 [В ЗДАНИИ / БЕЗ СПУТНИКОВ] Отправляю пинг на сервер, проверка команд зуммера активна...");
     }
+
+    sendCoordinatesToServer(lat, lng, accuracy);
   }
 }
 
