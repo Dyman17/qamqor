@@ -13,18 +13,14 @@ import {
   X,
   Undo2,
   Trash2,
-  Trees,
-  CheckCircle2,
-  Zap,
   Volume2,
   VolumeX,
-  Copy,
-  CheckCheck,
-  MousePointerClick,
   Activity,
   Layers,
   Signal,
-  RotateCcw,
+  CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 
 function LiveMapContent() {
@@ -40,17 +36,14 @@ function LiveMapContent() {
   const [selectedAnimal, setSelectedAnimal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // ESP32 Telemetry & Vibration State
-  const [esp32Response, setEsp32Response] = useState<any>(null);
-  const [lastRequestPayload, setLastRequestPayload] = useState<any>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [manualLat, setManualLat] = useState('43.6501');
-  const [manualLng, setManualLng] = useState('51.1572');
+  // Hardware Buzzer State
+  const [buzzerActive, setBuzzerActive] = useState<boolean>(false);
+  const [buzzerLoading, setBuzzerLoading] = useState<boolean>(false);
+  const [buzzerMessage, setBuzzerMessage] = useState<string | null>(null);
 
-  // Geofence Polygon Drawing State
+  // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
-  const [drawPoints, setDrawPoints] = useState<number[][]>([]); // Array of [lng, lat]
+  const [drawPoints, setDrawPoints] = useState<number[][]>([]);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [newGeofenceName, setNewGeofenceName] = useState('Жайлау №2');
   const [newGeofenceDesc, setNewGeofenceDesc] = useState('Зона контролируемого выпаса');
@@ -58,26 +51,31 @@ function LiveMapContent() {
   const [savingGeofence, setSavingGeofence] = useState(false);
   const [statusNotification, setStatusNotification] = useState<string | null>(null);
 
-  // 1. Fetch live data
+  // 1. Fetch live data & sync buzzer status
   const fetchData = async () => {
     try {
-      const [animalsData, geofencesData] = await Promise.all([
-        ApiClient.listAnimals(),
-        ApiClient.listGeofences(),
+      const [animalsData, geofencesData, buzzerData] = await Promise.all([
+        ApiClient.listAnimals().catch(() => []),
+        ApiClient.listGeofences().catch(() => []),
+        ApiClient.getBuzzer('QAM-0001').catch(() => ({ buzzer: false })),
       ]);
+
       setAnimals(animalsData || []);
       setGeofences(geofencesData || []);
+      if (buzzerData && typeof buzzerData.buzzer === 'boolean') {
+        setBuzzerActive(buzzerData.buzzer);
+      }
 
       setSelectedAnimal((prev: any) => {
         if (urlAnimalId) {
-          const match = animalsData.find((a: any) => a.id === urlAnimalId);
+          const match = (animalsData || []).find((a: any) => a.id === urlAnimalId);
           if (match) return match;
         }
         if (prev) {
-          const updated = animalsData.find((a: any) => a.id === prev.id);
+          const updated = (animalsData || []).find((a: any) => a.id === prev.id);
           return updated || prev;
         }
-        return animalsData[0] || null;
+        return (animalsData || [])[0] || null;
       });
     } catch (e) {
       console.error('Fetch error:', e);
@@ -88,43 +86,34 @@ function LiveMapContent() {
 
   useEffect(() => {
     fetchData();
-    const timer = setInterval(fetchData, 8000);
+    const timer = setInterval(fetchData, 4000);
     return () => clearInterval(timer);
   }, []);
 
-  // Update response state whenever selected animal changes
-  useEffect(() => {
-    if (selectedAnimal) {
-      const isOutside = selectedAnimal.isOutsideGeofence;
-      setEsp32Response({
-        success: true,
-        serverTime: new Date().toISOString(),
-        inFence: !isOutside,
-        vibrate: isOutside,
-        vibrateDurationMs: isOutside ? 3000 : 0,
-        buzzer: isOutside,
-        warningMessage: isOutside
-          ? 'GEOFENCE_BREACH: Скот вышел за пределы пастбища. Вибрация активна.'
-          : 'Внутри границ пастбища. Вибрация выключена.',
-        nextInterval: isOutside ? 60 : 300,
-        configVersion: 1,
-      });
-
-      setLastRequestPayload({
-        deviceId: selectedAnimal.device?.deviceId || 'QAM-0001',
-        latitude: selectedAnimal.lastLatitude || 43.6501,
-        longitude: selectedAnimal.lastLongitude || 51.1572,
-        battery: selectedAnimal.device?.battery || 90,
-        accuracy: 3.5,
-        timestamp: new Date().toISOString(),
-      });
-
-      setManualLat((selectedAnimal.lastLatitude ?? 43.6501).toFixed(6));
-      setManualLng((selectedAnimal.lastLongitude ?? 51.1572).toFixed(6));
+  // 2. Hardware Buzzer Toggle Handler
+  const handleToggleBuzzer = async () => {
+    setBuzzerLoading(true);
+    const targetState = !buzzerActive;
+    try {
+      const res = await ApiClient.setBuzzer(targetState, 'QAM-0001');
+      setBuzzerActive(targetState);
+      setBuzzerMessage(
+        targetState
+          ? '🚨 Зуммер ВКЛЮЧЕН! ESP32 начнет непрерывно пищать при следующем запросе.'
+          : '🔇 Зуммер ВЫКЛЮЧЕН. Звуковой сигнал на ESP32 остановлен.',
+      );
+      setTimeout(() => setBuzzerMessage(null), 5000);
+      fetchData();
+    } catch (err: any) {
+      console.error('Buzzer error:', err);
+      setBuzzerMessage('❌ Ошибка отправки команды на сервер');
+      setTimeout(() => setBuzzerMessage(null), 4000);
+    } finally {
+      setBuzzerLoading(false);
     }
-  }, [selectedAnimal?.id, selectedAnimal?.isOutsideGeofence]);
+  };
 
-  // 2. Initialize MapLibre GL
+  // 3. Initialize MapLibre GL
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -152,7 +141,7 @@ function LiveMapContent() {
           },
           layers: [
             {
-              id: 'osm-layer',
+              id: 'osm-tiles',
               type: 'raster',
               source: 'osm',
               minzoom: 0,
@@ -164,12 +153,17 @@ function LiveMapContent() {
         zoom: 13,
       });
 
-      map.addControl(new maplibregl.NavigationControl(), 'top-right');
-      mapInstanceRef.current = map;
+      map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
+      map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-      map.on('load', () => {
-        renderPastures(map, geofences);
+      map.on('click', (e) => {
+        const { lng, lat } = e.lngLat;
+        if (isDrawing) {
+          setDrawPoints((prev) => [...prev, [lng, lat]]);
+        }
       });
+
+      mapInstanceRef.current = map;
     }
 
     initMap();
@@ -181,64 +175,109 @@ function LiveMapContent() {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [isDrawing]);
 
-  // 3. Render Pasture Polygons
-  const renderPastures = (map: any, geofenceList: any[]) => {
-    if (!map || !map.isStyleLoaded()) return;
+  // 4. Render Geofence Polygons
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
 
-    geofenceList.forEach((gf, idx) => {
-      const sourceId = `geofence-source-${gf.id || idx}`;
-      const fillLayerId = `geofence-fill-${gf.id || idx}`;
-      const lineLayerId = `geofence-line-${gf.id || idx}`;
+    const renderLayers = () => {
+      geofences.forEach((gf) => {
+        const sourceId = `source-gf-${gf.id}`;
+        const fillLayerId = `layer-fill-${gf.id}`;
+        const lineLayerId = `layer-line-${gf.id}`;
 
+        let geojson: any = null;
+        if (typeof gf.polygonJson === 'string') {
+          try {
+            geojson = JSON.parse(gf.polygonJson);
+          } catch {}
+        } else if (typeof gf.polygonJson === 'object') {
+          geojson = gf.polygonJson;
+        }
+
+        if (!geojson) return;
+
+        if (map.getSource(sourceId)) {
+          map.getSource(sourceId).setData(geojson);
+        } else {
+          map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojson,
+          });
+
+          map.addLayer({
+            id: fillLayerId,
+            type: 'fill',
+            source: sourceId,
+            paint: {
+              'fill-color': gf.color || '#10b981',
+              'fill-opacity': 0.15,
+            },
+          });
+
+          map.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            paint: {
+              'line-color': gf.color || '#10b981',
+              'line-width': 2.5,
+              'line-dasharray': [2, 1],
+            },
+          });
+        }
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      renderLayers();
+    } else {
+      map.once('load', renderLayers);
+    }
+  }, [geofences]);
+
+  // 5. Render Drawing Dynamic Polygon
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const sourceId = 'source-drawing';
+    const fillLayerId = 'layer-drawing-fill';
+    const lineLayerId = 'layer-drawing-line';
+
+    const coords = drawPoints.length >= 3 ? [...drawPoints, drawPoints[0]] : drawPoints;
+    const geojson: any = {
+      type: 'Feature',
+      geometry: {
+        type: drawPoints.length >= 3 ? 'Polygon' : 'LineString',
+        coordinates: drawPoints.length >= 3 ? [coords] : coords,
+      },
+    };
+
+    if (map.isStyleLoaded()) {
       if (map.getSource(sourceId)) {
-        if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
-        if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
-        map.removeSource(sourceId);
-      }
-
-      if (gf.polygonJson) {
-        map.addSource(sourceId, {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: gf.polygonJson,
-            properties: { name: gf.name, color: gf.color || '#10b981' },
-          },
-        });
-
+        map.getSource(sourceId).setData(geojson);
+      } else if (drawPoints.length > 0) {
+        map.addSource(sourceId, { type: 'geojson', data: geojson });
         map.addLayer({
           id: fillLayerId,
           type: 'fill',
           source: sourceId,
-          paint: {
-            'fill-color': gf.color || '#10b981',
-            'fill-opacity': 0.18,
-          },
+          paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.25 },
         });
-
         map.addLayer({
           id: lineLayerId,
           type: 'line',
           source: sourceId,
-          paint: {
-            'line-color': gf.color || '#10b981',
-            'line-width': 2.5,
-            'line-dasharray': [3, 2],
-          },
+          paint: { 'line-color': '#f59e0b', 'line-width': 3 },
         });
       }
-    });
-  };
-
-  useEffect(() => {
-    if (mapInstanceRef.current && geofences.length > 0) {
-      renderPastures(mapInstanceRef.current, geofences);
     }
-  }, [geofences]);
+  }, [drawPoints]);
 
-  // 4. Update Animal Markers with clean SVG badges
+  // 6. Render Animal / Collar Markers
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -247,321 +286,109 @@ function LiveMapContent() {
       const maplibregl = maplibreglModule.default;
 
       animals.forEach((animal) => {
-        const lat = animal.lastLatitude || 43.6501;
-        const lng = animal.lastLongitude || 51.1572;
-        const isBreached = animal.isOutsideGeofence;
+        const lat = animal.lastLatitude ?? 43.6501;
+        const lng = animal.lastLongitude ?? 51.1572;
+        const isBreached = animal.isOutsideGeofence || buzzerActive;
         const isSelected = selectedAnimal?.id === animal.id;
 
-        const speciesCodeMap: Record<string, string> = {
-          HORSE: 'ЖЫЛ',
-          CAMEL: 'ТҮЙ',
-          CATTLE: 'СИЫ',
-          SHEEP: 'ҚОЙ',
-          GOAT: 'ЕШК',
-        };
-        const speciesLabel = speciesCodeMap[animal.species] || 'МРС';
-
-        let marker = markersRef.current[animal.id];
-
-        if (!marker) {
+        if (markersRef.current[animal.id]) {
+          markersRef.current[animal.id].setLngLat([lng, lat]);
+          const el = markersRef.current[animal.id].getElement();
+          if (el) {
+            el.className = `custom-marker ${isBreached ? 'breach-marker' : 'normal-marker'} ${isSelected ? 'selected-marker' : ''}`;
+          }
+        } else {
           const el = document.createElement('div');
-          el.className = 'cursor-pointer select-none';
+          el.className = `custom-marker ${isBreached ? 'breach-marker' : 'normal-marker'} ${isSelected ? 'selected-marker' : ''}`;
 
           el.innerHTML = `
-            <div class="relative group flex flex-col items-center">
-              <div class="w-9 h-9 rounded-md flex items-center justify-center font-mono font-bold text-xs shadow-lg border transition-all ${
-                isBreached
-                  ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
-                  : 'bg-slate-900 border-emerald-500 text-emerald-400'
-              } ${isSelected ? 'ring-2 ring-amber-400 scale-110' : ''}">
-                ${speciesLabel}
+            <div class="relative flex items-center justify-center cursor-pointer">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform hover:scale-110 ${
+                isBreached ? 'bg-rose-600 ring-4 ring-rose-500/30 animate-pulse' : 'bg-emerald-600 ring-2 ring-emerald-400'
+              }">
+                ${animal.species === 'CAMEL' ? 'CAM' : animal.species === 'HORSE' ? 'HRS' : 'COW'}
               </div>
-              <div class="mt-1 bg-slate-950 text-slate-200 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-800 whitespace-nowrap flex items-center gap-1 shadow">
-                <span class="${isBreached ? 'text-rose-400 font-bold' : 'text-slate-400'}">${animal.name}</span>
+              <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900/90 text-[10px] text-white border border-slate-700 font-mono shadow">
+                ${animal.name} (${animal.device?.deviceId || 'QAM'})
               </div>
             </div>
           `;
 
-          el.addEventListener('click', (e) => {
-            if (isDrawing) return;
-            e.stopPropagation();
+          el.addEventListener('click', () => {
             setSelectedAnimal(animal);
-            map.flyTo({ center: [lng, lat], zoom: 15, duration: 600 });
           });
 
-          marker = new maplibregl.Marker({ element: el })
+          const marker = new maplibregl.Marker({ element: el })
             .setLngLat([lng, lat])
             .addTo(map);
 
           markersRef.current[animal.id] = marker;
-        } else {
-          marker.setLngLat([lng, lat]);
-          const el = marker.getElement();
-          const badgeDiv = el.querySelector('.relative > div');
-          if (badgeDiv) {
-            badgeDiv.className = `w-9 h-9 rounded-md flex items-center justify-center font-mono font-bold text-xs shadow-lg border transition-all ${
-              isBreached
-                ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
-                : 'bg-slate-900 border-emerald-500 text-emerald-400'
-            } ${isSelected ? 'ring-2 ring-amber-400 scale-110' : ''}`;
-          }
         }
       });
     });
-  }, [animals, selectedAnimal?.id, isDrawing]);
+  }, [animals, selectedAnimal?.id, buzzerActive]);
 
-  // 5. Map Click Handler
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+  // 7. Save Geofence Handler
+  const handleSaveGeofence = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (drawPoints.length < 3) return;
 
-    const handleMapClick = async (e: any) => {
-      const clickLng = parseFloat(e.lngLat.lng.toFixed(6));
-      const clickLat = parseFloat(e.lngLat.lat.toFixed(6));
-
-      if (isDrawing) {
-        setDrawPoints((prev) => [...prev, [clickLng, clickLat]]);
-        return;
-      }
-
-      if (!selectedAnimal) return;
-
-      setIsSimulating(true);
-      try {
-        const payload = {
-          animalId: selectedAnimal.id,
-          latitude: clickLat,
-          longitude: clickLng,
-          battery: selectedAnimal.device?.battery || 90,
-          accuracy: 3.0,
-        };
-        setLastRequestPayload({
-          deviceId: selectedAnimal.device?.deviceId || 'QAM-0001',
-          ...payload,
-          timestamp: new Date().toISOString(),
-        });
-
-        const res = await ApiClient.injectTelemetry(payload);
-        if (res.collarResponse) {
-          setEsp32Response(res.collarResponse);
-        }
-
-        setStatusNotification(
-          res.collarResponse?.vibrate
-            ? 'Ошейник вышел за границу: ВИБРАЦИЯ АКТИВИРОВАНА'
-            : 'Скот внутри пастбища: нормальный режим'
-        );
-
-        await fetchData();
-      } catch (err: any) {
-        console.error('Teleport error:', err);
-      } finally {
-        setIsSimulating(false);
-      }
-    };
-
-    map.on('click', handleMapClick);
-    return () => {
-      map.off('click', handleMapClick);
-    };
-  }, [selectedAnimal?.id, isDrawing]);
-
-  // 6. Draw Preview on Map
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-
-    const sourceId = 'draw-preview-source';
-    const lineLayerId = 'draw-preview-line';
-    const pointLayerId = 'draw-preview-points';
-
-    if (drawPoints.length === 0) {
-      if (map.getLayer(pointLayerId)) map.removeLayer(pointLayerId);
-      if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
-      return;
-    }
-
-    const geojsonData: any = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: drawPoints,
-          },
-        },
-        ...drawPoints.map((pt) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: pt },
-        })),
-      ],
-    };
-
-    if (!map.getSource(sourceId)) {
-      map.addSource(sourceId, { type: 'geojson', data: geojsonData });
-
-      map.addLayer({
-        id: lineLayerId,
-        type: 'line',
-        source: sourceId,
-        paint: {
-          'line-color': '#f59e0b',
-          'line-width': 2.5,
-          'line-dasharray': [2, 1],
-        },
-      });
-
-      map.addLayer({
-        id: pointLayerId,
-        type: 'circle',
-        source: sourceId,
-        filter: ['==', '$type', 'Point'],
-        paint: {
-          'circle-radius': 5,
-          'circle-color': '#f59e0b',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-        },
-      });
-    } else {
-      map.getSource(sourceId).setData(geojsonData);
-    }
-  }, [drawPoints]);
-
-  // Quick action: breach
-  const handleSimulateBreach = async () => {
-    if (!selectedAnimal) return;
-    setIsSimulating(true);
-    try {
-      const res = await ApiClient.simulateBreach(selectedAnimal.id);
-      if (res.collarResponse) setEsp32Response(res.collarResponse);
-      setStatusNotification('Имитация побега: ошейник включил вибрацию 3000 мс');
-      await fetchData();
-    } catch (e: any) {
-      alert(`Ошибка: ${e.message}`);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
-  // Quick action: return
-  const handleSimulateReturn = async () => {
-    if (!selectedAnimal) return;
-    setIsSimulating(true);
-    try {
-      const res = await ApiClient.simulateReturn(selectedAnimal.id);
-      if (res.collarResponse) setEsp32Response(res.collarResponse);
-      setStatusNotification('Скот возвращен в загон: вибрация выключена');
-      await fetchData();
-    } catch (e: any) {
-      alert(`Ошибка: ${e.message}`);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
-  // Manual Coordinate Injection from site
-  const handleApplyManualCoordinates = async () => {
-    if (!selectedAnimal) return;
-    const latNum = parseFloat(manualLat);
-    const lngNum = parseFloat(manualLng);
-    if (isNaN(latNum) || isNaN(lngNum)) {
-      alert('Введите корректные числовые координаты (например: 43.6501 и 51.1572)');
-      return;
-    }
-    setIsSimulating(true);
-    try {
-      const res = await ApiClient.injectTelemetry({
-        animalId: selectedAnimal.id,
-        latitude: latNum,
-        longitude: lngNum,
-        battery: selectedAnimal.device?.battery || 90,
-        accuracy: 3.0,
-      });
-      if (res.collarResponse) setEsp32Response(res.collarResponse);
-      setStatusNotification(
-        res.collarResponse?.vibrate
-          ? `🚨 Точка [${latNum}, ${lngNum}] вне зоны: СКОТ СБЕЖАЛ! На ESP32 включен баззер.`
-          : `✅ Точка [${latNum}, ${lngNum}] в зоне: скот в безопасности. Баззер выключен.`
-      );
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.flyTo({ center: [lngNum, latNum], zoom: 15, duration: 600 });
-      }
-      await fetchData();
-    } catch (err: any) {
-      alert(`Ошибка применения координат: ${err.message}`);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
-  // Save Drawn Geofence
-  const handleSaveGeofence = async () => {
-    if (drawPoints.length < 3 || !newGeofenceName.trim()) return;
     setSavingGeofence(true);
     try {
-      const closedCoordinates = [...drawPoints, drawPoints[0]];
-      const payload = {
-        name: newGeofenceName.trim(),
-        description: newGeofenceDesc.trim() || undefined,
-        color: newGeofenceColor,
-        polygonJson: {
+      const closedPoints = [...drawPoints, drawPoints[0]];
+      const polygonGeoJson = {
+        type: 'Feature',
+        properties: { name: newGeofenceName, color: newGeofenceColor },
+        geometry: {
           type: 'Polygon',
-          coordinates: [closedCoordinates],
+          coordinates: [closedPoints],
         },
-        animalIds: animals.map((a) => a.id),
       };
 
-      const created = await ApiClient.createGeofence(payload);
-      setStatusNotification(`Пастбище «${created.name}» создано и привязано к стаду`);
+      await ApiClient.createGeofence({
+        name: newGeofenceName,
+        description: newGeofenceDesc,
+        polygonJson: polygonGeoJson,
+        color: newGeofenceColor,
+      });
+
+      setStatusNotification(`Геозона «${newGeofenceName}» успешно сохранена в базе`);
       setIsSaveModalOpen(false);
       setIsDrawing(false);
       setDrawPoints([]);
-      await fetchData();
-    } catch (e: any) {
-      alert(`Ошибка: ${e.message}`);
+      fetchData();
+    } catch (err) {
+      console.error('Failed to create geofence:', err);
+      setStatusNotification('Ошибка сохранения геозоны на сервере');
     } finally {
       setSavingGeofence(false);
+      setTimeout(() => setStatusNotification(null), 4000);
     }
   };
 
-  const handleDeleteGeofence = async (id: string, name: string) => {
-    if (!confirm(`Удалить пастбище «${name}»?`)) return;
-    try {
-      await ApiClient.deleteGeofence(id);
-      await fetchData();
-    } catch (e: any) {
-      alert(`Ошибка: ${e.message}`);
-    }
+  const activeDevice = selectedAnimal?.device || {
+    deviceId: 'QAM-0001',
+    status: 'ONLINE',
+    battery: 92,
+    signal: -72,
+    lastHeartbeatAt: new Date().toISOString(),
   };
-
-  const copyJsonResponse = () => {
-    if (!esp32Response) return;
-    navigator.clipboard.writeText(JSON.stringify(esp32Response, null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const isVibrating = esp32Response?.vibrate || selectedAnimal?.isOutsideGeofence;
 
   return (
-    <div className="relative flex-1 flex flex-col h-full bg-slate-950 text-slate-100 font-sans">
-      {/* 1. TOP CONTROL BAR */}
-      <div className="h-14 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-30">
-        {/* Left: Animal tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto py-1">
-          <span className="text-[11px] font-mono uppercase text-slate-400 shrink-0">Стадо:</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {animals.map((a) => {
+    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
+      {/* 1. TOP ACTION BAR: BIG BUZZER TOGGLE & GEOFENCE ACTIONS */}
+      <div className="h-16 px-4 md:px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-20">
+        {/* Left: Device selector */}
+        <div className="flex items-center gap-3 overflow-x-auto py-1">
+          <span className="text-[11px] font-mono uppercase text-slate-400 shrink-0">Ошейник:</span>
+          {animals.length > 0 ? (
+            animals.map((a) => {
               const isSelected = selectedAnimal?.id === a.id;
-              const isBreach = a.isOutsideGeofence;
+              const isBreach = a.isOutsideGeofence || (isSelected && buzzerActive);
               return (
                 <button
                   key={a.id}
                   onClick={() => {
-                    if (isDrawing) return;
                     setSelectedAnimal(a);
                     if (mapInstanceRef.current) {
                       mapInstanceRef.current.flyTo({
@@ -571,57 +398,48 @@ function LiveMapContent() {
                       });
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-colors ${
                     isSelected
                       ? isBreach
-                        ? 'bg-rose-600 text-white font-bold shadow-sm'
-                        : 'bg-emerald-600 text-white font-bold shadow-sm'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'bg-emerald-600 text-white shadow-md'
                       : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
                   }`}
                 >
                   <span>{a.name}</span>
-                  {isBreach && <AlertTriangle className="w-3 h-3 text-rose-200" />}
+                  <span className="text-[10px] opacity-80">({a.device?.deviceId || 'QAM'})</span>
+                  {isBreach && <AlertTriangle className="w-3.5 h-3.5 text-white animate-pulse" />}
                 </button>
               );
-            })}
-          </div>
-        </div>
-
-        {/* Center: Live Collar Status */}
-        <div className="hidden lg:flex items-center gap-3">
-          {isVibrating ? (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono">
-              <Zap className="w-3.5 h-3.5 fill-current animate-pulse text-rose-400" />
-              <span>ВЫХОД ЗА ЗОНУ • ВИБРАЦИЯ 3000 мс</span>
-            </div>
+            })
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>ВНУТРИ ПАСТБИЩА • НОРМА</span>
-            </div>
+            <span className="text-xs text-slate-400 font-mono">QAM-0001 (Подключен по Wi-Fi)</span>
           )}
         </div>
 
-        {/* Right: Quick Test Actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Center/Right: THE MAIN BUZZER BUTTON */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={handleSimulateReturn}
-            disabled={isSimulating || !selectedAnimal}
-            className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-md text-xs font-mono transition-colors disabled:opacity-40"
-            title="Переместить скот внутрь геозоны"
+            onClick={handleToggleBuzzer}
+            disabled={buzzerLoading}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-mono font-bold tracking-wide transition-all shadow-lg ${
+              buzzerActive
+                ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse ring-4 ring-rose-500/40'
+                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold'
+            } disabled:opacity-50`}
+            title="Прямое управление зуммером ошейника ESP32"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Внутрь зоны</span>
-          </button>
-
-          <button
-            onClick={handleSimulateBreach}
-            disabled={isSimulating || !selectedAnimal}
-            className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-500/30 rounded-md text-xs font-mono transition-colors disabled:opacity-40"
-            title="Вывести скот за пределы (активирует вибромотор)"
-          >
-            <Zap className="w-3.5 h-3.5 fill-current" />
-            <span className="hidden sm:inline">Побег (Тест)</span>
+            {buzzerActive ? (
+              <>
+                <Volume2 className="w-5 h-5 fill-current animate-bounce" />
+                <span>🚨 ЗУММЕР ВКЛЮЧЕН (ПИЩИТ) — ВЫКЛЮЧИТЬ</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-5 h-5" />
+                <span>🔊 ВКЛЮЧИТЬ ЗУММЕР (ТЕСТ)</span>
+              </>
+            )}
           </button>
 
           {!isDrawing ? (
@@ -630,10 +448,10 @@ function LiveMapContent() {
                 setIsDrawing(true);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-md text-xs font-mono transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-md text-xs font-mono font-medium transition-colors"
             >
               <PenTool className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Нарисовать геозону</span>
+              <span>Разметить пастбище</span>
             </button>
           ) : (
             <button
@@ -641,7 +459,7 @@ function LiveMapContent() {
                 setIsDrawing(false);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-xs font-mono"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-xs font-mono"
             >
               <X className="w-3.5 h-3.5" />
               <span>Отмена</span>
@@ -650,23 +468,21 @@ function LiveMapContent() {
         </div>
       </div>
 
-      {/* 2. MAP & TELEMETRY WORKSPACE */}
+      {/* Buzzer Feedback Notification Banner */}
+      {buzzerMessage && (
+        <div className="bg-slate-900 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-xs font-mono text-amber-300">
+          <span>{buzzerMessage}</span>
+          <button onClick={() => setBuzzerMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
+
+      {/* 2. MAP & HARDWARE STATUS WORKSPACE */}
       <div className="flex-1 flex relative overflow-hidden">
         {/* Map Canvas */}
         <div
           ref={mapContainerRef}
-          className={`flex-1 w-full h-full relative ${isDrawing ? 'cursor-crosshair' : 'cursor-pointer'}`}
+          className={`flex-1 w-full h-full relative ${isDrawing ? 'cursor-crosshair' : ''}`}
         />
-
-        {/* Floating Tooltip */}
-        {!isDrawing && selectedAnimal && (
-          <div className="absolute top-3 left-3 z-20 pointer-events-none">
-            <div className="bg-slate-950/90 backdrop-blur-sm px-2.5 py-1 rounded-md border border-slate-800 text-slate-300 text-xs font-mono flex items-center gap-2 shadow">
-              <MousePointerClick className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Кликните по карте, чтобы переместить животное</span>
-            </div>
-          </div>
-        )}
 
         {/* Drawing Controls Floating Banner */}
         {isDrawing && (
@@ -675,7 +491,7 @@ function LiveMapContent() {
               <div className="flex items-center gap-2">
                 <PenTool className="w-4 h-4 text-amber-400" />
                 <div>
-                  <div className="text-amber-400 font-bold">Разметка границы пастбища</div>
+                  <div className="text-amber-400 font-bold">Кликайте по карте для разметки</div>
                   <div className="text-slate-400 text-[11px]">
                     Точек: <span className="text-white font-bold">{drawPoints.length}</span> (мин. 3)
                   </div>
@@ -705,217 +521,163 @@ function LiveMapContent() {
           </div>
         )}
 
-        {/* Status Toast */}
-        {statusNotification && (
-          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 max-w-lg w-full px-4">
-            <div className="bg-slate-900 text-slate-200 rounded-md p-2.5 shadow-xl border border-slate-700 flex items-center justify-between gap-3 text-xs font-mono">
-              <span>{statusNotification}</span>
-              <button
-                onClick={() => setStatusNotification(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 3. DOCKED RIGHT PANEL: TELEMETRY & HARDWARE MONITOR */}
-        <div className="w-80 md:w-96 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto font-mono text-xs">
-          {/* Header */}
+        {/* 3. DOCKED RIGHT PANEL: REAL ESP32 HARDWARE STATUS */}
+        <div className="w-80 md:w-88 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto font-mono text-xs">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-emerald-400" />
               <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
-                ESP32 Ingestion Gateway
+                Ошейник ESP32
               </span>
             </div>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              HTTP 200 OK
+            <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              В СЕТИ
             </span>
           </div>
 
-          {/* Active Collar Status Card */}
-          <div className="my-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2">
+          {/* Active Collar Data Card */}
+          <div className="my-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200">
-                {selectedAnimal ? `${selectedAnimal.name} (${selectedAnimal.tagNumber})` : 'Ошейник'}
+                {selectedAnimal ? `${selectedAnimal.name} (${selectedAnimal.tagNumber})` : 'Верблюд «Ақтабан»'}
               </span>
-              <span className="text-[11px] text-emerald-400">
-                {selectedAnimal?.device?.deviceId || 'QAM-0001'}
+              <span className="text-[11px] font-bold text-emerald-400">
+                {activeDevice.deviceId || 'QAM-0001'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                <span className="text-slate-400 block text-[10px]">Вибромотор (GPIO):</span>
-                <span
-                  className={`font-bold flex items-center gap-1 mt-0.5 ${
-                    isVibrating ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
-                  }`}
-                >
-                  <Zap className="w-3 h-3 fill-current" />
-                  {isVibrating ? 'АКТИВЕН (3000 мс)' : 'ВЫКЛЮЧЕН'}
+                <span className="text-slate-400 block text-[10px]">ЗАРЯД АКБ</span>
+                <span className="text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
+                  <Battery className="w-3.5 h-3.5" />
+                  {activeDevice.battery ?? 92}%
                 </span>
               </div>
 
               <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                <span className="text-slate-400 block text-[10px]">Зуммер (Piezo):</span>
-                <span
-                  className={`font-bold flex items-center gap-1 mt-0.5 ${
-                    isVibrating ? 'text-amber-400' : 'text-slate-400'
-                  }`}
-                >
-                  {isVibrating ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-                  {isVibrating ? 'СИГНАЛ ВКЛ' : 'ВЫКЛ'}
+                <span className="text-slate-400 block text-[10px]">СИГНАЛ WI-FI</span>
+                <span className="text-slate-200 font-bold flex items-center gap-1 mt-0.5">
+                  <Signal className="w-3.5 h-3.5 text-blue-400" />
+                  {activeDevice.signal ?? -72} dBm
                 </span>
               </div>
             </div>
 
-            <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-              <span className="flex items-center gap-1">
-                <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                {selectedAnimal?.device?.battery || 90}% заряд
+            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Статус зуммера:</span>
+                <span className={`font-bold ${buzzerActive ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
+                  {buzzerActive ? '🔊 АКТИВЕН (ПИЩИТ)' : '🔇 ВЫКЛЮЧЕН'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Последний опрос:</span>
+                <span className="text-slate-300">
+                  {activeDevice.lastHeartbeatAt
+                    ? new Date(activeDevice.lastHeartbeatAt).toLocaleTimeString('ru-RU')
+                    : 'Только что'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pasture Geofences List */}
+          <div className="mt-2 flex-1 flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-slate-400" />
+                АКТИВНЫЕ ПАСТБИЩА ({geofences.length})
               </span>
-              <span className="flex items-center gap-1">
-                <Signal className="w-3.5 h-3.5 text-slate-400" />
-                -75 dBm (LTE)
-              </span>
-            </div>
-          </div>
-
-          {/* Manual Coordinate Control (Test without physical ESP32) */}
-          <div className="mb-3 p-3 rounded-md bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold text-slate-300 uppercase">Ручной ввод GPS координат:</span>
-              <span className="text-[10px] text-amber-400">Тест без ESP</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5">Широта (Lat):</label>
-                <input
-                  type="text"
-                  value={manualLat}
-                  onChange={(e) => setManualLat(e.target.value)}
-                  className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 outline-none focus:border-emerald-500 font-mono"
-                  placeholder="43.6501"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5">Долгота (Lng):</label>
-                <input
-                  type="text"
-                  value={manualLng}
-                  onChange={(e) => setManualLng(e.target.value)}
-                  className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 outline-none focus:border-emerald-500 font-mono"
-                  placeholder="51.1572"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleApplyManualCoordinates}
-              disabled={isSimulating || !selectedAnimal}
-              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-xs font-mono transition-colors disabled:opacity-40"
-            >
-              {isSimulating ? 'Проверка зоны...' : 'Применить координаты к скоту'}
-            </button>
-          </div>
-
-          {/* JSON Telemetry Response Box */}
-          <div className="flex-1 flex flex-col min-h-[220px]">
-            <div className="flex items-center justify-between mb-1 text-[11px]">
-              <span className="text-slate-400">Ответ сервера (POST /telemetry):</span>
-              <button
-                onClick={copyJsonResponse}
-                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 transition-colors"
-                title="Скопировать JSON"
-              >
-                {copied ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? 'Скопировано' : 'JSON'}</span>
-              </button>
-            </div>
-
-            <div className="flex-1 p-2.5 rounded-md bg-slate-900 border border-slate-800 text-[11px] leading-relaxed text-emerald-400 overflow-x-auto select-all font-mono">
-              <pre>{JSON.stringify(esp32Response || {}, null, 2)}</pre>
-            </div>
-          </div>
-
-          {/* Pastures List */}
-          {geofences.length > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-slate-800 text-xs">
-              <div className="flex items-center justify-between mb-1.5 text-[11px]">
-                <span className="text-slate-400 uppercase font-mono">Геозоны ({geofences.length}):</span>
-              </div>
-              <div className="space-y-1 max-h-24 overflow-y-auto">
-                {geofences.map((gf) => (
+            <div className="py-2 space-y-2 flex-1 overflow-y-auto">
+              {geofences.length > 0 ? (
+                geofences.map((gf) => (
                   <div
                     key={gf.id}
-                    className="flex items-center justify-between bg-slate-900 px-2 py-1 rounded border border-slate-800 text-[11px]"
+                    className="p-2.5 rounded-md bg-slate-900 border border-slate-800 flex items-center justify-between text-xs"
                   >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: gf.color || '#10b981' }}
-                      />
-                      <span className="text-slate-200 truncate">{gf.name}</span>
+                    <div>
+                      <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                          style={{ backgroundColor: gf.color || '#10b981' }}
+                        />
+                        {gf.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{gf.description || 'Контроль выпаса'}</div>
                     </div>
+
                     <button
-                      onClick={() => handleDeleteGeofence(gf.id, gf.name)}
-                      className="text-slate-400 hover:text-rose-400 p-0.5"
+                      onClick={async () => {
+                        if (confirm(`Удалить пастбище «${gf.name}»?`)) {
+                          await ApiClient.deleteGeofence(gf.id);
+                          fetchData();
+                        }
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
                       title="Удалить пастбище"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <div className="py-6 text-center text-slate-400 text-xs">
+                  Пастбища пока не созданы. Нажмите «Разметить пастбище» вверху.
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* SAVE GEOFENCE MODAL */}
+      {/* Save Geofence Modal */}
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-md max-w-sm w-full p-4 shadow-2xl border border-slate-800 space-y-3 text-white text-xs font-mono">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                <Trees className="w-4 h-4" />
-                <span>Новая геозона пастбища</span>
-              </div>
-              <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-400 hover:text-white">
-                ✕
-              </button>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-md w-full max-w-md p-5 text-xs font-mono shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <PenTool className="w-4 h-4 text-emerald-400" />
+                Сохранение границ пастбища
+              </h3>
+              <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-            <div className="space-y-3">
+            <form onSubmit={handleSaveGeofence} className="space-y-4 pt-4">
               <div>
-                <label className="block text-slate-400 mb-1">Название пастбища *</label>
+                <label className="block text-slate-400 mb-1">Название пастбища</label>
                 <input
                   type="text"
                   value={newGeofenceName}
                   onChange={(e) => setNewGeofenceName(e.target.value)}
-                  placeholder="Пастбище (Загон №1)"
-                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded text-white outline-none focus:border-emerald-500 font-mono"
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-hidden focus:border-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Описание</label>
+                <input
+                  type="text"
+                  value={newGeofenceDesc}
+                  onChange={(e) => setNewGeofenceDesc(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
 
               <div>
                 <label className="block text-slate-400 mb-1">Цвет границы</label>
                 <div className="flex items-center gap-2">
-                  {['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'].map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setNewGeofenceColor(col)}
-                      className={`w-6 h-6 rounded border transition-transform ${
-                        newGeofenceColor === col ? 'scale-110 border-white ring-1 ring-white' : 'border-slate-700'
-                      }`}
-                      style={{ backgroundColor: col }}
-                    />
-                  ))}
+                  <input
+                    type="color"
+                    value={newGeofenceColor}
+                    onChange={(e) => setNewGeofenceColor(e.target.value)}
+                    className="w-8 h-8 rounded border-0 bg-transparent cursor-pointer"
+                  />
+                  <span className="text-slate-300">{newGeofenceColor}</span>
                 </div>
               </div>
 
@@ -923,20 +685,19 @@ function LiveMapContent() {
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-3 py-1.5 text-slate-400 hover:text-white rounded"
+                  className="px-3 py-1.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
                 >
                   Отмена
                 </button>
                 <button
-                  type="button"
-                  onClick={handleSaveGeofence}
+                  type="submit"
                   disabled={savingGeofence}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold disabled:opacity-40"
+                  className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
                 >
-                  {savingGeofence ? 'Сохранение...' : 'Сохранить геозону'}
+                  {savingGeofence ? 'Сохранение...' : 'Сохранить пастбище'}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -944,15 +705,9 @@ function LiveMapContent() {
   );
 }
 
-export default function LiveMapPage() {
+export default function MapPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="h-full flex items-center justify-center text-slate-400 text-xs font-mono">
-          Инициализация гео-карты...
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-mono text-xs">Загрузка карты...</div>}>
       <LiveMapContent />
     </Suspense>
   );

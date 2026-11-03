@@ -96,7 +96,7 @@ export class ApiClient {
       headers['x-farm-id'] = farmId;
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${resolveApiBaseUrl()}${endpoint}`;
     const response = await fetch(url, {
       ...options,
       headers,
@@ -320,39 +320,18 @@ export class ApiClient {
   }
 
   // ==========================================
-  // MOCK & LIVE TESTING CONTROLS
+  // HARDWARE BUZZER CONTROL (ESP32)
   // ==========================================
-  public static async injectTelemetry(data: {
-    animalId: string;
-    latitude: number;
-    longitude: number;
-    battery?: number;
-    accuracy?: number;
-  }) {
-    return this.request<any>('/mock/inject-telemetry', {
+  public static async setBuzzer(buzzer: boolean, deviceId: string = 'QAM-0001') {
+    return this.request<{ success: boolean; buzzer: boolean; message: string }>('/device/buzzer', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ deviceId, buzzer }),
     });
   }
 
-  public static async simulateBreach(animalId: string) {
-    return this.request<any>('/mock/simulate-breach', {
-      method: 'POST',
-      body: JSON.stringify({ animalId }),
-    });
-  }
-
-  public static async simulateReturn(animalId: string) {
-    return this.request<any>('/mock/simulate-return', {
-      method: 'POST',
-      body: JSON.stringify({ animalId }),
-    });
-  }
-
-  public static async injectPhoto(animalId: string) {
-    return this.request<any>('/mock/inject-photo', {
-      method: 'POST',
-      body: JSON.stringify({ animalId }),
+  public static async getBuzzer(deviceId: string = 'QAM-0001') {
+    return this.request<{ deviceId: string; buzzer: boolean }>(`/device/buzzer/${deviceId}`, {
+      method: 'GET',
     });
   }
 }

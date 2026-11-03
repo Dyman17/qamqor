@@ -19,3 +19,4 @@ export class AppController {
     return { status: 'healthy', timestamp: new Date().toISOString() };
   }
 }
+

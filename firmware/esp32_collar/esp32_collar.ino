@@ -24,8 +24,8 @@
 // 1. НАСТРОЙКИ WI-FI И СЕРВЕРА
 // ==========================================
 // Имя и пароль Wi-Fi (можно раздать с мобильного телефона в поле)
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "BB";
+const char* WIFI_PASSWORD = "Student111";
 
 // Живой сервер Qamqor на Render
 const char* SERVER_URL    = "https://qamqor-api.onrender.com/api/v1/device/telemetry";

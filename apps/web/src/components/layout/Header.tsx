@@ -16,11 +16,10 @@ import {
 import Link from 'next/link';
 
 interface HeaderProps {
-  onOpenMockPanel?: () => void;
   activeAlertsCount?: number;
 }
 
-export function Header({ onOpenMockPanel, activeAlertsCount = 0 }: HeaderProps) {
+export function Header({ activeAlertsCount = 0 }: HeaderProps) {
   const { user, logout } = useAuth();
   const [lang, setLang] = useState<'KZ' | 'RU'>('RU');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -37,23 +36,12 @@ export function Header({ onOpenMockPanel, activeAlertsCount = 0 }: HeaderProps) 
         {/* Live System Indicator */}
         <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>ESP32 LTE Gateway • Online</span>
+          <span>ESP32 Gateway • Online</span>
         </div>
       </div>
 
       {/* Right controls */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Quick Test / Mock Dialog Button */}
-        {onOpenMockPanel && (
-          <button
-            onClick={onOpenMockPanel}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 transition-colors"
-            title="Ручной ввод GPS и тестирование побега без физического ESP32"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Эмулятор GPS / Ошейника</span>
-          </button>
-        )}
 
         {/* Language switch */}
         <button

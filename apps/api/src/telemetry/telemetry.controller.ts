@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
   Body,
   Headers,
   HttpCode,
@@ -29,6 +31,42 @@ export class TelemetryController {
     }
 
     return this.telemetryService.processDeviceTelemetry(token, dto);
+  }
+
+  @Post('buzzer')
+  @HttpCode(HttpStatus.OK)
+  setBuzzerState(
+    @Body() body: { deviceId?: string; buzzer: boolean },
+  ) {
+    const deviceId = body.deviceId || 'QAM-0001';
+    const isBuzzerOn = Boolean(body.buzzer);
+    this.telemetryService.setManualOverride(
+      deviceId,
+      {
+        latitude: isBuzzerOn ? 43.6000 : 43.6501,
+        longitude: isBuzzerOn ? 51.1000 : 51.1572,
+        isOutside: isBuzzerOn,
+        active: true,
+      },
+      60 * 60 * 1000,
+    );
+
+    return {
+      success: true,
+      deviceId,
+      buzzer: isBuzzerOn,
+      message: isBuzzerOn ? 'Buzzer turned ON' : 'Buzzer turned OFF',
+    };
+  }
+
+  @Get('buzzer/:deviceId?')
+  getBuzzerState(@Param('deviceId') paramDeviceId?: string) {
+    const deviceId = paramDeviceId || 'QAM-0001';
+    const override = this.telemetryService.getManualOverride(deviceId);
+    return {
+      deviceId,
+      buzzer: override?.active ? override.isOutside : false,
+    };
   }
 }
 
