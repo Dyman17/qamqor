@@ -110,10 +110,11 @@ export class MockService {
         longitude: updatedAnimal?.lastLongitude,
         battery: updatedAnimal?.device?.battery,
       },
+      collarResponse: response,
       serverNextInterval: response.nextInterval,
       message: updatedAnimal?.isOutsideGeofence
-        ? `🚨 Животное "${animal.name}" вышло за границы пастбища!`
-        : `✅ Животное "${animal.name}" находится внутри пастбища.`,
+        ? `🚨 Животное "${animal.name}" вышло за границы пастбища! На ошейник отправлена команда ВИБРАЦИИ.`
+        : `✅ Животное "${animal.name}" находится внутри пастбища. Вибрация отключена.`,
     };
   }
 

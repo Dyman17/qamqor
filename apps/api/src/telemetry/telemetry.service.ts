@@ -196,6 +196,14 @@ export class TelemetryService {
       serverTime: now.toISOString(),
       nextInterval,
       configVersion: 1,
+      command: isOutside ? 'VIBRATE_WARNING' : undefined,
+      inFence: !isOutside,
+      vibrate: isOutside,
+      vibrateDurationMs: isOutside ? 3000 : 0,
+      buzzer: isOutside,
+      warningMessage: isOutside
+        ? '🚨 GEOFENCE_BREACH: Скот вышел за пределы пастбища! Включена вибрация ошейника.'
+        : '✅ Внутри границ пастбища. Вибрация выключена.',
     };
   }
 }

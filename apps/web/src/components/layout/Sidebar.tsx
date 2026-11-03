@@ -24,22 +24,14 @@ export function Sidebar({ activeAlertsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Live Map', href: '/map', icon: MapPin },
-    { name: 'Животные', href: '/animals', icon: Compass },
-    { name: 'Ошейники', href: '/devices', icon: Radio },
-    { name: 'Пастбища', href: '/geofences', icon: Trees },
+    { name: 'Карта & Ошейник ESP32', href: '/map', icon: MapPin },
     {
-      name: 'Тревоги',
+      name: 'Журнал сработок',
       href: '/alerts',
       icon: ShieldAlert,
       badge: activeAlertsCount > 0 ? activeAlertsCount : null,
       badgeColor: 'bg-red-500 text-white',
     },
-    { name: 'Камера', href: '/camera', icon: Camera },
-    { name: 'Аналитика', href: '/analytics', icon: LineChart },
-    { name: 'Команда', href: '/team', icon: Users },
-    { name: 'Настройки', href: '/settings', icon: Settings },
   ];
 
   return (
