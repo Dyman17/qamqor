@@ -119,8 +119,8 @@ function LiveMapContent() {
         timestamp: new Date().toISOString(),
       });
 
-      if (selectedAnimal.lastLatitude) setManualLat(selectedAnimal.lastLatitude.toFixed(6));
-      if (selectedAnimal.lastLongitude) setManualLng(selectedAnimal.lastLongitude.toFixed(6));
+      setManualLat((selectedAnimal.lastLatitude ?? 43.6501).toFixed(6));
+      setManualLng((selectedAnimal.lastLongitude ?? 51.1572).toFixed(6));
     }
   }, [selectedAnimal?.id, selectedAnimal?.isOutsideGeofence]);
 
@@ -563,9 +563,9 @@ function LiveMapContent() {
                   onClick={() => {
                     if (isDrawing) return;
                     setSelectedAnimal(a);
-                    if (mapInstanceRef.current && a.lastLatitude) {
+                    if (mapInstanceRef.current) {
                       mapInstanceRef.current.flyTo({
-                        center: [a.lastLongitude, a.lastLatitude],
+                        center: [a.lastLongitude ?? 51.1572, a.lastLatitude ?? 43.6501],
                         zoom: 15,
                         duration: 600,
                       });
