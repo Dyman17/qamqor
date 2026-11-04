@@ -33,6 +33,46 @@ export class TelemetryController {
     return this.telemetryService.processDeviceTelemetry(token, dto);
   }
 
+  @Post('trigger')
+  @HttpCode(HttpStatus.OK)
+  setTriggerState(
+    @Body() body: { deviceId?: string; sound?: boolean; vibrate?: boolean; shock?: boolean; reset?: boolean },
+  ) {
+    const deviceId = body.deviceId || 'QAM-0001';
+    if (body.reset) {
+      this.telemetryService.clearManualOverride(deviceId);
+      return { success: true, deviceId, message: 'Все триггеры сброшены' };
+    }
+
+    const sound = Boolean(body.sound);
+    const vibrate = Boolean(body.vibrate);
+    const shock = Boolean(body.shock);
+    const anyActive = sound || vibrate || shock;
+
+    this.telemetryService.setManualOverride(
+      deviceId,
+      {
+        latitude: anyActive ? 43.6000 : 43.6501,
+        longitude: anyActive ? 51.1000 : 51.1572,
+        isOutside: anyActive,
+        sound,
+        vibrate,
+        shock,
+        active: true,
+      },
+      60 * 60 * 1000,
+    );
+
+    return {
+      success: true,
+      deviceId,
+      sound,
+      vibrate,
+      shock,
+      message: `Триггеры обновлены: звук=${sound}, вибро=${vibrate}, шокер=${shock}`,
+    };
+  }
+
   @Post('buzzer')
   @HttpCode(HttpStatus.OK)
   setBuzzerState(
@@ -46,6 +86,9 @@ export class TelemetryController {
         latitude: isBuzzerOn ? 43.6000 : 43.6501,
         longitude: isBuzzerOn ? 51.1000 : 51.1572,
         isOutside: isBuzzerOn,
+        sound: isBuzzerOn,
+        vibrate: isBuzzerOn,
+        shock: isBuzzerOn,
         active: true,
       },
       60 * 60 * 1000,

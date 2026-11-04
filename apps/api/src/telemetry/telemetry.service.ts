@@ -17,6 +17,9 @@ export interface DeviceOverride {
   longitude: number;
   isOutside: boolean;
   active: boolean;
+  sound?: boolean;
+  vibrate?: boolean;
+  shock?: boolean;
   expiresAt: number;
 }
 
@@ -82,7 +85,10 @@ export class TelemetryService {
     // Real online check: online only if ping arrived within the last 15 seconds!
     const isOnline = lastPing > 0 && (now - lastPing) < 15000;
     const override = this.getManualOverride(deviceId);
-    const buzzer = override?.active ? override.isOutside : false;
+    const sound = override?.active ? (override.sound ?? override.isOutside) : false;
+    const vibrate = override?.active ? (override.vibrate ?? override.isOutside) : false;
+    const shock = override?.active ? (override.shock ?? override.isOutside) : false;
+    const buzzer = sound;
 
     return {
       deviceId: device.deviceId,
@@ -95,6 +101,9 @@ export class TelemetryService {
       lastLatitude: latestTelemetry?.latitude ?? null,
       lastLongitude: latestTelemetry?.longitude ?? null,
       buzzer,
+      sound,
+      vibrate,
+      shock,
     };
   }
 
@@ -179,12 +188,19 @@ export class TelemetryService {
     );
 
     const override = this.getManualOverride(device.deviceId);
+    let sound = false;
+    let vibrate = false;
+    let shock = false;
+
     if (override && override.active) {
       isOutside = override.isOutside;
+      sound = override.sound ?? isOutside;
+      vibrate = override.vibrate ?? isOutside;
+      shock = override.shock ?? isOutside;
       if (isOutside) {
         nextInterval = emergencyInterval;
       }
-      this.logger.log(`Collar ping from ${device.deviceId} controlled by WEBSITE OVERRIDE (outside=${isOutside})`);
+      this.logger.log(`Collar ping from ${device.deviceId} controlled by WEBSITE OVERRIDE (outside=${isOutside}, sound=${sound}, vibrate=${vibrate}, shock=${shock})`);
     } else if (device.animal && device.animal.activeGeofence) {
       const evaluation = this.geofenceService.evaluateLocation(
         {
@@ -280,19 +296,28 @@ export class TelemetryService {
       },
     });
 
+    if (!override || !override.active) {
+      sound = isOutside;
+      vibrate = isOutside;
+      shock = isOutside;
+    }
+
     return {
       success: true,
       serverTime: now.toISOString(),
       nextInterval,
       configVersion: 1,
-      command: isOutside ? 'VIBRATE_WARNING' : undefined,
+      command: isOutside ? 'BREACH_ALERT' : undefined,
       inFence: !isOutside,
-      vibrate: isOutside,
-      vibrateDurationMs: isOutside ? 3000 : 0,
-      buzzer: isOutside,
+      buzzer: sound,
+      sound,
+      vibrate,
+      vibrateDurationMs: vibrate ? 3000 : 0,
+      shock,
+      shockDurationMs: shock ? 150 : 0,
       warningMessage: isOutside
-        ? '🚨 GEOFENCE_BREACH: Скот вышел за пределы пастбища! Включена вибрация ошейника.'
-        : '✅ Внутри границ пастбища. Вибрация выключена.',
+        ? '🚨 GEOFENCE_BREACH: Скот вне пастбища! Включены звук I2S, вибро и импульс 400кВ.'
+        : '✅ Внутри границ пастбища. Все триггеры выключены.',
     };
   }
 }

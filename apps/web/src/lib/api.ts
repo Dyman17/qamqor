@@ -320,8 +320,28 @@ export class ApiClient {
   }
 
   // ==========================================
-  // HARDWARE BUZZER CONTROL (ESP32)
+  // HARDWARE MULTI-TIER TRIGGER CONTROL (ESP32-WROVER)
   // ==========================================
+  public static async setDeviceTrigger(data: {
+    deviceId?: string;
+    sound?: boolean;
+    vibrate?: boolean;
+    shock?: boolean;
+    reset?: boolean;
+  }) {
+    return this.request<{
+      success: boolean;
+      deviceId: string;
+      sound?: boolean;
+      vibrate?: boolean;
+      shock?: boolean;
+      message: string;
+    }>('/device/trigger', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   public static async setBuzzer(buzzer: boolean, deviceId: string = 'QAM-0001') {
     return this.request<{ success: boolean; buzzer: boolean; message: string }>('/device/buzzer', {
       method: 'POST',
@@ -347,6 +367,9 @@ export class ApiClient {
       lastLatitude: number | null;
       lastLongitude: number | null;
       buzzer: boolean;
+      sound?: boolean;
+      vibrate?: boolean;
+      shock?: boolean;
     }>(`/device/status/${deviceId}`, {
       method: 'GET',
     });

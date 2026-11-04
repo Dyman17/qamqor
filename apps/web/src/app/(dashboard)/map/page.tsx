@@ -14,8 +14,9 @@ import {
   VolumeX,
   Layers,
   Signal,
-  Wifi,
-  WifiOff,
+  Zap,
+  Activity,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface DeviceStatus {
@@ -29,6 +30,9 @@ interface DeviceStatus {
   lastLatitude: number | null;
   lastLongitude: number | null;
   buzzer: boolean;
+  sound?: boolean;
+  vibrate?: boolean;
+  shock?: boolean;
 }
 
 function LiveMapContent() {
@@ -47,11 +51,14 @@ function LiveMapContent() {
     lastLatitude: null,
     lastLongitude: null,
     buzzer: false,
+    sound: false,
+    vibrate: false,
+    shock: false,
   });
 
   const [geofences, setGeofences] = useState<any[]>([]);
-  const [buzzerLoading, setBuzzerLoading] = useState<boolean>(false);
-  const [buzzerMessage, setBuzzerMessage] = useState<string | null>(null);
+  const [triggerLoading, setTriggerLoading] = useState<boolean>(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -85,26 +92,63 @@ function LiveMapContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Hardware Buzzer Toggle Handler
-  const handleToggleBuzzer = async () => {
-    setBuzzerLoading(true);
-    const targetState = !device.buzzer;
+  // 2. Hardware Trigger Control (Sound, Vibrate, Shock 400kV, or All)
+  const handleToggleTrigger = async (type: 'sound' | 'vibrate' | 'shock' | 'all') => {
+    setTriggerLoading(true);
     try {
-      await ApiClient.setBuzzer(targetState, 'QAM-0001');
-      setDevice((prev) => ({ ...prev, buzzer: targetState }));
-      setBuzzerMessage(
-        targetState
-          ? '🚨 Зуммер ВКЛЮЧЕН! ESP32 запищит при следующем пинге (в течение 3-5 сек).'
-          : '🔇 Зуммер ВЫКЛЮЧЕН. Команда остановки отправлена.',
-      );
-      setTimeout(() => setBuzzerMessage(null), 5000);
+      if (type === 'all') {
+        const anyActive = Boolean(device.sound || device.vibrate || device.shock || device.buzzer);
+        const nextState = !anyActive;
+        await ApiClient.setDeviceTrigger({
+          deviceId: 'QAM-0001',
+          sound: nextState,
+          vibrate: nextState,
+          shock: nextState,
+          reset: !nextState,
+        });
+        setDevice((prev) => ({
+          ...prev,
+          buzzer: nextState,
+          sound: nextState,
+          vibrate: nextState,
+          shock: nextState,
+        }));
+        setFeedbackMessage(
+          nextState
+            ? '🚨 ВСЕ ТРИГГЕРЫ ВКЛЮЧЕНЫ: Звук MAX98357, Вибромотор и Шокер 400кВ!'
+            : '🔇 Все триггеры выключены. Система в норме.',
+        );
+      } else {
+        const current = Boolean(device[type]);
+        const next = !current;
+        const newPayload = {
+          deviceId: 'QAM-0001',
+          sound: type === 'sound' ? next : Boolean(device.sound),
+          vibrate: type === 'vibrate' ? next : Boolean(device.vibrate),
+          shock: type === 'shock' ? next : Boolean(device.shock),
+        };
+        await ApiClient.setDeviceTrigger(newPayload);
+        setDevice((prev) => ({ ...prev, [type]: next, buzzer: newPayload.sound }));
+
+        const labels: Record<string, string> = {
+          sound: 'Звуковой сигнал (MAX98357 0.5W)',
+          vibrate: 'Вибромотор',
+          shock: 'Импульс шокера 400 кВ',
+        };
+        setFeedbackMessage(
+          next
+            ? `⚡ ${labels[type]} ВКЛЮЧЕН!`
+            : `🔇 ${labels[type]} ВЫКЛЮЧЕН.`,
+        );
+      }
+      setTimeout(() => setFeedbackMessage(null), 5000);
       fetchLiveStatus();
     } catch (err: any) {
-      console.error('Buzzer error:', err);
-      setBuzzerMessage('❌ Ошибка отправки команды');
-      setTimeout(() => setBuzzerMessage(null), 4000);
+      console.error('Trigger error:', err);
+      setFeedbackMessage('❌ Ошибка отправки команды на сервер');
+      setTimeout(() => setFeedbackMessage(null), 4000);
     } finally {
-      setBuzzerLoading(false);
+      setTriggerLoading(false);
     }
   };
 
@@ -289,7 +333,7 @@ function LiveMapContent() {
       const maplibregl = maplibreglModule.default;
       const lat = device.lastLatitude!;
       const lng = device.lastLongitude!;
-      const isBreached = device.buzzer;
+      const isBreached = Boolean(device.buzzer || device.sound || device.vibrate || device.shock);
 
       if (markerRef.current) {
         markerRef.current.setLngLat([lng, lat]);
@@ -318,7 +362,7 @@ function LiveMapContent() {
         markerRef.current = marker;
       }
     });
-  }, [device.lastLatitude, device.lastLongitude, device.buzzer]);
+  }, [device.lastLatitude, device.lastLongitude, device.buzzer, device.sound, device.vibrate, device.shock]);
 
   // 7. Save Geofence Handler
   const handleSaveGeofence = async (e: React.FormEvent) => {
@@ -355,12 +399,14 @@ function LiveMapContent() {
     }
   };
 
+  const anyTriggerActive = Boolean(device.sound || device.vibrate || device.shock || device.buzzer);
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden font-mono text-xs">
-      {/* 1. TOP BAR: DIRECT BUZZER TOGGLE & GEOFENCE ACTIONS */}
-      <div className="h-16 px-4 md:px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-20">
+      {/* 1. TOP BAR: STATUS & DIRECT MULTI-TIER TRIGGER CONTROLS */}
+      <div className="h-16 px-4 md:px-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-20 overflow-x-auto">
         {/* Device Status Badge */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <span className="font-bold text-slate-200 text-sm">{device.deviceId}</span>
           {device.isOnline ? (
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
@@ -375,28 +421,65 @@ function LiveMapContent() {
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Multi-Tier Hardware Triggers: Sound (MAX98357), Vibrate, Shock (400kV), All */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Audio I2S MAX98357 */}
           <button
-            onClick={handleToggleBuzzer}
-            disabled={buzzerLoading}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold tracking-wide transition-all shadow-lg ${
-              device.buzzer
-                ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse ring-4 ring-rose-500/40'
-                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold'
-            } disabled:opacity-50`}
+            onClick={() => handleToggleTrigger('sound')}
+            disabled={triggerLoading}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-all border ${
+              device.sound
+                ? 'bg-amber-600 border-amber-400 text-white animate-pulse'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+            }`}
+            title="Динамик 0.5W + MAX98357 I2S Сирена"
           >
-            {device.buzzer ? (
-              <>
-                <Volume2 className="w-5 h-5 fill-current animate-bounce" />
-                <span>🚨 ЗУММЕР ВКЛЮЧЕН (ПИЩИТ) — ВЫКЛЮЧИТЬ</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-5 h-5" />
-                <span>🔊 ВКЛЮЧИТЬ ЗУММЕР (ТЕСТ)</span>
-              </>
-            )}
+            <Volume2 className="w-3.5 h-3.5" />
+            <span>Звук 0.5W</span>
+          </button>
+
+          {/* Vibration Motor */}
+          <button
+            onClick={() => handleToggleTrigger('vibrate')}
+            disabled={triggerLoading}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-all border ${
+              device.vibrate
+                ? 'bg-blue-600 border-blue-400 text-white animate-pulse'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+            }`}
+            title="Вибромотор (GPIO 27)"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Вибромотор</span>
+          </button>
+
+          {/* Electric Pulse 400kV */}
+          <button
+            onClick={() => handleToggleTrigger('shock')}
+            disabled={triggerLoading}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-all border ${
+              device.shock
+                ? 'bg-rose-600 border-rose-400 text-white animate-pulse shadow-rose-900/50 shadow-md'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-rose-300'
+            }`}
+            title="Генератор импульсов 400 кВ (GPIO 19)"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>Импульс 400кВ</span>
+          </button>
+
+          {/* Master Trigger Toggle */}
+          <button
+            onClick={() => handleToggleTrigger('all')}
+            disabled={triggerLoading}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded text-xs font-extrabold transition-all shadow-md ${
+              anyTriggerActive
+                ? 'bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500/50 animate-pulse'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30'
+            }`}
+            title="Включить / Выключить все 3 триггера одновременно"
+          >
+            {anyTriggerActive ? '🚨 СБРОС ТРЕВОГИ' : '⚡ ТЕСТ ВСЕХ ТРИГГЕРОВ'}
           </button>
 
           {!isDrawing ? (
@@ -405,7 +488,7 @@ function LiveMapContent() {
                 setIsDrawing(true);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded text-xs transition-colors ml-2"
             >
               <PenTool className="w-3.5 h-3.5" />
               <span>Разметить зону</span>
@@ -416,7 +499,7 @@ function LiveMapContent() {
                 setIsDrawing(false);
                 setDrawPoints([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs ml-2"
             >
               <X className="w-3.5 h-3.5" />
               <span>Отмена</span>
@@ -426,10 +509,10 @@ function LiveMapContent() {
       </div>
 
       {/* Notification banner */}
-      {buzzerMessage && (
+      {feedbackMessage && (
         <div className="bg-slate-900 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-xs text-amber-300">
-          <span>{buzzerMessage}</span>
-          <button onClick={() => setBuzzerMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+          <span>{feedbackMessage}</span>
+          <button onClick={() => setFeedbackMessage(null)} className="text-slate-400 hover:text-white">✕</button>
         </div>
       )}
 
@@ -478,13 +561,13 @@ function LiveMapContent() {
           </div>
         )}
 
-        {/* 3. DOCKED RIGHT PANEL: REAL ESP32 HARDWARE STATUS */}
+        {/* 3. DOCKED RIGHT PANEL: REAL ESP32-WROVER HARDWARE MONITOR */}
         <div className="w-80 md:w-88 bg-slate-950 border-l border-slate-800 p-4 flex flex-col shrink-0 z-20 overflow-y-auto">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-emerald-400" />
               <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
-                Ошейник {device.deviceId}
+                Ошейник {device.deviceId} (WROVER)
               </span>
             </div>
             {device.isOnline ? (
@@ -518,27 +601,51 @@ function LiveMapContent() {
               </div>
             </div>
 
-            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1.5 text-[11px]">
+            {/* Actuators Hardware Status */}
+            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-2 text-[11px]">
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider border-b border-slate-800 pb-1">
+                Исполнительные датчики
+              </div>
+
+              {/* Sound MAX98357 */}
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Состояние зуммера:</span>
-                <span className={`font-bold ${device.buzzer ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
-                  {device.buzzer ? '🔊 ПИЩИТ (ВКЛ)' : '🔇 ВЫКЛЮЧЕН'}
+                <span className="text-slate-400">Динамик (I2S MAX98357):</span>
+                <span className={`font-bold ${device.sound ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`}>
+                  {device.sound ? '🔊 СИРЕНА ВКЛ' : 'ВЫКЛ'}
                 </span>
               </div>
+
+              {/* Vibration Motor */}
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Вибромотор (GPIO 27):</span>
+                <span className={`font-bold ${device.vibrate ? 'text-blue-400 animate-pulse' : 'text-slate-500'}`}>
+                  {device.vibrate ? '📳 ВИБРАЦИЯ' : 'ВЫКЛ'}
+                </span>
+              </div>
+
+              {/* Electric Pulse 400kV */}
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Шокер 400кВ (GPIO 19):</span>
+                <span className={`font-bold ${device.shock ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`}>
+                  {device.shock ? '⚡ ИМПУЛЬС 400кВ' : 'ВЫКЛ'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                <span className="text-slate-400">GPS Координаты:</span>
+                <span className="text-slate-300">
+                  {device.lastLatitude != null && device.lastLongitude != null
+                    ? `${device.lastLatitude.toFixed(4)}, ${device.lastLongitude.toFixed(4)}`
+                    : 'Поиск спутников (GPIO 32/33)'}
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Последний опрос:</span>
                 <span className="text-slate-300">
                   {device.lastHeartbeatAt
                     ? new Date(device.lastHeartbeatAt).toLocaleTimeString('ru-RU')
                     : 'Нет данных'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">GPS Координаты:</span>
-                <span className="text-slate-300">
-                  {device.lastLatitude != null && device.lastLongitude != null
-                    ? `${device.lastLatitude.toFixed(4)}, ${device.lastLongitude.toFixed(4)}`
-                    : 'Ожидание фиксации GPS'}
                 </span>
               </div>
             </div>

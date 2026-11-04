@@ -29,11 +29,14 @@ export interface DeviceTelemetryResponseDto {
   serverTime: string;    // ISO 8601 string
   nextInterval: number;  // Interval until next ping in seconds (e.g. 300)
   configVersion: number; // Device config version
-  command?: string;      // Optional command from server (e.g. "VIBRATE_WARNING", "BUZZ_ALARM")
+  command?: string;      // Optional command from server (e.g. "BREACH_ALERT", "VIBRATE_WARNING")
   inFence: boolean;      // true if within designated pasture, false if breach
   vibrate: boolean;      // true if ESP32 vibration motor should activate
   vibrateDurationMs: number; // vibration duration in ms (e.g. 3000 ms)
-  buzzer: boolean;       // true if buzzer/piezo should beep
+  buzzer: boolean;       // backwards compatible flag for audio buzzer/I2S sound
+  sound?: boolean;       // true if MAX98357 I2S speaker siren should sound
+  shock?: boolean;       // true if 400kV pulse generator should fire
+  shockDurationMs?: number; // duration of electric pulse in ms (e.g. 150 ms)
   warningMessage?: string;   // human-readable message for serial debug
 }
 
