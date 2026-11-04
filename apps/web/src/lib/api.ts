@@ -328,6 +328,9 @@ export class ApiClient {
     vibrate?: boolean;
     shock?: boolean;
     reset?: boolean;
+    zone?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
+    distanceToBorderMeters?: number;
+    toneFrequencyHz?: number;
   }) {
     return this.request<{
       success: boolean;
@@ -335,6 +338,9 @@ export class ApiClient {
       sound?: boolean;
       vibrate?: boolean;
       shock?: boolean;
+      zone?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
+      distanceToBorderMeters?: number;
+      toneFrequencyHz?: number;
       message: string;
     }>('/device/trigger', {
       method: 'POST',
@@ -370,6 +376,10 @@ export class ApiClient {
       sound?: boolean;
       vibrate?: boolean;
       shock?: boolean;
+      zone?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
+      distanceToBorderMeters?: number | null;
+      toneFrequencyHz?: number | null;
+      gpsAccuracy?: number | null;
     }>(`/device/status/${deviceId}`, {
       method: 'GET',
     });

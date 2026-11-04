@@ -14,6 +14,14 @@ import {
 // Header: Authorization: Bearer <DEVICE_SECRET>
 // ==========================================
 
+export enum VirtualFenceZone {
+  GREEN = 'GREEN',
+  YELLOW = 'YELLOW',
+  ORANGE = 'ORANGE',
+  RED = 'RED',
+  ESCAPE = 'ESCAPE',
+}
+
 export interface DeviceTelemetryRequestDto {
   deviceId: string;
   timestamp: string; // ISO 8601 string, e.g. "2026-11-02T18:00:00Z"
@@ -31,6 +39,9 @@ export interface DeviceTelemetryResponseDto {
   configVersion: number; // Device config version
   command?: string;      // Optional command from server (e.g. "BREACH_ALERT", "VIBRATE_WARNING")
   inFence: boolean;      // true if within designated pasture, false if breach
+  zone?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | VirtualFenceZone;
+  distanceToBorderMeters?: number;
+  toneFrequencyHz?: number;
   vibrate: boolean;      // true if ESP32 vibration motor should activate
   vibrateDurationMs: number; // vibration duration in ms (e.g. 3000 ms)
   buzzer: boolean;       // backwards compatible flag for audio buzzer/I2S sound

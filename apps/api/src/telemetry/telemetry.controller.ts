@@ -36,7 +36,16 @@ export class TelemetryController {
   @Post('trigger')
   @HttpCode(HttpStatus.OK)
   setTriggerState(
-    @Body() body: { deviceId?: string; sound?: boolean; vibrate?: boolean; shock?: boolean; reset?: boolean },
+    @Body() body: {
+      deviceId?: string;
+      sound?: boolean;
+      vibrate?: boolean;
+      shock?: boolean;
+      reset?: boolean;
+      zone?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
+      distanceToBorderMeters?: number;
+      toneFrequencyHz?: number;
+    },
   ) {
     const deviceId = body.deviceId || 'QAM-0001';
     if (body.reset) {
@@ -44,20 +53,42 @@ export class TelemetryController {
       return { success: true, deviceId, message: 'Все триггеры сброшены' };
     }
 
-    const sound = Boolean(body.sound);
-    const vibrate = Boolean(body.vibrate);
-    const shock = Boolean(body.shock);
-    const anyActive = sound || vibrate || shock;
+    let zone = body.zone;
+    let sound = body.sound;
+    let vibrate = body.vibrate;
+    let shock = body.shock;
+
+    if (zone) {
+      if (sound === undefined) sound = (zone === 'YELLOW' || zone === 'ORANGE' || zone === 'RED');
+      if (vibrate === undefined) vibrate = (zone === 'ORANGE' || zone === 'RED');
+      if (shock === undefined) shock = (zone === 'RED');
+    } else {
+      sound = Boolean(sound);
+      vibrate = Boolean(vibrate);
+      shock = Boolean(shock);
+      zone = shock ? 'RED' : vibrate ? 'ORANGE' : sound ? 'YELLOW' : 'GREEN';
+    }
+
+    const isOutside = zone === 'RED' || zone === 'ESCAPE' || shock;
+    const distanceToBorderMeters =
+      body.distanceToBorderMeters ??
+      (zone === 'RED' ? 25 : zone === 'ESCAPE' ? 120 : zone === 'ORANGE' ? 3 : zone === 'YELLOW' ? 12 : 50);
+    const toneFrequencyHz =
+      body.toneFrequencyHz ??
+      (zone === 'RED' ? 2400 : zone === 'ORANGE' ? 2000 : zone === 'YELLOW' ? 1200 : 0);
 
     this.telemetryService.setManualOverride(
       deviceId,
       {
-        latitude: anyActive ? 43.6000 : 43.6501,
-        longitude: anyActive ? 51.1000 : 51.1572,
-        isOutside: anyActive,
+        latitude: isOutside ? 43.6000 : 43.6501,
+        longitude: isOutside ? 51.1000 : 51.1572,
+        isOutside,
         sound,
         vibrate,
         shock,
+        zone,
+        distanceToBorderMeters,
+        toneFrequencyHz,
         active: true,
       },
       60 * 60 * 1000,
@@ -69,7 +100,10 @@ export class TelemetryController {
       sound,
       vibrate,
       shock,
-      message: `Триггеры обновлены: звук=${sound}, вибро=${vibrate}, шокер=${shock}`,
+      zone,
+      distanceToBorderMeters,
+      toneFrequencyHz,
+      message: `Триггеры обновлены: зона=${zone}, звук=${sound}, вибро=${vibrate}, шокер=${shock}`,
     };
   }
 
@@ -89,6 +123,9 @@ export class TelemetryController {
         sound: isBuzzerOn,
         vibrate: isBuzzerOn,
         shock: isBuzzerOn,
+        zone: isBuzzerOn ? 'RED' : 'GREEN',
+        distanceToBorderMeters: isBuzzerOn ? 25 : 50,
+        toneFrequencyHz: isBuzzerOn ? 2400 : 0,
         active: true,
       },
       60 * 60 * 1000,

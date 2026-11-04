@@ -92,7 +92,7 @@ async function sendTelemetry(collar: SimulatedCollar) {
 
     const data = (await response.json()) as DeviceTelemetryResponseDto;
     console.log(
-      `📡 [${collar.deviceId}] ${collar.animalName} (${collar.species}) -> Lat: ${payload.latitude}, Lng: ${payload.longitude}, Bat: ${payload.battery}% | Server: nextInterval=${data.nextInterval}s`,
+      `📡 [${collar.deviceId}] ${collar.animalName} (${collar.species}) -> Lat: ${payload.latitude}, Lng: ${payload.longitude} | Zone: ${data.zone || (data.inFence ? 'GREEN' : 'RED')} (${data.distanceToBorderMeters ?? '?'}m) | Sound: ${data.sound ? `${data.toneFrequencyHz ?? 0}Hz` : 'OFF'}, Vibe: ${data.vibrate}, Shock: ${data.shock}`,
     );
   } catch (error: any) {
     console.error(`⚠️ [${collar.deviceId}] Connection error: ${error.message}`);
