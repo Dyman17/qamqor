@@ -1,0 +1,267 @@
+[
+  {
+    "id": "vec-001",
+    "description": "Deep inside pasture (>20m), perfect GPS",
+    "inputs": [
+      { "distance": 45.0, "accuracy": 2.5, "speedKmh": 1.2, "hdop": 0.9, "satellites": 10, "ageMs": 200 }
+    ],
+    "expectedZone": "GREEN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-002",
+    "description": "Inside pasture at 22m, boundary of Green zone",
+    "inputs": [
+      { "distance": 22.0, "accuracy": 3.0, "speedKmh": 2.0, "hdop": 1.0, "satellites": 9, "ageMs": 300 }
+    ],
+    "expectedZone": "GREEN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-003",
+    "description": "Inside pasture at 20.1m, still Green",
+    "inputs": [
+      { "distance": 20.1, "accuracy": 2.0, "speedKmh": 1.5, "hdop": 0.8, "satellites": 11, "ageMs": 150 }
+    ],
+    "expectedZone": "GREEN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-004",
+    "description": "Entering Yellow Zone Level 1 (distance 19.5m, requires 3 confirmed fixes)",
+    "inputs": [
+      { "distance": 19.5, "accuracy": 2.0, "speedKmh": 1.5, "hdop": 0.8, "satellites": 11, "ageMs": 150 },
+      { "distance": 19.2, "accuracy": 2.1, "speedKmh": 1.4, "hdop": 0.8, "satellites": 11, "ageMs": 200 },
+      { "distance": 19.0, "accuracy": 2.0, "speedKmh": 1.5, "hdop": 0.8, "satellites": 11, "ageMs": 180 }
+    ],
+    "expectedZone": "YELLOW",
+    "expectedToneLevel": 1,
+    "expectedToneFreqHz": 800,
+    "expectedActuators": { "sound": true, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-005",
+    "description": "Yellow Zone Level 1 without 3 confirmations stays in prior zone",
+    "inputs": [
+      { "distance": 25.0, "accuracy": 2.0, "speedKmh": 1.5, "hdop": 0.8, "satellites": 11, "ageMs": 150 },
+      { "distance": 19.5, "accuracy": 2.0, "speedKmh": 1.5, "hdop": 0.8, "satellites": 11, "ageMs": 150 }
+    ],
+    "expectedZone": "GREEN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": "NOT_CONFIRMED"
+  },
+  {
+    "id": "vec-006",
+    "description": "Yellow Zone Level 2 (distance 15.5m confirmed)",
+    "inputs": [
+      { "distance": 16.0, "accuracy": 2.5, "speedKmh": 1.8, "hdop": 1.0, "satellites": 9, "ageMs": 200 },
+      { "distance": 15.8, "accuracy": 2.4, "speedKmh": 1.7, "hdop": 1.0, "satellites": 9, "ageMs": 210 },
+      { "distance": 15.5, "accuracy": 2.2, "speedKmh": 1.6, "hdop": 1.0, "satellites": 9, "ageMs": 220 }
+    ],
+    "expectedZone": "YELLOW",
+    "expectedToneLevel": 2,
+    "expectedToneFreqHz": 1200,
+    "expectedActuators": { "sound": true, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-007",
+    "description": "Yellow Zone Level 3 (distance 12.5m confirmed)",
+    "inputs": [
+      { "distance": 13.0, "accuracy": 2.0, "speedKmh": 1.2, "hdop": 0.9, "satellites": 10, "ageMs": 250 },
+      { "distance": 12.8, "accuracy": 2.1, "speedKmh": 1.2, "hdop": 0.9, "satellites": 10, "ageMs": 260 },
+      { "distance": 12.5, "accuracy": 2.0, "speedKmh": 1.1, "hdop": 0.9, "satellites": 10, "ageMs": 270 }
+    ],
+    "expectedZone": "YELLOW",
+    "expectedToneLevel": 3,
+    "expectedToneFreqHz": 1600,
+    "expectedActuators": { "sound": true, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-008",
+    "description": "Yellow Zone Level 4 (distance 9.5m confirmed)",
+    "inputs": [
+      { "distance": 10.0, "accuracy": 1.9, "speedKmh": 1.0, "hdop": 0.8, "satellites": 12, "ageMs": 150 },
+      { "distance": 9.8, "accuracy": 1.8, "speedKmh": 1.0, "hdop": 0.8, "satellites": 12, "ageMs": 160 },
+      { "distance": 9.5, "accuracy": 1.8, "speedKmh": 0.9, "hdop": 0.8, "satellites": 12, "ageMs": 170 }
+    ],
+    "expectedZone": "YELLOW",
+    "expectedToneLevel": 4,
+    "expectedToneFreqHz": 2000,
+    "expectedActuators": { "sound": true, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-009",
+    "description": "Yellow Zone Level 5 (distance 6.5m confirmed)",
+    "inputs": [
+      { "distance": 7.0, "accuracy": 1.8, "speedKmh": 0.8, "hdop": 0.8, "satellites": 12, "ageMs": 180 },
+      { "distance": 6.8, "accuracy": 1.7, "speedKmh": 0.8, "hdop": 0.8, "satellites": 12, "ageMs": 190 },
+      { "distance": 6.5, "accuracy": 1.7, "speedKmh": 0.8, "hdop": 0.8, "satellites": 12, "ageMs": 200 }
+    ],
+    "expectedZone": "YELLOW",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-010",
+    "description": "Entering Orange Zone (Pre-border 3.5m, sound + vibration)",
+    "inputs": [
+      { "distance": 4.5, "accuracy": 1.5, "speedKmh": 0.8, "hdop": 0.8, "satellites": 12, "ageMs": 200 },
+      { "distance": 4.0, "accuracy": 1.5, "speedKmh": 0.8, "hdop": 0.8, "satellites": 12, "ageMs": 210 },
+      { "distance": 3.5, "accuracy": 1.4, "speedKmh": 0.7, "hdop": 0.8, "satellites": 12, "ageMs": 220 }
+    ],
+    "expectedZone": "ORANGE",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-011",
+    "description": "Orange Zone right at edge (0.5m inside)",
+    "inputs": [
+      { "distance": 1.5, "accuracy": 1.2, "speedKmh": 0.5, "hdop": 0.7, "satellites": 14, "ageMs": 180 },
+      { "distance": 1.0, "accuracy": 1.2, "speedKmh": 0.5, "hdop": 0.7, "satellites": 14, "ageMs": 190 },
+      { "distance": 0.5, "accuracy": 1.1, "speedKmh": 0.4, "hdop": 0.7, "satellites": 14, "ageMs": 200 }
+    ],
+    "expectedZone": "ORANGE",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-012",
+    "description": "Active Breach (RED): -8m outside, accuracy 3m (< abs distance), 3 confirmed fixes -> Shock fires",
+    "inputs": [
+      { "distance": -6.0, "accuracy": 3.0, "speedKmh": 3.0, "hdop": 1.1, "satellites": 8, "ageMs": 250 },
+      { "distance": -7.0, "accuracy": 2.8, "speedKmh": 3.2, "hdop": 1.0, "satellites": 9, "ageMs": 260 },
+      { "distance": -8.0, "accuracy": 2.5, "speedKmh": 3.1, "hdop": 1.0, "satellites": 9, "ageMs": 270 }
+    ],
+    "expectedZone": "RED",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": true },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-013",
+    "description": "Breach outside (-4m) BUT accuracy is 6m (> abs distance): Shock blocked by accuracy filter!",
+    "inputs": [
+      { "distance": -3.0, "accuracy": 6.0, "speedKmh": 1.0, "hdop": 1.5, "satellites": 6, "ageMs": 400 },
+      { "distance": -3.5, "accuracy": 6.0, "speedKmh": 1.0, "hdop": 1.5, "satellites": 6, "ageMs": 410 },
+      { "distance": -4.0, "accuracy": 6.0, "speedKmh": 1.0, "hdop": 1.5, "satellites": 6, "ageMs": 420 }
+    ],
+    "expectedZone": "RED",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": "ACCURACY"
+  },
+  {
+    "id": "vec-014",
+    "description": "Breach outside (-15m) BUT HDOP is 3.2 (> 2.5): UNKNOWN state, all actuators OFF",
+    "inputs": [
+      { "distance": -15.0, "accuracy": 5.0, "speedKmh": 2.0, "hdop": 3.2, "satellites": 4, "ageMs": 300 }
+    ],
+    "expectedZone": "UNKNOWN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": "HDOP"
+  },
+  {
+    "id": "vec-015",
+    "description": "Breach outside (-15m) BUT fix age is 4500ms (> 3000ms): UNKNOWN state, all actuators OFF",
+    "inputs": [
+      { "distance": -15.0, "accuracy": 3.0, "speedKmh": 2.0, "hdop": 1.2, "satellites": 8, "ageMs": 4500 }
+    ],
+    "expectedZone": "UNKNOWN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": "STALE"
+  },
+  {
+    "id": "vec-016",
+    "description": "Escape trigger by distance: -105m outside (< -100m) -> ESCAPE, Shock prohibited!",
+    "inputs": [
+      { "distance": -95.0, "accuracy": 3.0, "speedKmh": 4.0, "hdop": 1.0, "satellites": 10, "ageMs": 200 },
+      { "distance": -101.0, "accuracy": 3.0, "speedKmh": 4.0, "hdop": 1.0, "satellites": 10, "ageMs": 210 },
+      { "distance": -105.0, "accuracy": 2.8, "speedKmh": 4.1, "hdop": 1.0, "satellites": 10, "ageMs": 220 }
+    ],
+    "expectedZone": "ESCAPE",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": "ESCAPE_LATCH"
+  },
+  {
+    "id": "vec-017",
+    "description": "Escape trigger by speed outside: speed 18 km/h (> 15 km/h for 3s outside) -> ESCAPE, Shock prohibited",
+    "inputs": [
+      { "distance": -12.0, "accuracy": 2.5, "speedKmh": 16.5, "hdop": 1.0, "satellites": 9, "ageMs": 200 },
+      { "distance": -16.0, "accuracy": 2.5, "speedKmh": 17.0, "hdop": 1.0, "satellites": 9, "ageMs": 210 },
+      { "distance": -20.0, "accuracy": 2.4, "speedKmh": 18.0, "hdop": 1.0, "satellites": 9, "ageMs": 220 }
+    ],
+    "expectedZone": "ESCAPE",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": "ESCAPE_LATCH"
+  },
+  {
+    "id": "vec-018",
+    "description": "Animal running fast INSIDE pasture (speed 22 km/h, distance +30m): NOT Escape, remains GREEN",
+    "inputs": [
+      { "distance": 35.0, "accuracy": 2.0, "speedKmh": 20.0, "hdop": 0.9, "satellites": 10, "ageMs": 150 },
+      { "distance": 32.0, "accuracy": 2.0, "speedKmh": 21.0, "hdop": 0.9, "satellites": 10, "ageMs": 160 },
+      { "distance": 30.0, "accuracy": 2.0, "speedKmh": 22.0, "hdop": 0.9, "satellites": 10, "ageMs": 170 }
+    ],
+    "expectedZone": "GREEN",
+    "expectedToneLevel": 0,
+    "expectedToneFreqHz": 0,
+    "expectedActuators": { "sound": false, "vibrate": false, "shock": false },
+    "expectedBlockReason": null
+  },
+  {
+    "id": "vec-019",
+    "description": "Shock exhausted: 3 pulses already fired in 10-minute window -> shock blocked, SHOCK_EXHAUSTED",
+    "inputs": [
+      { "distance": -15.0, "accuracy": 2.0, "speedKmh": 2.0, "hdop": 1.0, "satellites": 9, "ageMs": 200, "usedShocksInWindow": 3 }
+    ],
+    "expectedZone": "RED",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": "LIMIT"
+  },
+  {
+    "id": "vec-020",
+    "description": "Operating Mode SOUND_ONLY: active breach outside (-25m) -> shock blocked by mode",
+    "inputs": [
+      { "distance": -25.0, "accuracy": 2.0, "speedKmh": 1.0, "hdop": 0.9, "satellites": 10, "ageMs": 200, "mode": "SOUND_ONLY" }
+    ],
+    "expectedZone": "RED",
+    "expectedToneLevel": 5,
+    "expectedToneFreqHz": 2400,
+    "expectedActuators": { "sound": true, "vibrate": true, "shock": false },
+    "expectedBlockReason": "MODE"
+  }
+]
