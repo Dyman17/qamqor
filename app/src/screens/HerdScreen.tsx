@@ -78,11 +78,11 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 },
               ]}
             />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Корова #{item.id}</Text>
-              <Text style={styles.rowSub}>Бирка {item.tag} · {item.pen}</Text>
+            <View style={styles.rowMain}>
+              <Text style={styles.rowTitle} numberOfLines={1}>Корова #{item.id}</Text>
+              <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">Бирка {item.tag} · {item.pen}</Text>
             </View>
-            <Text style={styles.rowTime}>{item.ago} мин назад</Text>
+            <Text style={styles.rowTime} numberOfLines={1}>{item.ago} мин назад</Text>
           </TouchableOpacity>
         )}
       />
@@ -152,6 +152,10 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+  },
   rowTitle: {
     ...typography.bodyL,
   },
@@ -163,6 +167,7 @@ const styles = StyleSheet.create({
   rowTime: {
     ...typography.caption,
     color: colors.ink3,
+    flexShrink: 0,
   },
 });
 

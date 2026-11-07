@@ -47,6 +47,7 @@ export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 style={[
                   typography.bodyL,
                   {
+                    flexShrink: 1,
                     color:
                       item.type === 'danger'
                         ? colors.signal
@@ -112,6 +113,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -121,6 +123,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
