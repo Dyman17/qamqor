@@ -1,59 +1,73 @@
-pair                                                       ratio    min    result
-tertiary button in UNREAD alert (was 4.19)                 6.43     4.5    pass
-tertiary button in read alert / on surface                 5.05     4.5    pass
-tertiary 'Retry' in server banner (was 4.19)               4.98     4.5    pass
-Wi-Fi plate text                                           5.04     4.5    pass
-Wi-Fi plate button 'Понятно'                               5.04     4.5    pass
-pressed secondary/tertiary label on sunken                 6.47     4.5    pass
-secondary button on bg (mini card)                         4.78     4.5    pass
-secondary button on surface                                5.05     4.5    pass
-rail active label on primary-tint (was 4.19)               11.89    4.5    pass
-bottom-nav active label                                    5.05     4.5    pass
-bottom-nav inactive label                                  8.22     4.5    pass
-link / farm accents on bg                                  4.78     4.5    pass
-chip selected text                                         11.89    4.5    pass
-herd row selected: title                                   11.89    4.5    pass
-herd row selected: subtitle                                6.83     4.5    pass
-herd row selected: time                                    4.95     4.5    pass
-unread alert: title                                        11.89    4.5    pass
-unread alert: text                                         6.83     4.5    pass
-unread alert: time                                         4.95     4.5    pass
-mini card caption on bg                                    5.64     4.5    pass
-ink-3 on surface                                           5.96     4.5    pass
-ink-3 on sunken                                            4.98     4.5    pass
-on-primary on primary                                      5.05     4.5    pass
-on-primary on primary-pressed                              7.73     4.5    pass
-on-primary on danger                                       6.00     4.5    pass
-on-primary on danger-pressed                               8.05     4.5    pass
-nav badge                                                  6.00     4.5    pass
-toast                                                      14.31    4.5    pass
-badge ok / connection button / all-ok line                 5.03     4.5    pass
-badge warning                                              5.80     4.5    pass
-badge danger / error banner                                4.98     4.5    pass
-badge offline / offline banner                             6.25     4.5    pass
-badge info ('Черновик')                                    5.04     4.5    pass
-summary tile: out of zone                                  6.00     4.5    pass
-summary tile: no fence                                     6.80     4.5    pass
-summary tile: no connection                                7.54     4.5    pass
-summary tile label                                         8.22     4.5    pass
-alert icon danger on tint (G)                              4.99     3.0    pass
-check icon primary on tint (G)                             4.19     3.0    pass
-map label ink on 90% plate over dark grass                 11.86    4.5    pass
-map label ink on 90% plate over sand                       13.59    4.5    pass
-top bar text on 94% surface over dark grass                12.86    4.5    pass
-map caption                                                8.22     4.5    pass
-input border (G)                                           3.87     3.0    pass
-input border on bg (G)                                     3.66     3.0    pass
-selected outline primary on tint (G)                       4.19     3.0    pass
-focus ring on bg (G)                                       6.34     3.0    pass
-focus ring on surface (G)                                  6.70     3.0    pass
-focus ring on sunken (G)                                   5.60     3.0    pass
-focus ring on primary-tint (G)                             5.56     3.0    pass
-marker ok glyph (G)                                        6.07     3.0    pass
-marker warning glyph (G)                                   6.96     3.0    pass
-marker danger glyph white (G)                              4.31     3.0    pass
-marker offline glyph (G)                                   4.55     3.0    pass
-marker ring vs halo (G)                                    14.31    3.0    pass
+pair                                                               ratio    min    result
+ink on surface-0 (AAA)                                             17.00    7.0    pass
+ink-2 on surface-0 (AAA)                                           9.74     7.0    pass
+ink-3 on surface-0                                                 7.12     4.5    pass
+primary on surface-0 (tertiary buttons, links)                     9.80     4.5    pass
+ok on surface-0                                                    6.26     4.5    pass
+warning on surface-0                                               7.09     4.5    pass
+signal on surface-0                                                5.98     4.5    pass
+offline on surface-0                                               7.47     4.5    pass
+ink on surface-1 (AAA)                                             14.95    7.0    pass
+ink-2 on surface-1 (AAA)                                           8.56     7.0    pass
+ink-3 on surface-1                                                 6.26     4.5    pass
+primary on surface-1 (tertiary buttons, links)                     8.61     4.5    pass
+ok on surface-1                                                    5.50     4.5    pass
+warning on surface-1                                               6.23     4.5    pass
+signal on surface-1                                                5.26     4.5    pass
+offline on surface-1                                               6.57     4.5    pass
+ink on surface-2 (AAA)                                             17.72    7.0    pass
+ink-2 on surface-2 (AAA)                                           10.16    7.0    pass
+ink-3 on surface-2                                                 7.42     4.5    pass
+primary on surface-2 (tertiary buttons, links)                     10.21    4.5    pass
+ok on surface-2                                                    6.52     4.5    pass
+warning on surface-2                                               7.39     4.5    pass
+signal on surface-2                                                6.23     4.5    pass
+offline on surface-2                                               7.79     4.5    pass
+ink-3 on surface-0 (AAA)                                           7.12     7.0    pass
+ink on sheet glass .93 over sand                                   16.71    4.5    pass
+ink-2 on sheet glass .93 over sand                                 9.58     4.5    pass
+ink-3 on sheet glass .93 over sand                                 7.00     4.5    pass
+primary on sheet glass .93 over sand                               9.63     4.5    pass
+signal on sheet glass .93 over sand                                5.88     4.5    pass
+offline on sheet glass .93 over sand                               7.34     4.5    pass
+ink on top chrome glass .86 over sand                              16.43    4.5    pass
+ink on pill-less map plate .88 over sand                           16.55    4.5    pass
+ink on sheet glass .93 over dark grass                             15.24    4.5    pass
+ink-2 on sheet glass .93 over dark grass                           8.73     4.5    pass
+ink-3 on sheet glass .93 over dark grass                           6.38     4.5    pass
+primary on sheet glass .93 over dark grass                         8.78     4.5    pass
+signal on sheet glass .93 over dark grass                          5.36     4.5    pass
+offline on sheet glass .93 over dark grass                         6.70     4.5    pass
+ink on top chrome glass .86 over dark grass                        13.50    4.5    pass
+ink on pill-less map plate .88 over dark grass                     13.99    4.5    pass
+white on primary                                                   10.34    4.5    pass
+white on primary-pressed                                           13.14    4.5    pass
+white on signal (destructive, server banner)                       6.31     4.5    pass
+white on signal-pressed                                            8.86     4.5    pass
+white on ink (toast)                                               17.94    4.5    pass
+white on primary (selected chip, language row, cluster number)     10.34    4.5    pass
+ink on signal-map (alerts tab counter)                             5.75     4.5    pass
+ink on surface-0 (current tab on the pill)                         17.00    4.5    pass
+signal on surface-2-white (out-of-zone tile number)                6.31     4.5    pass
+ink on surface-2-white (tile label)                                17.94    4.5    pass
+nav label (inactive) on surface-3-a                                5.61     4.5    pass
+white on surface-3-a                                               7.60     4.5    pass
+nav label (inactive) on surface-3-b                                7.64     4.5    pass
+white on surface-3-b                                               10.34    4.5    pass
+nav label (inactive) on surface-3-c                                9.09     4.5    pass
+white on surface-3-c                                               12.31    4.5    pass
+primary on surface-0 (current tab icon)                            9.80     3.0    pass
+line on surface-2 (input border, G)                                4.90     3.0    pass
+line on surface-0 (G)                                              4.70     3.0    pass
+focus outer ring vs inner ring (G)                                 17.00    3.0    pass
+focus outer ring vs sand (G)                                       13.24    3.0    pass
+focus inner ring vs dark grass (G)                                 9.05     3.0    pass
+focus inner ring vs primary (G)                                    9.80     3.0    pass
+marker casing vs white dot (G)                                     15.35    3.0    pass
+white ring vs dark grass (G)                                       9.55     3.0    pass
+white ring vs signal-map dot (G)                                   3.12     1.0    pass
+signal-map dot vs marker casing (G)                                4.92     3.0    pass
+primary cluster vs white ring (G)                                  10.34    3.0    pass
 
-55 pairs, 0 failures
-Informational (exempt, disabled controls): disabled-text on bg = 4.32, on sunken = 3.82
+69 pairs, 0 failures
+Informational (disabled controls are exempt): disabled-text on surface-0 = 5.47, on surface-1 = 4.81

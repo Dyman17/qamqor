@@ -1,0 +1,166 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
+import { colors, spacing, radius, typography } from '../theme/tokens';
+
+const ANIMALS = [
+  { id: '0142', tag: 'DEMO-A42', pen: 'Загон «Северный»', status: 'danger', ago: 5 },
+  { id: '0087', tag: 'DEMO-A87', pen: 'Загон «Северный»', status: 'ok', ago: 1 },
+  { id: '0054', tag: 'DEMO-A54', pen: 'Загон «Северный»', status: 'ok', ago: 2 },
+  { id: '0099', tag: 'DEMO-A99', pen: 'Загон «Северный»', status: 'ok', ago: 3 },
+  { id: '0231', tag: 'DEMO-A31', pen: 'Загон «Северный»', status: 'offline', ago: 12 },
+  { id: '0301', tag: 'DEMO-A01', pen: 'Загон «Южный»', status: 'ok', ago: 1 },
+  { id: '0410', tag: 'DEMO-A11', pen: 'Без границы', status: 'warning', ago: 6 },
+];
+
+export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
+  const filtered = ANIMALS.filter((a) => {
+    const matchesFilter = filter === 'all' || a.status === filter;
+    const matchesSearch = a.id.includes(search) || a.tag.toLowerCase().includes(search.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  return (
+    <View style={styles.container}>
+      <Text style={[typography.title1, styles.header]}>Стадо (142)</Text>
+
+      {/* Search Input */}
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Поиск по номеру или бирке..."
+          placeholderTextColor={colors.ink3}
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterRow}>
+        {(['all', 'ok', 'danger', 'offline'] as const).map((st) => (
+          <TouchableOpacity
+            key={st}
+            style={[styles.filterChip, filter === st && styles.filterChipActive]}
+            onPress={() => setFilter(st)}
+          >
+            <Text style={[styles.chipText, filter === st && styles.chipTextActive]}>
+              {st === 'all' ? 'Все' : st === 'ok' ? 'В зоне' : st === 'danger' ? 'Вне зоны' : 'Без связи'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Animal List */}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('Profile', { animalId: item.id })}
+          >
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor:
+                    item.status === 'ok'
+                      ? colors.ok
+                      : item.status === 'danger'
+                      ? colors.signal
+                      : item.status === 'offline'
+                      ? colors.offline
+                      : colors.warning,
+                },
+              ]}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Корова #{item.id}</Text>
+              <Text style={styles.rowSub}>Бирка {item.tag} · {item.pen}</Text>
+            </View>
+            <Text style={styles.rowTime}>{item.ago} мин назад</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.surface0,
+    paddingTop: 54,
+    paddingHorizontal: spacing.lg,
+  },
+  header: {
+    marginBottom: spacing.md,
+  },
+  searchBar: {
+    backgroundColor: colors.surface1,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.md,
+    height: 48,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  searchInput: {
+    ...typography.body,
+    color: colors.ink,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface1,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+  },
+  chipText: {
+    ...typography.caption,
+    color: colors.ink2,
+  },
+  chipTextActive: {
+    color: colors.onPrimary,
+    fontWeight: '700',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    gap: spacing.md,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  rowTitle: {
+    ...typography.bodyL,
+  },
+  rowSub: {
+    ...typography.caption,
+    color: colors.ink2,
+    marginTop: 2,
+  },
+  rowTime: {
+    ...typography.caption,
+    color: colors.ink3,
+  },
+});
+

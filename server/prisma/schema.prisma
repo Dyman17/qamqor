@@ -1,0 +1,257 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  FARM_OWNER
+  FARM_MANAGER
+  VIEWER
+}
+
+enum AnimalSpecies {
+  HORSE
+  CAMEL
+  CATTLE
+  SHEEP
+  GOAT
+}
+
+enum AnimalGender {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  LOW_BATTERY
+  NO_GPS
+  INACTIVE
+}
+
+enum AlertType {
+  GEOFENCE_BREACH
+  GEOFENCE_RETURN
+  LOW_BATTERY
+  DEVICE_OFFLINE
+  GPS_LOST
+  DEVICE_RESTORED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         UserRole     @default(FARM_OWNER)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  farmMembers  FarmMember[]
+  ownedFarms   Farm[]       @relation("FarmOwner")
+
+  @@map("users")
+}
+
+model Farm {
+  id              String           @id @default(uuid())
+  name            String
+  description     String?
+  ownerId         String
+  owner           User             @relation("FarmOwner", fields: [ownerId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  members         FarmMember[]
+  animals         Animal[]
+  devices         Device[]
+  geofences       Geofence[]
+  alerts          Alert[]
+  cameraSnapshots CameraSnapshot[]
+
+  @@map("farms")
+}
+
+model FarmMember {
+  id        String   @id @default(uuid())
+  userId    String
+  farmId    String
+  role      UserRole @default(FARM_MANAGER)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm      Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, farmId])
+  @@map("farm_members")
+}
+
+model Device {
+  id                String           @id @default(uuid())
+  deviceId          String           @unique // e.g. "QAM-0001" or "QAM-CAM-0001"
+  secretKey         String           // Bearer secret for authentication
+  status            DeviceStatus     @default(INACTIVE)
+  battery           Int              @default(100)
+  signal            Int?             // dBm RSSI
+  firmwareVersion   String?          @default("1.0.0")
+  lastHeartbeatAt   DateTime?
+  farmId            String?
+  farm              Farm?            @relation(fields: [farmId], references: [id], onDelete: SetNull)
+  animalId          String?          @unique
+  animal            Animal?          @relation(fields: [animalId], references: [id], onDelete: SetNull)
+
+  telemetries       Telemetry[]
+  alerts            Alert[]
+  commands          DeviceCommand[]
+  cameraSnapshots   CameraSnapshot[]
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@map("devices")
+}
+
+model Animal {
+  id                String           @id @default(uuid())
+  farmId            String
+  farm              Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  name              String           // e.g. "Қарагер"
+  tagNumber         String           @unique // Ear tag number
+  species           AnimalSpecies
+  gender            AnimalGender     @default(UNKNOWN)
+  breed             String?
+  birthDate         DateTime?
+  photoUrl          String?
+
+  device            Device?
+  activeGeofenceId  String?
+  activeGeofence    Geofence?        @relation(fields: [activeGeofenceId], references: [id], onDelete: SetNull)
+
+  // Last known state cache
+  lastLatitude      Float?
+  lastLongitude     Float?
+  lastAccuracy      Float?
+  lastSeenAt        DateTime?
+  isOutsideGeofence Boolean          @default(false)
+
+  telemetries       Telemetry[]
+  alerts            Alert[]
+  cameraSnapshots   CameraSnapshot[]
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@map("animals")
+}
+
+model Geofence {
+  id          String   @id @default(uuid())
+  farmId      String
+  farm        Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  color       String   @default("#10B981")
+  polygonJson Json
+  isActive    Boolean  @default(true)
+
+  animals     Animal[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("geofences")
+}
+
+model Telemetry {
+  id                String   @id @default(uuid())
+  deviceId          String
+  device            Device   @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  animalId          String?
+  animal            Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  latitude          Float
+  longitude         Float
+  accuracy          Float
+  battery           Int
+  signal            Int?
+  isOutsideGeofence Boolean  @default(false)
+  timestamp         DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([deviceId, timestamp(sort: Desc)])
+  @@index([animalId, timestamp(sort: Desc)])
+  @@map("telemetry")
+}
+
+model Alert {
+  id          String        @id @default(uuid())
+  farmId      String
+  farm        Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animalId    String?
+  animal      Animal?       @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  deviceId    String?
+  device      Device?       @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
+  type        AlertType
+  severity    AlertSeverity @default(WARNING)
+  status      AlertStatus   @default(ACTIVE)
+  message     String
+  latitude    Float?
+  longitude   Float?
+  resolvedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([farmId, status])
+  @@map("alerts")
+}
+
+model CameraSnapshot {
+  id         String   @id @default(uuid())
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  animalId   String?
+  animal     Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  farmId     String
+  farm       Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  imageUrl   String   // File path or base64 data URI
+  trigger    String   @default("MANUAL_REQUEST") // MANUAL_REQUEST, GEOFENCE_BREACH, PERIODIC, MOCK_TEST
+  fileSize   Int?     // bytes
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([farmId, capturedAt(sort: Desc)])
+  @@index([animalId, capturedAt(sort: Desc)])
+  @@map("camera_snapshots")
+}
+
+model DeviceCommand {
+  id         String    @id @default(uuid())
+  deviceId   String
+  device     Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  command    String    // CAPTURE_PHOTO, BUZZER_ON, BUZZER_OFF, LOCATE_IMMEDIATELY
+  payload    Json?     // Optional params
+  status     String    @default("PENDING") // PENDING, EXECUTED, CANCELLED
+  executedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([deviceId, status])
+  @@map("device_commands")
+}

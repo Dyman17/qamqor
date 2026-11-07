@@ -1,0 +1,8 @@
+Satellite imagery (sentinel2-ili.webp, sentinel2-steppe.webp)
+Source: EOxCloudless / Sentinel-2 cloudless layer for 2016 by EOX, obtained from the public WMS
+https://tiles.maps.eox.at/wms (layer s2cloudless_3857), no account or login.
+Licence stated in the WMS capabilities of the layer: Creative Commons Attribution 4.0 International
+(https://creativecommons.org/licenses/by/4.0/).
+Required credit: "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)".
+Areas: ili = about 43.72 N 78.17 E (Ili river lowland, Almaty region); steppe = about 43.17 N 71.03 E (Zhambyl region).
+Imagery is shown only as a design mock-up texture. Toning is done in CSS (filters) on top of the unmodified-colour file.

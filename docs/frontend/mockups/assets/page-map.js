@@ -15,6 +15,7 @@
   var state = q.get("state") || "normal";
   var sheet = q.get("sheet") || "peek";
   var role = q.get("role") || "owner";
+  var view = q.get("view") || "map";
 
   function frame(def, container) {
     var wrap = document.createElement("section");
@@ -27,7 +28,7 @@
     dev.style.setProperty("--h", def.h + "px");
     if (def.safe) { dev.setAttribute("data-safe-b", ""); }
     dev.setAttribute("data-device", def.phone ? "phone" : "tablet");
-    var app = MAPAPP.build({ state: state, sheet: sheet, role: role, name: def.id });
+    var app = MAPAPP.build({ state: state, sheet: sheet, role: role, view: view, name: def.id });
     dev.appendChild(app);
     wrap.querySelector(".mk-scroll").appendChild(dev);
     container.appendChild(wrap);
@@ -43,7 +44,7 @@
     var dev = document.createElement("main");   // the one main landmark of the embedded page
     dev.className = "device is-embed";
     if (window.innerWidth < 768 && window.innerHeight >= 800) { dev.setAttribute("data-safe-b", ""); }
-    var app = MAPAPP.build({ state: state, sheet: sheet, role: role, name: "embed" });
+    var app = MAPAPP.build({ state: state, sheet: sheet, role: role, view: view, name: "embed" });
     dev.appendChild(app);
     document.body.appendChild(dev);
     app.refresh();
@@ -57,15 +58,22 @@
     document.getElementById("panel").addEventListener("change", function (e) {
       var n = e.target.name, v = e.target.value;
       apps.forEach(function (a) {
-        if (n === "state") { a.app.setState(v); }
+        if (n === "view") { a.app.setView(v); }
+        else if (n === "state") { a.app.setState(v); }
         else if (n === "sheet" && a.phone) { a.app.setSheet(v); }
         else if (n === "role") { a.app.setRole(v); }
         else if (n === "scale") { a.wrap.querySelector(".mk-scroll").style.zoom = v; }
       });
     });
+
+    document.addEventListener("appviewchange", function (e) {
+      var v = typeof e.detail === "string" ? e.detail : (e.detail && e.detail.view);
+      var r = document.querySelector('#panel input[name="view"][value="' + v + '"]');
+      if (r) { r.checked = true; }
+    });
     // apply URL-provided initial values to the radios
-    ["state", "sheet", "role"].forEach(function (n) {
-      var v = { state: state, sheet: sheet, role: role }[n];
+    ["view", "state", "sheet", "role"].forEach(function (n) {
+      var v = { view: view, state: state, sheet: sheet, role: role }[n];
       var r = document.querySelector('input[name="' + n + '"][value="' + v + '"]');
       if (r) { r.checked = true; }
     });

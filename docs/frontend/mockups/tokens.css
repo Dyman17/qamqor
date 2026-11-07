@@ -1,52 +1,66 @@
 /*
-  Qamqor mockups: design tokens.
-  Names and values come from docs/frontend/app-design-brief.md (palette B "сочная трава", approved).
-  Naming mirrors the Figma variables (docs/frontend/figma-phase-1.md): Color, Map, Space, Radius, Size.
+  Qamqor mockups: design tokens, brief v3 (direction A3 "Горизонт современный", approved).
+  Names and values come from docs/frontend/app-design-brief.md sections 2-4 and 8 (and directions/assets/a3.css).
   This is the ONLY file in the mockups that may contain raw colour values.
 */
 
 :root {
-  /* ---- Color (Light, the only mode) ---- */
-  --bg: #F4FBEE;
-  --surface: #FFFFFF;
-  --sunken: #E3EFD3;
-  --ink: #14301A;
-  --ink-2: #3A5540;
-  --ink-3: #4F6A55;
-  --line: #6A8A62;
-  --line-soft: #C6DBB2;
-  --primary: #17802C;
-  --primary-vivid: #5CCB3C;   /* fills only, see brief 2.1 */
-  --primary-pressed: #10601F;
+  /* ---- Palette (2.1) ---- */
+  --primary: #0D4A2B;
+  --primary-pressed: #093820;
+  --primary-lift: #14603A;       /* light end of the navigation gradient only */
   --on-primary: #FFFFFF;
-  --primary-tint: #D9F2C4;
-  --accent: #FFB300;
-  --sky: #2A9AE8;
-  --disabled-text: #6B7A66;
-  --focus: #1B4FD6;
-  --danger-pressed: #9E1A10;
+  --signal: #B52C08;             /* the only red: out of zone, deviation numbers, draft, error, destructive */
+  --signal-pressed: #8E2106;
+  --signal-map: #FF5A1F;         /* map dot, pulse, alerts tab counter */
+  --marker-casing: #0F2A1C;
+  --ink: #0B1A12;
+  --ink-2: #31453A;
+  --ink-3: #46594D;
+  --offline: #46554C;
+  --ok: #0D6B3A;
+  --ok-dot: #14934F;
+  --warning: #7A4A00;
+  --disabled-text: #586A5E;
+  --line: #5F7568;
+  --line-soft: rgba(11, 26, 18, .10);
+  --focus-inner: #F6FAF4;
+  --focus-outer: #0B1A12;
 
-  /* semantics: text / bg / solid (solid = fill for a plate or button with white text) */
-  --ok-text: #00705A;       --ok-bg: #D2F1E4;       --ok-solid: #00705A;
-  --warning-text: #8A4B00;  --warning-bg: #FFEBC2;  --warning-solid: #8A4B00;
-  --danger-text: #C21F14;   --danger-bg: #FFE4DF;   --danger-solid: #C21F14;
-  --offline-text: #4D5560;  --offline-bg: #E7EAEE;  --offline-solid: #4D5560;
-  --info-text: #0F62B5;     --info-bg: #DCEBFA;     --info-solid: #0F62B5;
+  /* ---- Tonal ladder (2.2) ---- */
+  --surface-0: #F6FAF4;
+  --surface-1: #E1EEDF;
+  --surface-2: #FDFEFB;
+  --surface-2-white: #FFFFFF;    /* "Out of zone" summary tile */
+  --surface-3-a: #14603A;        /* navigation gradient, top to bottom */
+  --surface-3-b: #0D4A2B;
+  --surface-3-c: #0A3D24;
+  --tonal-pressed: #D3E5D0;      /* tonal button pressed */
+  --nav-text: #CDE3D2;           /* inactive tab label on surface-3 */
 
-  /* ---- Map ---- */
-  --map-fence: #FFCE1F;
-  --map-active: #5CF2A0;
-  --map-alarm: #FF5A44;
-  --map-casing: #14301A;
-  --marker-ok: #1FBF8F;
-  --marker-warning: #FF9F0A;
-  --marker-danger: #E5352B;
-  --marker-offline: #8A929C;
-  /* placeholder basemap swatches (flat stylised, NOT real imagery) */
-  --map-ph-dark: #23301F;
-  --map-ph-mid: #2F4127;
-  --map-ph-field: #3A5030;
-  --map-ph-sand: #C9C2A8;
+  /* ---- Glass and highlights (2.4) ---- */
+  --glass-sheet: rgba(246, 250, 244, .93);
+  --glass-chrome: rgba(246, 250, 244, .86);
+  --glass-solid: #F6FAF4;        /* reduced transparency */
+  --glass-blur: blur(30px) saturate(1.6);
+  --hl: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(255, 255, 255, .3);
+  --hl-dark: inset 0 1px 0 rgba(255, 255, 255, .38), inset 0 0 0 1px rgba(255, 255, 255, .10);
+  --hl-soft: inset 0 1px 0 rgba(255, 255, 255, .8);
+  --sheen-top: radial-gradient(120% 100% at 50% 0, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 70%);
+  --sheen-diag: linear-gradient(115deg, rgba(255, 255, 255, .22) 0, rgba(255, 255, 255, 0) 38%);
+  --white-tint: rgba(255, 255, 255, .7);
+  --plate-glass: rgba(246, 250, 244, .88);
+  --row-hover: rgba(13, 74, 43, .07);
+
+  /* ---- Map overlays (2.5) ---- */
+  --map-line: #FFFFFF;
+  --map-fill: rgba(255, 255, 255, .04);
+  --map-fill-active: rgba(255, 255, 255, .14);
+  --map-shadow: rgba(6, 12, 18, .65);
+  --map-label-casing: rgba(8, 16, 24, .62);
+  --map-grad: rgba(11, 26, 18, .18);
+  --dot-off: rgba(14, 26, 20, .55);
+  --map-filter: saturate(1) contrast(1.1) brightness(1.1);
 
   /* ---- Space (4 px step) ---- */
   --space-1: 4px;
@@ -59,38 +73,52 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  /* ---- Radius ---- */
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 20px;
+  /* ---- Radius (nested, 4) ---- */
+  --r-xs: 6px;
+  --r-sm: 14px;
+  --r-md: 18px;
+  --r-btn: 20px;
+  --r-lg: 22px;
+  --r-xl: 24px;
+  --r-sheet: 32px;
+  --r-nav: 34px;
+  --r-rail: 42px;
+  --r-cluster: 9px;
 
   /* ---- Elevation ---- */
-  --e0: none;
-  --e1: 0 1px 2px rgba(20, 48, 26, .16);
-  --e2: 0 4px 16px rgba(20, 48, 26, .20);
+  --e1: 0 6px 20px rgba(8, 18, 12, .22);
+  --e2: 0 -12px 48px rgba(8, 18, 12, .26);
+  --e-panel: 0 14px 56px rgba(8, 18, 12, .30);
+  --e-nav: 0 10px 30px rgba(8, 18, 12, .34);
+  --e-pill: 0 2px 8px rgba(0, 0, 0, .25);
 
   /* ---- Fixed sizes ---- */
   --touch: 48px;
   --btn-h: 56px;
-  --fab: 52px;
-  --nav-h: 64px;
-  --rail-w: 104px;
-  --topbar-h: 56px;
+  --btn-h-sm: 52px;
+  --fab: 48px;
+  --nav-h: 68px;
+  --rail-w: 96px;
+  --peek-h: 204px;
 
-  /* ---- Type: phone scale (brief 3.2). Tablet overrides live in mockups.css ---- */
-  --font-sans: "Noto Sans", system-ui, sans-serif;
-  --font-serif: "Noto Serif", Georgia, serif;
-  --fs-display: 28px;  --lh-display: 34px;
-  --fs-title-1: 22px;  --lh-title-1: 28px;
-  --fs-title-2: 18px;  --lh-title-2: 24px;
-  --fs-body-l: 17px;   --lh-body-l: 24px;
+  /* ---- Motion (8) ---- */
+  --spring: cubic-bezier(.3, 1.35, .5, 1);
+  --spring-press: cubic-bezier(.3, 1.4, .5, 1);
+  --dur-sheet: 500ms;
+  --dur-press: 160ms;
+  --dur-color: 200ms;
+
+  /* ---- Type: Inter only, phone scale (3.2). Tablet overrides live in mockups.css ---- */
+  --font: "Inter", system-ui, sans-serif;
+  --fs-display: 40px;  --lh-display: 44px;  --ls-display: -.045em;
+  --fs-title-1: 26px;  --lh-title-1: 32px;  --ls-title-1: -.03em;
+  --fs-title-2: 20px;  --lh-title-2: 26px;  --ls-title-2: -.025em;
+  --fs-body-l: 17px;   --lh-body-l: 24px;   --ls-body-l: -.015em;
   --fs-body: 16px;     --lh-body: 22px;
-  --fs-label: 16px;    --lh-label: 20px;
+  --fs-body-sm: 15px;  /* connection badge at 320, brief 3.2: body 15 to 16 */
+  --fs-label: 17px;    --lh-label: 22px;    --ls-label: -.01em;
   --fs-caption: 13px;  --lh-caption: 18px;
   --fs-nav: 12px;      --lh-nav: 16px;
-  --fs-nav-rail: 13px; /* tablet rail label: 14 px "Оповещения" does not fit 88 px */
 
-  /* scrim for mockup-only overlays */
-  --scrim: rgba(20, 48, 26, .45);
+  --scrim: rgba(11, 26, 18, .45);
 }

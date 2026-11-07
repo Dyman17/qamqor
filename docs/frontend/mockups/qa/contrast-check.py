@@ -1,10 +1,12 @@
-"""WCAG 2.x contrast check of the token pairs the mockups actually use. Run: python -I contrast-check.py
+"""WCAG 2.x contrast check of the token pairs the v3 mockups actually use. Run: python -I contrast-check.py
 Reads ../tokens.css, so a token change is re-measured. Exit code 1 if any pair is below its threshold.
-Threshold: 4.5 text, 3.0 for icons/borders/graphics (marked G)."""
+Thresholds: 4.5 text, 3.0 for graphics/borders (G), 7.0 for the AAA target of main text (A).
+Glass is blended over the two extreme basemap samples from the brief (2.3): sand #E9DDB8 and dark grass #3A4A2E."""
 import pathlib, re, sys
 
 css = (pathlib.Path(__file__).resolve().parent.parent / "tokens.css").read_text(encoding="utf-8")
 T = {k: v.upper() for k, v in re.findall(r"--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})", css)}
+SAND, GRASS = "#E9DDB8", "#3A4A2E"
 
 def rgb(h): h = h.lstrip("#"); return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 def lum(c):
@@ -17,77 +19,64 @@ def ratio(a, b):
     la, lb = sorted((lum(a), lum(b)), reverse=True)
     return (la + 0.05) / (lb + 0.05)
 def blend(fg, bg, a): return tuple(round(fg[i] * a + bg[i] * (1 - a)) for i in range(3))
-def tok(n): return rgb(T[n])
-
-# (label, fg, bg, threshold). fg/bg are token names, or ("blend", fgToken, bgToken, alpha)
+def tok(n): return rgb(T[n]) if n in T else rgb(n)
 def col(x):
     if isinstance(x, tuple): return blend(tok(x[1]), tok(x[2]), x[3])
     return tok(x)
+def sheet(base): return ("blend", "surface-0", base, 0.93)
+def chrome(base): return ("blend", "surface-0", base, 0.86)
 
-P = [
- ("tertiary button in UNREAD alert (was 4.19)", "primary-pressed", "primary-tint", 4.5),
- ("tertiary button in read alert / on surface", "primary", "surface", 4.5),
- ("tertiary 'Retry' in server banner (was 4.19)", "danger-text", "danger-bg", 4.5),
- ("Wi-Fi plate text", "info-text", "info-bg", 4.5),
- ("Wi-Fi plate button 'Понятно'", "info-text", "info-bg", 4.5),
- ("pressed secondary/tertiary label on sunken", "primary-pressed", "sunken", 4.5),
- ("secondary button on bg (mini card)", "primary", "bg", 4.5),
- ("secondary button on surface", "primary", "surface", 4.5),
- ("rail active label on primary-tint (was 4.19)", "ink", "primary-tint", 4.5),
- ("bottom-nav active label", "primary", "surface", 4.5),
- ("bottom-nav inactive label", "ink-2", "surface", 4.5),
- ("link / farm accents on bg", "primary", "bg", 4.5),
- ("chip selected text", "ink", "primary-tint", 4.5),
- ("herd row selected: title", "ink", "primary-tint", 4.5),
- ("herd row selected: subtitle", "ink-2", "primary-tint", 4.5),
- ("herd row selected: time", "ink-3", "primary-tint", 4.5),
- ("unread alert: title", "ink", "primary-tint", 4.5),
- ("unread alert: text", "ink-2", "primary-tint", 4.5),
- ("unread alert: time", "ink-3", "primary-tint", 4.5),
- ("mini card caption on bg", "ink-3", "bg", 4.5),
- ("ink-3 on surface", "ink-3", "surface", 4.5),
- ("ink-3 on sunken", "ink-3", "sunken", 4.5),
- ("on-primary on primary", "on-primary", "primary", 4.5),
- ("on-primary on primary-pressed", "on-primary", "primary-pressed", 4.5),
- ("on-primary on danger", "on-primary", "danger-solid", 4.5),
- ("on-primary on danger-pressed", "on-primary", "danger-pressed", 4.5),
- ("nav badge", "on-primary", "danger-solid", 4.5),
- ("toast", "on-primary", "ink", 4.5),
- ("badge ok / connection button / all-ok line", "ok-text", "ok-bg", 4.5),
- ("badge warning", "warning-text", "warning-bg", 4.5),
- ("badge danger / error banner", "danger-text", "danger-bg", 4.5),
- ("badge offline / offline banner", "offline-text", "offline-bg", 4.5),
- ("badge info ('Черновик')", "info-text", "info-bg", 4.5),
- ("summary tile: out of zone", "danger-text", "surface", 4.5),
- ("summary tile: no fence", "warning-text", "surface", 4.5),
- ("summary tile: no connection", "offline-text", "surface", 4.5),
- ("summary tile label", "ink-2", "surface", 4.5),
- ("alert icon danger on tint (G)", "danger-text", "primary-tint", 3.0),
- ("check icon primary on tint (G)", "primary", "primary-tint", 3.0),
- ("map label ink on 90% plate over dark grass", "ink", ("blend", "surface", "map-ph-dark", 0.9), 4.5),
- ("map label ink on 90% plate over sand", "ink", ("blend", "surface", "map-ph-sand", 0.9), 4.5),
- ("top bar text on 94% surface over dark grass", "ink", ("blend", "surface", "map-ph-dark", 0.94), 4.5),
- ("map caption", "ink-2", "surface", 4.5),
- ("input border (G)", "line", "surface", 3.0),
- ("input border on bg (G)", "line", "bg", 3.0),
- ("selected outline primary on tint (G)", "primary", "primary-tint", 3.0),
- ("focus ring on bg (G)", "focus", "bg", 3.0),
- ("focus ring on surface (G)", "focus", "surface", 3.0),
- ("focus ring on sunken (G)", "focus", "sunken", 3.0),
- ("focus ring on primary-tint (G)", "focus", "primary-tint", 3.0),
- ("marker ok glyph (G)", "ink", "marker-ok", 3.0),
- ("marker warning glyph (G)", "ink", "marker-warning", 3.0),
- ("marker danger glyph white (G)", "on-primary", "marker-danger", 3.0),
- ("marker offline glyph (G)", "ink", "marker-offline", 3.0),
- ("marker ring vs halo (G)", "ink", "surface", 3.0),
-]
+P = []
+def add(label, fg, bg, th=4.5): P.append((label, fg, bg, th))
+
+for s in ("surface-0", "surface-1", "surface-2"):
+    add("ink on " + s + " (AAA)", "ink", s, 7.0)
+    add("ink-2 on " + s + " (AAA)", "ink-2", s, 7.0)
+    add("ink-3 on " + s, "ink-3", s, 4.5)
+    add("primary on " + s + " (tertiary buttons, links)", "primary", s, 4.5)
+    add("ok on " + s, "ok", s)
+    add("warning on " + s, "warning", s)
+    add("signal on " + s, "signal", s)
+    add("offline on " + s, "offline", s)
+add("ink-3 on surface-0 (AAA)", "ink-3", "surface-0", 7.0)
+for nm, b in (("sand", SAND), ("dark grass", GRASS)):
+    for t in ("ink", "ink-2", "ink-3", "primary", "signal", "offline"):
+        add(t + " on sheet glass .93 over " + nm, t, sheet(b))
+    add("ink on top chrome glass .86 over " + nm, "ink", chrome(b))
+    add("ink on pill-less map plate .88 over " + nm, "ink", ("blend", "surface-0", b, 0.88))
+add("white on primary", "on-primary", "primary")
+add("white on primary-pressed", "on-primary", "primary-pressed")
+add("white on signal (destructive, server banner)", "on-primary", "signal")
+add("white on signal-pressed", "on-primary", "signal-pressed")
+add("white on ink (toast)", "on-primary", "ink")
+add("white on primary (selected chip, language row, cluster number)", "on-primary", "primary")
+add("ink on signal-map (alerts tab counter)", "ink", "signal-map")
+add("ink on surface-0 (current tab on the pill)", "ink", "surface-0")
+add("signal on surface-2-white (out-of-zone tile number)", "signal", "surface-2-white")
+add("ink on surface-2-white (tile label)", "ink", "surface-2-white")
+for st in ("surface-3-a", "surface-3-b", "surface-3-c"):
+    add("nav label (inactive) on " + st, "nav-text", st)
+    add("white on " + st, "on-primary", st)
+add("primary on surface-0 (current tab icon)", "primary", "surface-0", 3.0)
+add("line on surface-2 (input border, G)", "line", "surface-2", 3.0)
+add("line on surface-0 (G)", "line", "surface-0", 3.0)
+add("focus outer ring vs inner ring (G)", "focus-outer", "focus-inner", 3.0)
+add("focus outer ring vs sand (G)", "focus-outer", SAND, 3.0)
+add("focus inner ring vs dark grass (G)", "focus-inner", GRASS, 3.0)
+add("focus inner ring vs primary (G)", "focus-inner", "primary", 3.0)
+add("marker casing vs white dot (G)", "marker-casing", "surface-2-white", 3.0)
+add("white ring vs dark grass (G)", "surface-2-white", GRASS, 3.0)
+add("white ring vs signal-map dot (G)", "surface-2-white", "signal-map", 1.0)
+add("signal-map dot vs marker casing (G)", "signal-map", "marker-casing", 3.0)
+add("primary cluster vs white ring (G)", "primary", "surface-2-white", 3.0)
+
 bad = 0
-print("%-58s %-8s %-6s %s" % ("pair", "ratio", "min", "result"))
+print("%-66s %-8s %-6s %s" % ("pair", "ratio", "min", "result"))
 for label, fg, bg, th in P:
     r = ratio(col(fg), col(bg))
     ok = r >= th
     bad += not ok
-    print("%-58s %-8.2f %-6.1f %s" % (label, r, th, "pass" if ok else "FAIL"))
+    print("%-66s %-8.2f %-6.1f %s" % (label, r, th, "pass" if ok else "FAIL"))
 print("\n%d pairs, %d failures" % (len(P), bad))
-print("Informational (exempt, disabled controls): disabled-text on bg = %.2f, on sunken = %.2f" % (ratio(tok("disabled-text"), tok("bg")), ratio(tok("disabled-text"), tok("sunken"))))
+print("Informational (disabled controls are exempt): disabled-text on surface-0 = %.2f, on surface-1 = %.2f" % (ratio(tok("disabled-text"), tok("surface-0")), ratio(tok("disabled-text"), tok("surface-1"))))
 sys.exit(1 if bad else 0)

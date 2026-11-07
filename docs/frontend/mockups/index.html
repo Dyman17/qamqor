@@ -29,12 +29,44 @@
         <h2 class="t-title-2 mk-heading" id="list-h" data-i18n="mk.list"></h2>
         <ul class="mk-list">
           <li>
-            <h3><a href="components.html" data-i18n="mk.components"></a></h3>
-            <p data-i18n="mk.components.desc"></p>
+            <h3><a href="screen-map.html?view=map">Карта (S2)</a></h3>
+            <p>Главный экран со спутниковой картой, пастбищами, животными и нижней шторкой.</p>
           </li>
           <li>
-            <h3><a href="screen-map.html" data-i18n="mk.map"></a></h3>
-            <p data-i18n="mk.map.desc"></p>
+            <h3><a href="screen-map.html?view=herd">Стадо (S5)</a></h3>
+            <p>Список животных с живым поиском, фильтрами статусов, выбором и групповым перегоном.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=profile">Профиль животного (S6)</a></h3>
+            <p>Карточка коровы с датчиками, ошейником, координатами и интерактивным тестом триггеров.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=alerts">Оповещения (S7)</a></h3>
+            <p>Тревоги выхода за границу, потери связи и выхода из зоны Wi-Fi.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=collars">Ошейники (S8)</a></h3>
+            <p>Инвентарь ошейников, статусы онлайн/офлайн и мастер привязки.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=settings">Настройки (S9)</a></h3>
+            <p>Параметры фермы, права работников, пороги сигналов и выбор языка.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=draw">Рисование загона (S3)</a></h3>
+            <p>Инструмент очерчивания границ виртуального пастбища на спутниковой карте.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=move">Перегон стада (S4)</a></h3>
+            <p>Настройка звукового коридора и маршрута перемещения группы в новый загон.</p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html?view=auth">Вход / Регистрация (S1)</a></h3>
+            <p>Авторизация владельца и работника.</p>
+          </li>
+          <li>
+            <h3><a href="components.html" data-i18n="mk.components"></a></h3>
+            <p data-i18n="mk.components.desc"></p>
           </li>
         </ul>
       </section>
@@ -43,10 +75,18 @@
         <h2 class="t-title-2 mk-heading" id="stage-h" data-i18n="mk.show"></h2>
         <form class="mk-panel" id="stage-panel" onsubmit="return false">
           <fieldset>
-            <legend data-i18n="mk.list"></legend>
+            <legend>Экран</legend>
             <div class="mk-radios">
-              <label><input type="radio" name="page" value="screen-map.html" checked><span data-i18n="mk.map"></span></label>
-              <label><input type="radio" name="page" value="components.html"><span data-i18n="mk.components"></span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=map" checked><span>Карта (S2)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=herd"><span>Стадо (S5)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=profile"><span>Профиль (S6)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=alerts"><span>Оповещения (S7)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=collars"><span>Ошейники (S8)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=settings"><span>Настройки (S9)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=draw"><span>Рисование (S3)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=move"><span>Перегон (S4)</span></label>
+              <label><input type="radio" name="page" value="screen-map.html?view=auth"><span>Вход (S1)</span></label>
+              <label><input type="radio" name="page" value="components.html"><span>Компоненты</span></label>
             </div>
           </fieldset>
           <fieldset>

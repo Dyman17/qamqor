@@ -1,6 +1,6 @@
 /*
   Qamqor mockups: shared helpers. Vanilla JS, no dependencies.
-  - icons (from icons.js, generated from the Lucide SVG files)
+  - icons (from icons.js, generated from the Phosphor and Tabler SVG files)
   - i18n (ru / en / kk) with a language switcher
   - markup helpers for components (marker, badge, herd row, alert card)
   - stub toast for screens that are built in later phases
@@ -21,18 +21,21 @@
     lang = pick;
   })();
 
-  /* ---------- icons ---------- */
-  function ic(name, size, cls) {
-    var body = (window.ICONS || {})[name] || "";
-    if (!body) { console.warn("MOCK.ic: unknown icon '" + name + "'"); }
+  /* ---------- icons: Phosphor (regular / fill) and Tabler (fence, route, satellite) ---------- */
+  function ic(name, size, cls, weight) {
+    var I = window.ICONS || {};
+    var key = I["tabler/" + name] ? "tabler/" + name : (weight || "regular") + "/" + name;
+    var def = I[key];
+    if (!def) { console.warn("MOCK.ic: unknown icon '" + key + "'"); def = { vb: "0 0 24 24", d: "" }; }
     size = size || 24;
-    return '<svg class="ic' + (cls ? " " + cls : "") + '" width="' + size + '" height="' + size +
-      '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + body + "</svg>";
+    var stroke = key.indexOf("tabler/") === 0;
+    return '<svg class="ic' + (stroke ? " ic-stroke" : "") + (cls ? " " + cls : "") + '" width="' + size + '" height="' + size +
+      '" viewBox="' + def.vb + '" aria-hidden="true" focusable="false">' + def.d + "</svg>";
   }
   function hydrateIcons(root) {
     (root || document).querySelectorAll("i[data-icon]").forEach(function (el) {
       var tmp = document.createElement("span");
-      tmp.innerHTML = ic(el.getAttribute("data-icon"), parseInt(el.getAttribute("data-size") || "24", 10), el.getAttribute("class") || "");
+      tmp.innerHTML = ic(el.getAttribute("data-icon"), parseInt(el.getAttribute("data-size") || "24", 10), el.getAttribute("class") || "", el.getAttribute("data-weight"));
       el.replaceWith(tmp.firstChild);
     });
   }
@@ -127,62 +130,53 @@
     stub(el, t(el.getAttribute("data-stub"), paramsOf(el)));
   });
 
-  /* ---------- markers ---------- */
-  var FENCE_SLASH = '<path d="M4 18v-6 M8 18V9 M12 18V9 M16 18V9 M20 18v-6" /><path d="M2 21L22 3" />';
+  /* ---------- markers (7.6): small calm dot; only deviations carry extra marks ---------- */
   function markerSVG(status, o) {
     o = o || {};
     var size = o.size || 44;
-    var pts = {
-      circle: null,
-      diamond: "22,6 38,22 22,38 6,22",
-      tri: "22,7 37,35 7,35"
-    };
-    var kind = { ok: "circle", offline: "circle", warning: "diamond", danger: "tri" }[status] || "circle";
-    function shape(cls, extra) {
-      if (kind === "circle") { return '<circle cx="22" cy="22" r="14" class="' + cls + '"' + (extra || "") + "/>"; }
-      return '<polygon points="' + pts[kind] + '" class="' + cls + '"' + (extra || "") + "/>";
+    var dot;
+    if (status === "danger") {
+      dot = '<circle class="mk-pulse" cx="22" cy="22" r="9"/><circle class="mk-casing" cx="22" cy="22" r="8.75"/><circle class="mk-out" cx="22" cy="22" r="7"/>';
+    } else if (status === "offline") {
+      dot = '<circle class="mk-off" cx="22" cy="22" r="6"/>';
+    } else {
+      dot = '<circle class="mk-ring" cx="22" cy="22" r="6.5"/>';
     }
-
-    var glyph = {
-      ok: '<path class="mk-glyph" d="M15.5 22.5l5 5 8-10"/>',
-      warning: '<circle class="mk-glyph-dot" cx="22" cy="22" r="3.2"/>',
-      danger: '<path class="mk-glyph mk-glyph-white" d="M22 19v8"/><circle class="mk-glyph-white-dot" cx="22" cy="31.5" r="1.9"/>',
-      offline: '<path class="mk-glyph" d="M15 29L29 15"/>'
-    }[status];
-    var ring = status === "offline" ? shape("mk-ring mk-offline-ring") : shape("mk-ring");
-    var plate = o.nofence
-      ? '<rect class="mk-plate" x="28" y="0.5" width="15" height="15" rx="3"/><svg x="30" y="2.5" width="11" height="11" viewBox="0 0 24 24" class="mk-plate-ic">' + FENCE_SLASH + "</svg>"
+    var fence = (window.ICONS || {})["tabler/fence-off"];
+    var plate = o.nofence && fence
+      ? '<rect class="mk-plate" x="28" y="4" width="14" height="14" rx="4"/><svg x="30" y="6" width="10" height="10" viewBox="' + fence.vb + '" class="mk-plate-ic">' + fence.d + "</svg>"
       : "";
     return '<svg class="mk-svg' + (o.selected ? " is-selected" : "") + '" width="' + size + '" height="' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
-      shape(status === "offline" ? "mk-halo mk-halo-dash" : "mk-halo") + shape("mk-acc") + ring + shape("mk-" + status) + glyph + plate + "</svg>";
+      '<circle class="mk-sel" cx="22" cy="22" r="15"/>' + dot + plate + "</svg>";
   }
   function clusterSVG(n, size) {
     size = size || 44;
     return '<svg class="mk-svg" width="' + size + '" height="' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
-      '<rect class="mk-halo" x="4" y="4" width="36" height="36" rx="8"/><rect class="mk-ring" x="4" y="4" width="36" height="36" rx="8"/>' +
-      '<rect class="mk-cluster-fill" x="5" y="5" width="34" height="34" rx="7"/><text class="mk-cluster-text" x="22" y="23">' + n + "</text></svg>";
+      '<rect class="mk-cluster-box" x="4" y="8" width="36" height="28" rx="9"/><text class="mk-cluster-text" x="22" y="22.5">' + n + "</text></svg>";
   }
 
   /* ---------- component markup helpers ---------- */
   var BADGES = {
-    online: { cls: "badge-ok", icon: "wifi", key: "status.online" },
-    inZone: { cls: "badge-ok", icon: "circle-check", key: "status.inZone" },
-    outOfZone: { cls: "badge-danger", icon: "arrow-up-right", key: "status.outOfZone" },
-    noConn: { cls: "badge-offline", icon: "wifi-off", key: "status.noConnection" },
-    lastSeen: { cls: "badge-warning", icon: "clock", key: "status.lastSeen" },
+    online: { cls: "badge-ok", dot: true, key: "status.online" },
+    inZone: { cls: "badge-zone", dot: false, key: "status.inZone" },
+    outOfZone: { cls: "badge-danger", dot: true, key: "status.outOfZone" },
+    noConn: { cls: "badge-offline", dot: true, key: "status.noConnection" },
+    lastSeen: { cls: "badge-warning", dot: true, key: "status.lastSeen" },
     noFence: { cls: "badge-warning", icon: "fence", key: "status.noFence" }
   };
   function badgeHTML(kind, time) {
     var b = BADGES[kind];
     var p = time ? ' data-p="time=' + time + '"' : "";
-    return '<span class="badge ' + b.cls + '">' + ic(b.icon, 16) + '<span data-i18n="' + b.key + '"' + p + "></span></span>";
+    var mark = b.icon ? ic(b.icon, 16) : (b.dot ? '<span class="sdot"></span>' : "");
+    return '<span class="badge ' + b.cls + '">' + mark + '<span data-i18n="' + b.key + '"' + p + "></span></span>";
   }
-  /* o: {status, titleKey, subKey, badge, ago, state} ; state: "", selected, pressed, focus, disabled */
+  var ROW_DOT = { ok: "ok", danger: "out", offline: "off", warning: "warn" };
+  /* o: {status, titleKey, subKey, badge, ago, n, state} ; state: "", selected, pressed, focus, disabled */
   function rowHTML(o) {
     var st = o.state ? " is-" + o.state : "";
     return '<button type="button" class="row' + st + '"' + (o.state === "disabled" ? " disabled" : "") + (o.state === "selected" ? ' aria-pressed="true"' : "") + ">" +
-      ic("check", 24, "row-check") +
-      markerSVG(o.status, { size: 32, nofence: o.nofence }) +
+      ic("check-circle", 24, "row-check", "fill") +
+      '<span class="row-dot ' + ROW_DOT[o.status] + '"></span>' +
       '<span class="row-main"><span class="row-title" data-i18n="' + (o.titleKey || "animal.sample") + '"></span>' +
       '<span class="row-sub" data-i18n="' + (o.subKey || "tag.short") + '" data-p="n=' + (o.n || 42) + '"></span></span>' +
       '<span class="row-side">' + badgeHTML(o.badge) + '<span class="row-time" data-i18n="time.ago" data-p="n=' + (o.ago || 5) + '"></span></span></button>';
@@ -194,10 +188,10 @@
   }
   /* o: {type: danger|offline, unread, titleKey, whereKeys:[...], ago, state} */
   function alertHTML(o) {
-    var icon = o.type === "danger" ? "triangle-exclamation-point" : "wifi-off";
+    var dot = o.type === "danger" ? '<span class="sdot dot-danger"></span>' : '<span class="sdot dot-offline"></span>';
     var where = o.whereKeys.map(function (k) { return '<span data-i18n="' + k + '"></span>'; }).join(" · ");
     return '<article class="alert alert-' + o.type + (o.unread ? " is-unread" : "") + (o.state ? " is-" + o.state : "") + '">' +
-      '<div class="alert-head">' + ic(icon, 24, "alert-ic") + '<div><h3 class="alert-title" data-i18n="' + o.titleKey + '"></h3></div></div>' +
+      '<div class="alert-head">' + dot + '<h3 class="alert-title" data-i18n="' + o.titleKey + '"></h3></div>' +
       '<p class="alert-text">' + where + '</p><p class="alert-time"><span data-i18n="time.ago" data-p="n=' + (o.ago || 5) + '"></span></p>' +
       '<div class="alert-actions"><button type="button" class="btn btn-tertiary" data-stub="alert.show" data-i18n="alert.show"></button>' +
       '<button type="button" class="btn btn-tertiary" data-stub="alert.profile" data-i18n="alert.profile"></button>' +

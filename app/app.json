@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Qamqor",
+    "slug": "qamqor-app",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0d1f14"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "kz.qamqor.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d1f14"
+      },
+      "package": "kz.qamqor.app"
+    }
+  }
+}
+

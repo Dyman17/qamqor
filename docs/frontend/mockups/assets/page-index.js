@@ -21,10 +21,11 @@
     frame.style.width = w + "px";
     frame.style.height = h + "px";
     frame.style.transform = "scale(" + k + ")";
-    var src = page + "?embed=1&lang=" + M.getLang();
+    var sep = page.indexOf("?") >= 0 ? "&" : "?";
+    var src = page + sep + "embed=1&lang=" + M.getLang();
     if (src !== lastSrc) { frame.src = src; lastSrc = src; }
     frame.title = page + " " + w + "x" + h;
-    link.href = page + "?lang=" + M.getLang();
+    link.href = page + sep + "lang=" + M.getLang();
   }
 
   form.addEventListener("change", render);

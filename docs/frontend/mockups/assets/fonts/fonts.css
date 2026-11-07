@@ -1,17 +1,8 @@
-/* Self-hosted Noto Sans + Noto Serif (SIL OFL 1.1, see OFL-*.txt). Variable fonts from github.com/google/fonts (ofl/notosans, ofl/notoserif). */
+/* Self-hosted Inter (variable: opsz + wght), SIL OFL 1.1, see OFL-inter.txt. Source: docs/frontend/directions/assets/fonts/Inter.woff */
 @font-face {
-  font-family: "Noto Sans";
-  src: url("NotoSans-VF.ttf") format("truetype");
+  font-family: "Inter";
+  src: url("Inter.woff") format("woff");
   font-weight: 100 900;
-  font-stretch: 62.5% 100%;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Noto Serif";
-  src: url("NotoSerif-VF.ttf") format("truetype");
-  font-weight: 100 900;
-  font-stretch: 62.5% 100%;
   font-style: normal;
   font-display: swap;
 }
