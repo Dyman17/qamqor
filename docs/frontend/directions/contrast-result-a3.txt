@@ -1,0 +1,39 @@
+16.37:1 | need 4.5 | PASS | ink #0E1A14 on s0 #F3F6F1 | #0E1A14 on #F3F6F1
+ 9.47:1 | need 4.5 | PASS | secondary #34443A on s0 #F3F6F1 | #34443A on #F3F6F1
+ 5.79:1 | need 4.5 | PASS | signal #B52C08 on s0 #F3F6F1 | #B52C08 on #F3F6F1
+14.79:1 | need 4.5 | PASS | ink #0E1A14 on s1 #E4ECE3 | #0E1A14 on #E4ECE3
+ 8.56:1 | need 4.5 | PASS | secondary #34443A on s1 #E4ECE3 | #34443A on #E4ECE3
+ 5.23:1 | need 4.5 | PASS | signal #B52C08 on s1 #E4ECE3 | #B52C08 on #E4ECE3
+17.34:1 | need 4.5 | PASS | ink #0E1A14 on s2 #FBFCFA | #0E1A14 on #FBFCFA
+10.03:1 | need 4.5 | PASS | secondary #34443A on s2 #FBFCFA | #34443A on #FBFCFA
+ 6.13:1 | need 4.5 | PASS | signal #B52C08 on s2 #FBFCFA | #B52C08 on #FBFCFA
+17.85:1 | need 4.5 | PASS | ink #0E1A14 on white stat tile | #0E1A14 on #FFFFFF
+10.32:1 | need 4.5 | PASS | secondary #34443A on white stat tile | #34443A on #FFFFFF
+ 6.31:1 | need 4.5 | PASS | signal #B52C08 on white stat tile | #B52C08 on #FFFFFF
+16.11:1 | need 4.5 | PASS | ink #0E1A14 on sheet over bright sand | #0E1A14 on #F2F4EE
+ 9.32:1 | need 4.5 | PASS | secondary #34443A on sheet over bright sand | #34443A on #F2F4EE
+ 5.69:1 | need 4.5 | PASS | signal #B52C08 on sheet over bright sand | #B52C08 on #F2F4EE
+14.93:1 | need 4.5 | PASS | ink #0E1A14 on sheet over dark grass | #0E1A14 on #E8ECE5
+ 8.63:1 | need 4.5 | PASS | secondary #34443A on sheet over dark grass | #34443A on #E8ECE5
+ 5.28:1 | need 4.5 | PASS | signal #B52C08 on sheet over dark grass | #B52C08 on #E8ECE5
+13.06:1 | need 4.5 | PASS | ink #0E1A14 on top chrome over dark | #0E1A14 on #D9DED6
+ 7.56:1 | need 4.5 | PASS | secondary #34443A on top chrome over dark | #34443A on #D9DED6
+ 4.62:1 | need 4.5 | PASS | signal #B52C08 on top chrome over dark | #B52C08 on #D9DED6
+15.85:1 | need 4.5 | PASS | ink #0E1A14 on top chrome over bright | #0E1A14 on #F2F2E9
+ 9.17:1 | need 4.5 | PASS | secondary #34443A on top chrome over bright | #34443A on #F2F2E9
+ 5.60:1 | need 4.5 | PASS | signal #B52C08 on top chrome over bright | #B52C08 on #F2F2E9
+12.18:1 | need 4.5 | PASS | white on green button #123D28 | #FFFFFF on #123D28
+14.76:1 | need 4.5 | PASS | white on green hover #0A2E1E | #FFFFFF on #0A2E1E
+ 8.22:1 | need 4.5 | PASS | nav inactive #C9D8CC on pill #123D28 | #C9D8CC on #123D28
+16.37:1 | need 4.5 | PASS | nav active ink on #F3F6F1 | #0E1A14 on #F3F6F1
+ 5.72:1 | need 4.5 | PASS | badge ink on #FF5A1F | #0E1A14 on #FF5A1F
+12.18:1 | need 4.5 | PASS | white on cluster #123D28 | #FFFFFF on #123D28
+14.79:1 | need 4.5 | PASS | ink on quiet button s1 | #0E1A14 on #E4ECE3
+13.34:1 | need 4.5 | PASS | ink on quiet hover #D6E2D5 | #0E1A14 on #D6E2D5
+ 5.23:1 | need 4.5 | PASS | signal on s1 draft label | #B52C08 on #E4ECE3
+ 4.91:1 | need 3 | PASS | ok dot #1E7A45 on s0 (non-text) | #1E7A45 on #F3F6F1
+ 7.10:1 | need 3 | PASS | offline dot #4A5A51 on s2 (non-text) | #4A5A51 on #FBFCFA
+ 9.55:1 | need 3 | PASS | herd dot ring #0F2A1C vs grass #3A4A2E (non-text, ring+white fill) | #FFFFFF on #3A4A2E
+11.33:1 | need 3 | PASS | herd dot white vs sand #E9DDB8 uses dark ring 0F2A1C (non-text) | #0F2A1C on #E9DDB8
+ 3.06:1 | need 3 | PASS | signal map dot #FF5A1F vs grass #3A4A2E (non-text) | #FF5A1F on #3A4A2E
+failures: 0
