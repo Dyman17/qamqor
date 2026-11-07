@@ -86,7 +86,7 @@
   function ic(n, w, s, c) { return QI.ph(n, w, s, c); }
 
   function summaryHtml(cfg) {
-    return D.summary.map(function (x) {
+    return D.summary.filter(function (x) { return !(cfg.noBattery && x.k === "low"); }).map(function (x) {
       return '<button type="button" class="stat' + (x.dev ? " is-dev" : "") + '" data-k="' + x.k + '"><span class="n">' + x.n + '</span><span class="l">' + x.l + "</span></button>";
     }).join("");
   }
@@ -96,7 +96,7 @@
     }).join("");
   }
   function alertsHtml(cfg) {
-    return D.alerts.map(function (a) {
+    return D.alerts.filter(function (a) { return !(cfg.noBattery && a.kind === "low"); }).map(function (a) {
       return '<li><button type="button" class="row alert k-' + a.kind + '"><i class="ad" aria-hidden="true"></i><span class="row-main"><span class="t">' + a.t + '</span><span class="s">' + a.s + '</span></span><time class="tm">' + a.time + "</time></button></li>";
     }).join("");
   }

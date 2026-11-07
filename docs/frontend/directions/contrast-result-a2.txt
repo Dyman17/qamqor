@@ -1,0 +1,48 @@
+14.42:1 | need 4.5 | PASS | ink #12201A on s0 sheet (bright backdrop) | #12201A on #EAEFE6
+ 7.09:1 | need 4.5 | PASS | secondary #42524A on s0 sheet (bright backdrop) | #42524A on #EAEFE6
+ 5.46:1 | need 4.5 | PASS | warn #A63D07 on s0 sheet (bright backdrop) | #A63D07 on #EAEFE6
+ 7.76:1 | need 4.5 | PASS | green #1E5238 text on s0 sheet (bright backdrop) | #1E5238 on #EAEFE6
+ 5.66:1 | need 3 | PASS | offline dot #52605A on s0 sheet (bright backdrop) (non-text) | #52605A on #EAEFE6
+12.96:1 | need 4.5 | PASS | ink #12201A on s0 sheet (dark backdrop) | #12201A on #DCE4DB
+ 6.37:1 | need 4.5 | PASS | secondary #42524A on s0 sheet (dark backdrop) | #42524A on #DCE4DB
+ 4.91:1 | need 4.5 | PASS | warn #A63D07 on s0 sheet (dark backdrop) | #A63D07 on #DCE4DB
+ 6.97:1 | need 4.5 | PASS | green #1E5238 text on s0 sheet (dark backdrop) | #1E5238 on #DCE4DB
+ 5.08:1 | need 3 | PASS | offline dot #52605A on s0 sheet (dark backdrop) (non-text) | #52605A on #DCE4DB
+13.24:1 | need 4.5 | PASS | ink #12201A on s1 summary #DCE7DD | #12201A on #DCE7DD
+ 6.51:1 | need 4.5 | PASS | secondary #42524A on s1 summary #DCE7DD | #42524A on #DCE7DD
+ 5.02:1 | need 4.5 | PASS | warn #A63D07 on s1 summary #DCE7DD | #A63D07 on #DCE7DD
+ 7.12:1 | need 4.5 | PASS | green #1E5238 text on s1 summary #DCE7DD | #1E5238 on #DCE7DD
+ 5.19:1 | need 3 | PASS | offline dot #52605A on s1 summary #DCE7DD (non-text) | #52605A on #DCE7DD
+15.83:1 | need 4.5 | PASS | ink #12201A on s2 list #F5F9F4 | #12201A on #F5F9F4
+ 7.78:1 | need 4.5 | PASS | secondary #42524A on s2 list #F5F9F4 | #42524A on #F5F9F4
+ 6.00:1 | need 4.5 | PASS | warn #A63D07 on s2 list #F5F9F4 | #A63D07 on #F5F9F4
+ 8.51:1 | need 4.5 | PASS | green #1E5238 text on s2 list #F5F9F4 | #1E5238 on #F5F9F4
+ 6.21:1 | need 3 | PASS | offline dot #52605A on s2 list #F5F9F4 (non-text) | #52605A on #F5F9F4
+12.22:1 | need 4.5 | PASS | ink #12201A on s3 nav #D2DFD4 | #12201A on #D2DFD4
+ 6.01:1 | need 4.5 | PASS | secondary #42524A on s3 nav #D2DFD4 | #42524A on #D2DFD4
+ 4.63:1 | need 4.5 | PASS | warn #A63D07 on s3 nav #D2DFD4 | #A63D07 on #D2DFD4
+ 6.57:1 | need 4.5 | PASS | green #1E5238 text on s3 nav #D2DFD4 | #1E5238 on #D2DFD4
+ 4.80:1 | need 3 | PASS | offline dot #52605A on s3 nav #D2DFD4 (non-text) | #52605A on #D2DFD4
+13.15:1 | need 4.5 | PASS | ink #12201A on top chrome over bright | #12201A on #DDE6DA
+ 6.47:1 | need 4.5 | PASS | secondary #42524A on top chrome over bright | #42524A on #DDE6DA
+ 4.98:1 | need 4.5 | PASS | warn #A63D07 on top chrome over bright | #A63D07 on #DDE6DA
+ 7.07:1 | need 4.5 | PASS | green #1E5238 text on top chrome over bright | #1E5238 on #DDE6DA
+ 5.16:1 | need 3 | PASS | offline dot #52605A on top chrome over bright (non-text) | #52605A on #DDE6DA
+11.92:1 | need 4.5 | PASS | ink #12201A on top chrome over dark | #12201A on #D1DCD1
+ 5.86:1 | need 4.5 | PASS | secondary #42524A on top chrome over dark | #42524A on #D1DCD1
+ 4.52:1 | need 4.5 | PASS | warn #A63D07 on top chrome over dark | #A63D07 on #D1DCD1
+ 6.41:1 | need 4.5 | PASS | green #1E5238 text on top chrome over dark | #1E5238 on #D1DCD1
+ 4.68:1 | need 3 | PASS | offline dot #52605A on top chrome over dark (non-text) | #52605A on #D1DCD1
+ 9.05:1 | need 4.5 | PASS | white on green button #1E5238 | #FFFFFF on #1E5238
+11.19:1 | need 4.5 | PASS | white on green hover #17432D | #FFFFFF on #17432D
+ 6.38:1 | need 4.5 | PASS | white on warn badge | #FFFFFF on #A63D07
+11.78:1 | need 4.5 | PASS | ink on quiet button (13% green over s0) | #12201A on #CFDBCF
+ 9.68:1 | need 4.5 | PASS | ink on quiet button over s1 (hover 20%) | #12201A on #B6C9BC
+ 5.26:1 | need 4.5 | PASS | green on nav active tint 15% over s3 | #1E5238 on #B7CABD
+ 6.01:1 | need 4.5 | PASS | secondary on nav s3 | #42524A on #D2DFD4
+14.14:1 | need 4.5 | PASS | ink on hover row (7% green over s2) | #12201A on #E6EDE7
+ 7.03:1 | need 4.5 | PASS | attribution secondary on .86 s0 over bright | #42524A on #EAEEE3
+15.11:1 | need 4.5 | PASS | ink on cluster fill | #14202B on #F5F5F1
+14.30:1 | need 3 | PASS | focus ring #12301F vs white ring (non-text) | #12301F on #FFFFFF
+ 1.11:1 | need 1.0 | PASS | tonal step s0 vs s1 (non-text, informational) | #EAF1EA on #DCE7DD
+failures: 0
