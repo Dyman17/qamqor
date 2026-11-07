@@ -1,0 +1,65 @@
+A | 15.10:1 | need 4.5 | PASS | ink text, glass over bright sand | #14202B on #F5F5F0
+A |  7.33:1 | need 4.5 | PASS | secondary text, glass over bright sand | #44525F on #F5F5F0
+A |  5.83:1 | need 4.5 | PASS | out-of-zone number/label, glass over bright sand | #A63D07 on #F5F5F0
+A |  5.42:1 | need 3 | PASS | low-battery dot is non-text, amber glass over bright sand | #8A5A00 on #F5F5F0
+A |  5.62:1 | need 3 | PASS | offline dot non-text, glass over bright sand | #566371 on #F5F5F0
+A |  6.47:1 | need 4.5 | PASS | active nav text #085F82, glass over bright sand | #085F82 on #F5F5F0
+A | 13.52:1 | need 4.5 | PASS | ink text, glass over dark vegetation | #14202B on #E7E9E5
+A |  6.56:1 | need 4.5 | PASS | secondary text, glass over dark vegetation | #44525F on #E7E9E5
+A |  5.22:1 | need 4.5 | PASS | out-of-zone number/label, glass over dark vegetation | #A63D07 on #E7E9E5
+A |  4.85:1 | need 3 | PASS | low-battery dot is non-text, amber glass over dark vegetation | #8A5A00 on #E7E9E5
+A |  5.03:1 | need 3 | PASS | offline dot non-text, glass over dark vegetation | #566371 on #E7E9E5
+A |  5.79:1 | need 4.5 | PASS | active nav text #085F82, glass over dark vegetation | #085F82 on #E7E9E5
+A | 15.10:1 | need 4.5 | PASS | ink text, opaque fallback | #14202B on #F4F5F3
+A |  7.33:1 | need 4.5 | PASS | secondary text, opaque fallback | #44525F on #F4F5F3
+A |  5.83:1 | need 4.5 | PASS | out-of-zone number/label, opaque fallback | #A63D07 on #F4F5F3
+A |  5.42:1 | need 3 | PASS | low-battery dot is non-text, amber opaque fallback | #8A5A00 on #F4F5F3
+A |  5.62:1 | need 3 | PASS | offline dot non-text, opaque fallback | #566371 on #F4F5F3
+A |  6.47:1 | need 4.5 | PASS | active nav text #085F82, opaque fallback | #085F82 on #F4F5F3
+A |  5.85:1 | need 4.5 | PASS | white on sky button #0A6C95 | #FFFFFF on #0A6C95
+A |  7.61:1 | need 4.5 | PASS | white on sky hover #085A7B | #FFFFFF on #085A7B
+A |  6.38:1 | need 4.5 | PASS | white on warn badge #A63D07 | #FFFFFF on #A63D07
+A | 13.18:1 | need 4.5 | PASS | ink on quiet button | #14202B on #E4E6E5
+A | 13.18:1 | need 4.5 | PASS | secondary on quiet button (none used, label is ink) | #14202B on #E4E6E5
+A | 15.11:1 | need 4.5 | PASS | cluster number ink on cluster fill | #14202B on #F5F5F1
+A |  7.21:1 | need 4.5 | PASS | attribution secondary text on .84 glass over bright sand | #44525F on #F4F3EB
+A | 11.68:1 | need 3 | PASS | focus ring #0B3C57 vs white ring (non-text 3:1) | #0B3C57 on #FFFFFF
+B | 15.71:1 | need 4.5 | PASS | ink on paper | #19211F on #FAFAF7
+B |  6.96:1 | need 4.5 | PASS | secondary on paper | #4E5956 on #FAFAF7
+B |  5.18:1 | need 4.5 | PASS | vermilion text on paper | #C2381A on #FAFAF7
+B |  5.42:1 | need 4.5 | PASS | white on vermilion badge | #FFFFFF on #C2381A
+B | 15.71:1 | need 4.5 | PASS | paper on ink primary button | #FAFAF7 on #19211F
+B | 11.33:1 | need 4.5 | PASS | paper on ink hover #2D3A37 | #FAFAF7 on #2D3A37
+B | 14.28:1 | need 4.5 | PASS | ink on quiet button #EEF0E8 | #19211F on #EEF0E8
+B | 13.00:1 | need 4.5 | PASS | ink on quiet hover #E3E6DC | #19211F on #E3E6DC
+B |  6.56:1 | need 4.5 | PASS | secondary on hover row #F2F4EE | #4E5956 on #F2F4EE
+B |  6.39:1 | need 4.5 | PASS | secondary on hover #EFF1EA | #4E5956 on #EFF1EA
+B |  4.89:1 | need 4.5 | PASS | vermilion on hover #F2F4EE | #C2381A on #F2F4EE
+B |  6.04:1 | need 3 | PASS | low-battery dot (non-text) #7A5B00 on paper | #7A5B00 on #FAFAF7
+B |  5.68:1 | need 3 | PASS | offline dot (non-text) #5C6663 on paper | #5C6663 on #FAFAF7
+B | 15.71:1 | need 4.5 | PASS | paper on cluster ink fill | #FAFAF7 on #19211F
+B | 12.43:1 | need 3 | PASS | ink pen line on relief #DDE2D3 (non-text) | #19211F on #DDE2D3
+B |  4.10:1 | need 3 | PASS | vermilion marker on relief #DDE2D3 (non-text) | #C2381A on #DDE2D3
+B |  3.23:1 | need 3 | PASS | vermilion marker on relief low band #C1CBB8 (non-text) | #C2381A on #C1CBB8
+B |  6.58:1 | need 4.5 | PASS | secondary on attribution .88 paper over relief | #4E5956 on #F3F4EF
+B | 15.71:1 | need 3 | PASS | ink focus ring vs paper (non-text) | #19211F on #FAFAF7
+C | 14.88:1 | need 4.5 | PASS | text on sheet | #E8EDF1 on #131A21
+C |  7.83:1 | need 4.5 | PASS | secondary on sheet | #A2AFBA on #131A21
+C |  6.85:1 | need 4.5 | PASS | secondary on raise #1C2630 | #A2AFBA on #1C2630
+C | 13.01:1 | need 4.5 | PASS | text on raise | #E8EDF1 on #1C2630
+C |  8.28:1 | need 4.5 | PASS | secondary on deep #0E1419 | #A2AFBA on #0E1419
+C | 15.73:1 | need 4.5 | PASS | text on deep | #E8EDF1 on #0E1419
+C |  8.80:1 | need 4.5 | PASS | gold text/number on sheet | #E2B04A on #131A21
+C |  7.70:1 | need 4.5 | PASS | gold on raise | #E2B04A on #1C2630
+C |  9.31:1 | need 4.5 | PASS | gold on deep #0E1419 | #E2B04A on #0E1419
+C |  9.17:1 | need 4.5 | PASS | on-gold #1B1406 on gold button | #1B1406 on #E2B04A
+C | 10.69:1 | need 4.5 | PASS | on-gold on hover gold #EBC06A | #1B1406 on #EBC06A
+C | 11.24:1 | need 4.5 | PASS | text on quiet hover #25313D | #E8EDF1 on #25313D
+C |  4.95:1 | need 3 | PASS | steel dot (non-text) #7C8A96 on sheet | #7C8A96 on #131A21
+C |  8.20:1 | need 3 | PASS | blue-steel dot #9FB4C6 on sheet | #9FB4C6 on #131A21
+C |  9.28:1 | need 4.5 | PASS | text on scrim over lightest map (#6E7A78 map, scrim .55) | #E8EDF1 on #363E40
+C |  6.85:1 | need 4.5 | PASS | secondary on attribution .82 deep over #6E7A78 | #A2AFBA on #1F262A
+C |  4.98:1 | need 3 | PASS | gold dot (non-text) vs dark map #3A4545 | #E2B04A on #3A4545
+C |  4.36:1 | need 3 | PASS | pale pen line #A9B1B3 (62% of E8EDF1) vs map #3A4545 (non-text) | #A6ADB0 on #3A4545
+C | 17.06:1 | need 3 | PASS | focus ring #F2F6F9 vs deep (non-text) | #F2F6F9 on #0E1419
+failures: 0

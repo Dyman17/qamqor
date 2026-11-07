@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qamqor, три направления визуального языка</title>
+<style>
+@font-face{font-family:"QInter";src:url("assets/fonts/Inter.woff") format("woff");font-weight:100 900;font-display:swap}
+@font-face{font-family:"QOnest";src:url("assets/fonts/Onest.woff") format("woff");font-weight:100 900;font-display:swap}
+@font-face{font-family:"QGolos";src:url("assets/fonts/GolosText.woff") format("woff");font-weight:400 900;font-display:swap}
+@font-face{font-family:"QGeologica";src:url("assets/fonts/Geologica.woff") format("woff");font-weight:100 900;font-display:swap}
+:root{--bg:#F2F3F0;--ink:#1A1F1E;--ink2:#4A5350;--hair:#CDD2CB;--link:#0A5F82}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 "QInter",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+a{color:var(--link);text-underline-offset:3px}
+a:focus-visible{outline:3px solid #1A1F1E;outline-offset:3px;border-radius:2px}
+.wrap{max-width:1440px;margin:0 auto;padding:40px 32px 64px}
+h1{font:300 40px/1.1 "QInter",sans-serif;letter-spacing:-.025em;margin:0 0 12px}
+.lead{max-width:62ch;color:var(--ink2);margin:0 0 40px}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.col{padding:0 28px;border-left:1px solid var(--hair)}
+.col:first-child{padding-left:0;border-left:0}
+.col:last-child{padding-right:0}
+.shots{display:flex;gap:12px;align-items:flex-end;margin-bottom:24px}
+.shots img{display:block;height:auto;border-radius:10px}
+.shots .ph{width:34%}
+.shots .tb{width:66%}
+h2{font:500 26px/1.15 "QInter",sans-serif;letter-spacing:-.015em;margin:0 0 4px}
+.sub{color:var(--ink2);margin:0 0 14px;font-size:14px}
+.idea{margin:0 0 20px}
+dl{margin:0 0 20px;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;line-height:1.45}
+dt{color:var(--ink2)}dd{margin:0}
+.sw{display:flex;flex-wrap:wrap;gap:12px 14px}
+.sw span{display:flex;align-items:center;gap:8px;font-size:13px}
+.sw i{width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);flex:none}
+.spec{font-size:22px;line-height:1.3;margin:0 0 20px;padding:12px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.links{display:flex;flex-wrap:wrap;gap:6px 22px;font-weight:500}
+.links a{display:inline-flex;align-items:center;min-height:48px;min-width:48px}
+.note{margin-top:40px;color:var(--ink2);font-size:14px;max-width:80ch}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}.col{padding:32px 0;border-left:0;border-top:1px solid var(--hair)}.col:first-child{border-top:0;padding-top:0}.shots .ph{width:30%}.shots .tb{width:70%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Qamqor: три направления</h1>
+<p class="lead">Один и тот же экран S2 (карта) в трёх разных визуальных языках, телефон 375 × 812 и планшет 1366 × 1024, по-русски. Содержимое и действия взяты из спецификации, различается только оформление. Данные на экране условные.</p>
+<main class="cols">
+
+<article class="col" aria-labelledby="ha">
+<div class="shots"><img class="ph" src="shots/a-phone-peek.png" alt="Направление A на телефоне"><img class="tb" src="shots/a-tablet.png" alt="Направление A на планшете"></div>
+<h2 id="ha">A, Горизонт</h2>
+<p class="sub">Реальный спутник, светлое матовое стекло</p>
+<p class="idea">Смотришь на пастбище с высоты, ничто не закрывает горизонт. Карта занимает весь экран, интерфейс остаётся лёгким слоем стекла. Акцент один: небесная синева, как цвет флага. Громкость вложена в одно, в снимок степи без рамок.</p>
+<div class="sw" aria-label="Палитра A"><span><i style="background:#14202B"></i>#14202B тушь</span><span><i style="background:#F4F5F3"></i>#F4F5F3 стекло</span><span><i style="background:#0A6C95"></i>#0A6C95 небо</span><span><i style="background:#A63D07"></i>#A63D07 отклонение</span><span><i style="background:#4CC3F0"></i>#4CC3F0 стадо</span></div>
+<dl style="margin-top:20px"><dt>Шрифт</dt><dd>Inter (OFL), одна семья, opsz и tnum</dd><dt>Иконки</dt><dd>Phosphor regular и fill (MIT), забор из Tabler (MIT)</dd><dt>Карта</dt><dd>Sentinel-2 cloudless 2016, EOX, CC BY 4.0, реальный снимок</dd></dl>
+<p class="spec" style="font-family:'QInter'">Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі, Қамқор</p>
+<div class="links"><a href="a-horizon.html">Открыть оба экрана</a><a href="a-horizon.html?device=phone">Телефон</a><a href="a-horizon.html?device=tablet">Планшет</a></div>
+</article>
+
+<article class="col" aria-labelledby="hb">
+<div class="shots"><img class="ph" src="shots/b-phone-peek.png" alt="Направление B на телефоне"><img class="tb" src="shots/b-tablet.png" alt="Направление B на планшете"></div>
+<h2 id="hb">B, Съёмка</h2>
+<p class="sub">Нарисованная карта местности, бумага и тушь</p>
+<p class="idea">Лист топографической съёмки: ступенчатая заливка высот, изолинии, река, зимник. Интерфейс строгий, как бумага с тушью. Красно-оранжевый появляется только там, где что-то не так. Громкость вложена в саму карту, у неё характер и нет лицензионных ограничений.</p>
+<div class="sw" aria-label="Палитра B"><span><i style="background:#19211F"></i>#19211F тушь</span><span><i style="background:#FAFAF7"></i>#FAFAF7 бумага</span><span><i style="background:#DDE2D3"></i>#DDE2D3 рельеф</span><span><i style="background:#C2381A"></i>#C2381A киноварь</span><span><i style="background:#7FA2B5"></i>#7FA2B5 река</span></div>
+<dl style="margin-top:20px"><dt>Шрифт</dt><dd>Onest (OFL), одна семья, tnum</dd><dt>Иконки</dt><dd>Phosphor regular и fill (MIT), забор из Tabler (MIT)</dd><dt>Карта</dt><dd>нарисована для макета (рельеф генерируется скриптом, чужих данных нет)</dd></dl>
+<p class="spec" style="font-family:'QOnest'">Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі, Қамқор</p>
+<div class="links"><a href="b-survey.html">Открыть оба экрана</a><a href="b-survey.html?device=phone">Телефон</a><a href="b-survey.html?device=tablet">Планшет</a></div>
+</article>
+
+<article class="col" aria-labelledby="hc">
+<div class="shots"><img class="ph" src="shots/c-phone-peek.png" alt="Направление C на телефоне"><img class="tb" src="shots/c-tablet.png" alt="Направление C на планшете"></div>
+<h2 id="hc">C, Ночной дозор</h2>
+<p class="sub">Сумеречная степь, тональные поверхности</p>
+<p class="idea">Сумерки над степью: спутник, приглушённый до сланцевого тона, поверхности отличаются оттенком, а не тенями. Золото флага есть только у коровы вне зоны: крупная цифра и след её выхода из загона. Громкость вложена в этот золотой след.</p>
+<div class="sw" aria-label="Палитра C"><span><i style="background:#131A21"></i>#131A21 панель</span><span><i style="background:#0E1419"></i>#0E1419 глубина</span><span><i style="background:#E8EDF1"></i>#E8EDF1 текст</span><span><i style="background:#A2AFBA"></i>#A2AFBA второй</span><span><i style="background:#E2B04A"></i>#E2B04A золото</span></div>
+<dl style="margin-top:20px"><dt>Шрифты</dt><dd>Golos Text и Geologica (OFL)</dd><dt>Иконки</dt><dd>Phosphor regular и fill (MIT), забор из Tabler (MIT)</dd><dt>Карта</dt><dd>Sentinel-2 cloudless 2016, EOX, CC BY 4.0, затемнён в CSS</dd></dl>
+<p class="spec" style="font-family:'QGolos'">Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі, <span style="font-family:'QGeologica';font-weight:300">Қамқор</span></p>
+<div class="links"><a href="c-night.html">Открыть оба экрана</a><a href="c-night.html?device=phone">Телефон</a><a href="c-night.html?device=tablet">Планшет</a></div>
+</article>
+
+</main>
+<p class="note">Подробности, контраст, лицензии, самокритика и рекомендация: <a href="README.md">README.md</a>. На страницах направлений панель телефона переключается нажатием на ручку. Нажатия по остальным элементам ничего не делают, это макет только одного экрана.</p>
+</div>
+</body>
+</html>

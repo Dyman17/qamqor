@@ -1,0 +1,102 @@
+/* Direction A: Горизонт. Satellite full bleed, light frosted glass chrome, one sky-blue accent. Inter only. */
+@font-face{font-family:"QInter";src:url("fonts/Inter.woff") format("woff");font-weight:100 900;font-style:normal;font-display:swap}
+:root{color-scheme:light}
+body{background:#DDE0DD;font-family:"QInter","Inter",system-ui,sans-serif}
+.scr{
+  --font:"QInter","Inter",system-ui,sans-serif;
+  --map-bg:#5d6a4a;
+  --text:#14202B; --text2:#44525F; --hair:rgba(20,32,43,.12);
+  --glass:rgba(246,247,245,.92); --glass-solid:#F4F5F3;
+  --accent:#0A6C95; --accent-ink:#085F82; --on-accent:#FFFFFF;
+  --warn:#A63D07; --low:#8A5A00; --offline:#566371;
+  --focus:0 0 0 2px #FFFFFF,0 0 0 4.5px #0B3C57;
+  --inset:20px;
+  font-optical-sizing:auto;
+}
+/* material */
+.farmbtn,.connbtn,.gear,.ctl,.selchip,.connlong,.rail,.panel,.sheet,.tabs{background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5)}
+@media (prefers-reduced-transparency:reduce){.farmbtn,.connbtn,.gear,.ctl,.selchip,.connlong,.rail,.panel,.sheet,.tabs{background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none}}
+.farmbtn,.connbtn,.gear,.ctl,.connlong{box-shadow:0 4px 18px rgba(10,20,30,.22),0 0 0 .5px rgba(10,20,30,.10)}
+.farmbtn{border-radius:24px;font-size:16px;line-height:24px;font-weight:500;letter-spacing:-.005em}
+.connbtn,.connlong{border-radius:24px;font-size:15px;font-weight:500}
+.connlong{font-size:16px}
+.gear,.ctl{border-radius:24px;color:var(--text)}
+.mapctl{gap:10px}
+.sd.ok{color:#1C7C4A}
+.farmbtn:hover,.connbtn:hover,.gear:hover,.ctl:hover,.connlong:hover{background:rgba(255,255,255,.96)}
+.ctl:active,.gear:active{transform:scale(.96)}
+.ctl[disabled],.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* sheet and tabs: one slab */
+.sheet{border-radius:28px 28px 0 0;box-shadow:0 -10px 40px rgba(10,20,30,.20)}
+.tabs{border-top:1px solid var(--hair)}
+.grab i{background:rgba(20,32,43,.28)}
+.grab:hover i{background:rgba(20,32,43,.46)}
+.stats{padding:0 8px}
+.stat{border-radius:14px}
+.stat:hover{background:rgba(20,32,43,.05)}
+.stat .n{font-size:34px;line-height:38px;font-weight:300;letter-spacing:-.025em;font-variation-settings:"opsz" 32;color:var(--text)}
+.stat .l{font-size:12.5px;line-height:16px;color:var(--text2)}
+.stat.is-dev .n{color:var(--warn)}
+.actions-wrap{padding:8px 20px 4px}
+.btn{border-radius:16px;font-size:16px;line-height:22px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{background:#085A7B}
+.btn.quiet{background:rgba(20,32,43,.07);color:var(--text)}
+.btn.quiet:hover{background:rgba(20,32,43,.12)}
+.sec{padding:22px 20px 6px;font-size:13px;line-height:18px;font-weight:600;color:var(--text2);letter-spacing:.005em}
+.row:hover{background:rgba(20,32,43,.045)}
+.row .t{font-size:17px;line-height:24px;font-weight:500;color:var(--text)}
+.row .s{font-size:14px;line-height:20px;color:var(--text2)}
+.row .st{font-size:13px;color:var(--text2)}
+.row.pen .st .sd{display:none}
+.row.pen.is-draft .st{color:var(--warn)}
+.row.pen.is-draft .st .sd{display:inline-block}
+.row .chev{color:var(--text2);margin-right:-4px}
+.alert.k-out .ad{color:var(--warn)} .alert.k-off .ad{color:var(--offline)} .alert.k-low .ad{color:var(--low)}
+.alert .ad{margin-top:-18px}
+.tm{font-size:13px;line-height:20px;color:var(--text2)}
+.updated{font-size:13px;line-height:18px;color:var(--text2)}
+.nav-i{color:var(--text2);font-weight:500}
+.nav-i.is-cur{color:var(--accent-ink);font-weight:600}
+.badge{background:var(--warn);color:#fff}
+.selchip{border-radius:14px;box-shadow:0 4px 18px rgba(10,20,30,.28)}
+.selchip .t{font-size:14px;line-height:20px;font-weight:600;color:var(--text)}
+.selchip .s{font-size:12.5px;line-height:16px;color:var(--text2)}
+.selchip .sd.out{background:var(--warn)}
+.attrib{background:rgba(246,247,245,.84);color:var(--text2)}
+
+/* tablet */
+.tablet{--panel-w:420px;--panel-m:20px}
+.rail{left:16px;top:16px;bottom:16px;width:80px;border-radius:28px;box-shadow:0 4px 24px rgba(10,20,30,.22),0 0 0 .5px rgba(10,20,30,.10);padding:12px 0;color:var(--text2)}
+.rail-farm,.rail-set,.rail-lang{color:var(--text2);border-radius:16px}
+.rail-farm:hover,.rail-set:hover,.rail-lang:hover,.rail-nav .nav-i:hover{background:rgba(20,32,43,.06)}
+.rail-nav .nav-i{border-radius:16px;width:68px}
+.rail-nav .nav-i.is-cur{background:rgba(10,108,149,.11)}
+.rail-farm{width:68px}
+.rail-set{width:68px}
+.tablet .attrib{left:116px}
+.connlong{left:112px}
+.tablet .panel{top:20px;bottom:20px;right:20px;width:420px;border-radius:28px;box-shadow:0 10px 48px rgba(10,20,30,.28),0 0 0 .5px rgba(10,20,30,.10)}
+.tablet .mapctl{right:460px}
+.mini{padding:22px 20px 14px}
+.mini .t{font-size:22px;line-height:28px;font-weight:600;letter-spacing:-.015em}
+.mini .s{margin-top:2px;font-size:14px;line-height:20px;color:var(--text2)}
+.mini .st{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--warn)}
+.btn.small{font-size:15px;border-radius:14px}
+.tablet .stats{padding:4px 12px}
+.panel-body{padding-bottom:12px}
+
+/* map layers */
+.layers image{filter:saturate(.88) contrast(1.06) brightness(1.16)}
+.pen{fill:rgba(255,255,255,.05);stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 1.2px rgba(6,12,18,.65))}
+.pen.is-active{fill:rgba(255,255,255,.17);stroke-width:2.75}
+.pen.is-draft{stroke-dasharray:7 5;stroke-width:1.5}
+.dot{fill:#4CC3F0;stroke:#fff;stroke-width:1.5}
+.dot.off{fill:rgba(32,42,52,.6);stroke-width:1.25}
+.dot.out{fill:#FF7A3D;stroke:#fff;stroke-width:1.75}
+.cluster rect{fill:rgba(246,247,245,.94);filter:drop-shadow(0 1px 3px rgba(6,12,18,.4))}
+.cluster text{fill:#14202B;font:600 1em "QInter",sans-serif;font-family:"QInter","Inter",sans-serif;font-weight:600}
+.sel-ring{fill:none;stroke:#fff;stroke-width:2.25;filter:drop-shadow(0 0 2px rgba(6,12,18,.6))}
+.penlabel{fill:#fff;stroke:rgba(8,16,24,.62);stroke-width:3.4px;paint-order:stroke;stroke-linejoin:round;font-family:"QInter","Inter",sans-serif;font-weight:600;letter-spacing:.01em;pointer-events:none}
+.trail,.trail-glow{display:none}

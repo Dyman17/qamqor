@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Направление C, Ночной дозор: карта (S2)</title>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/c.css">
+</head>
+<body>
+<div class="viewer-bar"><a href="index.html">Все направления</a><span>C, Ночной дозор. Сумеречный спутник, тональные поверхности, золото только для отклонения.</span><a href="?device=phone">Только телефон</a><a href="?device=tablet">Только планшет</a></div>
+<main id="stage"></main>
+<script src="assets/icons.js"></script>
+<script src="assets/screen.js"></script>
+<script>
+QS.mount({
+  layers: '<image href="assets/img/sentinel2-steppe.webp" x="0" y="0" width="1800" height="1800" preserveAspectRatio="none" style="filter:grayscale(.5) contrast(1.28) brightness(.66) sepia(.3)"/><rect class="tint" width="1800" height="1800" fill="#4B6670" opacity=".38"/><rect width="1800" height="1800" fill="#050B12" opacity=".1"/>',
+  cam: { phone: { peek: { x: 715, y: 372, scale: 0.68 }, half: { x: 713, y: 341, scale: 0.45 } }, tablet: { x: 555, y: 375, scale: 1.15 } },
+  iw: { btn: "regular", ctl: "regular", nav: "regular", navOn: "fill" },
+  chev: false, trail: true, clusterRadius: 6,
+  attrib: 'Sentinel-2 cloudless, s2maps.eu, EOX IT Services GmbH, CC BY 4.0. Contains modified Copernicus Sentinel data 2016'
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Направление B, Съёмка: карта (S2)</title>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/b.css">
+</head>
+<body>
+<div class="viewer-bar"><a href="index.html">Все направления</a><span>B, Съёмка. Нарисованная карта местности, бумага и тушь.</span><a href="?device=phone">Только телефон</a><a href="?device=tablet">Только планшет</a></div>
+<main id="stage"></main>
+<script src="assets/icons.js"></script>
+<script src="assets/screen.js"></script>
+<script>
+QS.mount({
+  layers: '<image href="assets/img/b-relief.webp" x="0" y="0" width="1800" height="1800" preserveAspectRatio="none"/><image href="assets/img/b-contours.svg" x="0" y="0" width="1800" height="1800" preserveAspectRatio="none"/>',
+  cam: { phone: { peek: { x: 715, y: 372, scale: 0.68 }, half: { x: 713, y: 341, scale: 0.45 } }, tablet: { x: 555, y: 375, scale: 1.15 } },
+  iw: { btn: "regular", ctl: "regular", nav: "regular", navOn: "fill" },
+  chev: false, trail: false, clusterRadius: 5,
+  attrib: 'Рельеф и изолинии нарисованы для макета, не реальная местность'
+});
+</script>
+</body>
+</html>
