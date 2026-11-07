@@ -1,0 +1,26 @@
+| Текст | surface-0 #F6FAF4 | surface-1 #E1EEDF | surface-2 #FDFEFB | sheet glass over sand | sheet glass over dark grass |
+|---|---|---|---|---|---|
+| `ink` #0B1A12 | 17.00 | 14.95 | 17.72 | 16.71 | 15.24 |
+| `ink-2` #31453A | 9.74 | 8.56 | 10.16 | 9.58 | 8.73 |
+| `ink-3` #46594D | 7.12 | 6.26 | 7.42 | 7.00 | 6.38 |
+| `primary` #0D4A2B | 9.80 | 8.61 | 10.21 | 9.63 | 8.78 |
+| `ok` #0D6B3A | 6.26 | 5.50 | 6.52 | 6.15 | 5.61 |
+| `warning` #7A4A00 | 7.09 | 6.23 | 7.39 | 6.97 | 6.35 |
+| `signal` #B52C08 | 5.98 | 5.26 | 6.23 | 5.88 | 5.36 |
+| `offline` #46554C | 7.47 | 6.57 | 7.79 | 7.34 | 6.70 |
+| `disabled-text` #586A5E | 5.47 | 4.81 | 5.70 | 5.38 | 4.90 |
+
+- on-primary white on primary #0D4A2B: 10.34:1 (need 4.5) PASS
+- white on primary-pressed #093820: 13.14:1 (need 4.5) PASS
+- white on signal #B52C08 (badge): 6.31:1 (need 4.5) PASS
+- nav inactive #CDE3D2 on pill dark end #0D4A2B: 7.64:1 (need 4.5) PASS
+- nav inactive on pill light end #14603A: 5.61:1 (need 4.5) PASS
+- nav active ink on #F6FAF4: 17.00:1 (need 4.5) PASS
+- ink on quiet button surface-1: 14.95:1 (need 4.5) PASS
+- line #5F7568 vs surface-0 (control border): 4.70:1 (need 3) PASS
+- focus ring ink #0B1A12 vs surface-0: 17.00:1 (need 3) PASS
+- signal-map #FF5A1F dot vs grass #3A4A2E: 3.06:1 (need 3) PASS
+- herd dot ring #0F2A1C vs sand #E9DDB8: 11.33:1 (need 3) PASS
+- white herd dot vs grass #3A4A2E: 9.55:1 (need 3) PASS
+- ok-dot #14934F vs surface-0 (non-text): 3.74:1 (need 3) PASS
+failures 0
