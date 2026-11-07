@@ -68,21 +68,55 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
 
       {/* Trigger Hardware Test Panel */}
       <View style={styles.panel}>
-        <Text style={[typography.title2, { marginBottom: spacing.sm }]}>Тестирование датчиков ошейника</Text>
+        <View style={styles.panelHeader}>
+          <Text style={typography.title2}>Тестирование датчиков ошейника</Text>
+          <View style={styles.badgeOk}>
+            <Text style={styles.badgeOkText}>Тест-режим</Text>
+          </View>
+        </View>
         <Text style={[typography.caption, { color: colors.ink2, marginBottom: spacing.md }]}>
           Прямая подача управляющих сигналов на ESP32-ошейник через протокол API Gateway.
         </Text>
 
-        <View style={styles.triggerRow}>
-          <TouchableOpacity style={styles.triggerBtn} onPress={() => handleTrigger('sound')}>
-            <Text style={styles.triggerBtnText}>Звук 0.5W</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.triggerBtn} onPress={() => handleTrigger('vibro')}>
-            <Text style={styles.triggerBtnText}>Вибромотор</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.triggerBtn, styles.triggerBtnDanger]} onPress={() => handleTrigger('shock')}>
-            <Text style={[styles.triggerBtnText, { color: '#ffffff' }]}>Импульс 150мс</Text>
-          </TouchableOpacity>
+        <View style={styles.triggerList}>
+          <View style={styles.triggerItem}>
+            <View style={styles.triggerIconBox}>
+              <Text style={styles.triggerIcon}>🔔</Text>
+            </View>
+            <View style={styles.triggerInfo}>
+              <Text style={styles.triggerTitle}>Звуковой сигнал</Text>
+              <Text style={styles.triggerSub}>0.5 Вт · 800–2400 Гц свип</Text>
+            </View>
+            <TouchableOpacity style={styles.triggerActionBtn} onPress={() => handleTrigger('sound')}>
+              <Text style={styles.triggerActionText}>Тест звука</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.triggerItem}>
+            <View style={styles.triggerIconBox}>
+              <Text style={styles.triggerIcon}>📳</Text>
+            </View>
+            <View style={styles.triggerInfo}>
+              <Text style={styles.triggerTitle}>Вибромотор</Text>
+              <Text style={styles.triggerSub}>ERM мотор · 2 секунды</Text>
+            </View>
+            <TouchableOpacity style={styles.triggerActionBtn} onPress={() => handleTrigger('vibro')}>
+              <Text style={styles.triggerActionText}>Тест вибро</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.triggerItem}>
+            <View style={[styles.triggerIconBox, styles.triggerIconBoxDanger]}>
+              <Text style={styles.triggerIcon}>⚡</Text>
+            </View>
+            <View style={styles.triggerInfo}>
+              <Text style={styles.triggerTitle}>Электро-импульс</Text>
+              <Text style={styles.triggerSub}>150 мс · 400 кВ при границе</Text>
+            </View>
+            <TouchableOpacity style={[styles.triggerActionBtn, styles.triggerActionBtnDanger]} onPress={() => handleTrigger('shock')}>
+              <Text style={[styles.triggerActionText, { color: '#ffffff' }]}>Импульс</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {activeFeedback && (
@@ -171,31 +205,85 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.borderGlow,
+    borderColor: colors.borderSubtle,
     marginBottom: 40,
   },
-  triggerRow: {
+  panelHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  badgeOk: {
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  badgeOkText: {
+    ...typography.caption,
+    color: colors.ok,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  triggerList: {
     gap: spacing.sm,
   },
-  triggerBtn: {
-    flex: 1,
-    height: 44,
-    backgroundColor: colors.surface2,
+  triggerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface0,
     borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    gap: spacing.sm,
+  },
+  triggerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  triggerIconBoxDanger: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  triggerIcon: {
+    fontSize: 18,
+  },
+  triggerInfo: {
+    flex: 1,
+  },
+  triggerTitle: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  triggerSub: {
+    ...typography.caption,
+    color: colors.ink2,
+    fontSize: 11,
+  },
+  triggerActionBtn: {
+    height: 34,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface2,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
-  triggerBtnDanger: {
+  triggerActionBtnDanger: {
     backgroundColor: colors.signal,
     borderColor: colors.signalPressed,
   },
-  triggerBtnText: {
+  triggerActionText: {
     ...typography.caption,
-    color: colors.ink,
     fontWeight: '600',
+    color: colors.ink,
   },
   feedbackBox: {
     marginTop: spacing.md,

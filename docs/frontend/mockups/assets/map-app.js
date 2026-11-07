@@ -205,7 +205,7 @@
           '<span class="t-caption t-muted herd-counter" data-i18n="herd.count" data-p="n=142">В стаде: 142</span>' +
         '</div>' +
         '<div class="view-search-row">' +
-          '<div class="input" style="flex:1;"><i data-icon="magnifying-glass" data-size="20"></i><input type="text" class="herd-search-input" placeholder="Поиск по номеру или бирке..." data-i18n-attr="placeholder:herd.search"></div>' +
+          '<div class="input" style="flex:1;"><i data-icon="magnifying-glass" data-size="20"></i><input type="text" class="herd-search-input" placeholder="Номер или бирка..." data-i18n-attr="placeholder:herd.search"></div>' +
           '<button type="button" class="btn btn-secondary btn-sm herd-select-toggle" data-i18n="herd.select">Выбрать</button>' +
         '</div>' +
         '<div class="filter-pills" role="tablist">' +
@@ -239,19 +239,43 @@
             '<div class="profile-grid-item"><span class="profile-grid-label" data-i18n="profile.coords">Координаты</span><span class="profile-grid-val num profile-coords">43.6501, 51.1572</span></div>' +
             '<div class="profile-grid-item"><span class="profile-grid-label" data-i18n="profile.lastSeen">Последняя связь</span><span class="profile-grid-val profile-ago">5 мин назад</span></div>' +
           '</div>' +
-          '<div style="display:flex; gap:var(--space-2); margin-top:var(--space-2);">' +
-            '<button type="button" class="btn btn-secondary btn-block" data-act="profile-show-map"><i data-icon="map-trifold" data-size="20"></i> <span data-i18n="profile.btnShowMap">Найти на карте</span></button>' +
-            '<button type="button" class="btn btn-primary btn-block" data-tab="move"><i data-icon="path" data-size="20"></i> <span data-i18n="profile.btnMove">Перегнать</span></button>' +
+          '<div style="display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-2);">' +
+            '<button type="button" class="btn btn-primary btn-block" data-tab="move"><i data-icon="path" data-size="20"></i> <span data-i18n="profile.btnMove">Перегнать в другой загон</span></button>' +
+            '<button type="button" class="btn btn-secondary btn-block" data-act="profile-show-map"><i data-icon="map-trifold" data-size="20"></i> <span data-i18n="profile.btnShowMap">Показать на карте</span></button>' +
           '</div>' +
         '</div>' +
         '<div class="trigger-panel">' +
-          '<span class="t-caption cap-strong" data-i18n="profile.testTriggers">Тестирование датчиков ошейника</span>' +
-          '<div class="trigger-btn-grid">' +
-            '<button type="button" class="btn btn-secondary btn-sm" data-trigger="sound"><i data-icon="bell-ringing" data-size="18"></i> <span data-i18n="profile.btnSound">Звук 0.5W</span></button>' +
-            '<button type="button" class="btn btn-secondary btn-sm" data-trigger="vibro"><i data-icon="sliders-horizontal" data-size="18"></i> <span data-i18n="profile.btnVibro">Вибромотор</span></button>' +
-            '<button type="button" class="btn btn-danger btn-sm" data-trigger="shock"><i data-icon="warning" data-size="18"></i> <span data-i18n="profile.btnShock">Импульс 150мс</span></button>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<span class="t-caption cap-strong" data-i18n="profile.testTriggers">Тестирование датчиков ошейника</span>' +
+            '<span class="badge badge-ok"><span class="sdot"></span>Тест-режим</span>' +
           '</div>' +
-          '<div class="trigger-status-box" style="display:none; padding:var(--space-2); background:var(--surface-0); border-radius:var(--r-sm); font-size:var(--fs-caption); color:var(--primary);">' +
+          '<div class="trigger-list">' +
+            '<div class="trigger-row">' +
+              '<div class="trigger-icon-box"><i data-icon="bell-ringing" data-size="20"></i></div>' +
+              '<div class="trigger-info">' +
+                '<span class="trigger-title">Звуковой сигнал</span>' +
+                '<span class="trigger-sub">0.5 Вт · 800–2400 Гц свип</span>' +
+              '</div>' +
+              '<button type="button" class="btn btn-secondary btn-sm" data-trigger="sound">Тест звука</button>' +
+            '</div>' +
+            '<div class="trigger-row">' +
+              '<div class="trigger-icon-box"><i data-icon="sliders-horizontal" data-size="20"></i></div>' +
+              '<div class="trigger-info">' +
+                '<span class="trigger-title">Вибромотор</span>' +
+                '<span class="trigger-sub">ERM мотор · 2 секунды</span>' +
+              '</div>' +
+              '<button type="button" class="btn btn-secondary btn-sm" data-trigger="vibro">Тест вибро</button>' +
+            '</div>' +
+            '<div class="trigger-row">' +
+              '<div class="trigger-icon-box is-danger"><i data-icon="warning" data-size="20"></i></div>' +
+              '<div class="trigger-info">' +
+                '<span class="trigger-title">Электро-импульс</span>' +
+                '<span class="trigger-sub">150 мс · 400 кВ при границе</span>' +
+              '</div>' +
+              '<button type="button" class="btn btn-danger btn-sm" data-trigger="shock">Импульс</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="trigger-status-box" style="display:none; padding:var(--space-2); background:var(--surface-0); border-radius:var(--r-sm); font-size:var(--fs-caption); color:var(--primary); align-items:center; gap:var(--space-2);">' +
             '<i data-icon="check-circle" data-size="16"></i> <span class="trigger-msg"></span>' +
           '</div>' +
         '</div>' +
@@ -272,7 +296,7 @@
             '<div class="alert-head"><i data-icon="warning" data-size="20"></i><span class="alert-title" data-i18n="alert.leftFence">Вышло за забор</span><span class="alert-time">5 мин назад</span></div>' +
             '<p class="t-body" style="font-weight:600;">Корова #0142 · Загон «Северный»</p>' +
             '<p class="t-caption t-muted">Ошейник QAM-0001 подал предупреждение (звук и вибрация)</p>' +
-            '<div class="alert-actions" style="display:flex; gap:var(--space-2); margin-top:var(--space-2);">' +
+            '<div class="alert-actions">' +
               '<button type="button" class="btn btn-secondary btn-sm" data-act="alert-show-map" data-animal="0142" data-i18n="alert.show">Показать на карте</button>' +
               '<button type="button" class="btn btn-primary btn-sm" data-tab="move" data-i18n="action.moveHerd">Перегнать</button>' +
               '<button type="button" class="btn btn-tertiary btn-sm" data-act="alert-dismiss" data-i18n="alert.markRead">Прочитано</button>' +
@@ -282,12 +306,21 @@
             '<div class="alert-head"><i data-icon="cloud-slash" data-size="20"></i><span class="alert-title" data-i18n="status.noConnection">Нет связи</span><span class="alert-time">12 мин назад</span></div>' +
             '<p class="t-body" style="font-weight:600;">Корова #0231 · Бирка DEMO-A31</p>' +
             '<p class="t-caption t-muted">Последнее положение у восточной границы</p>' +
-            '<div class="alert-actions" style="display:flex; gap:var(--space-2); margin-top:var(--space-2);">' +
+            '<div class="alert-actions">' +
               '<button type="button" class="btn btn-secondary btn-sm" data-act="alert-show-map" data-animal="0231" data-i18n="alert.show">Показать на карте</button>' +
               '<button type="button" class="btn btn-tertiary btn-sm" data-act="alert-dismiss" data-i18n="alert.markRead">Прочитано</button>' +
             '</div>' +
           '</div>' +
           '<div class="alert-card is-warning" data-alert-id="3">' +
+            '<div class="alert-head"><i data-icon="wifi-slash" data-size="20"></i><span class="alert-title">Ошейники вне зоны Wi-Fi</span><span class="alert-time">25 мин назад</span></div>' +
+            '<p class="t-body" style="font-weight:600;">Корова #0410, #0415 (2 животных)</p>' +
+            '<p class="t-caption t-muted">Ошейники удерживают виртуальный забор автономно</p>' +
+            '<div class="alert-actions">' +
+              '<button type="button" class="btn btn-tertiary btn-sm" data-act="alert-dismiss" data-i18n="wifi.ok">Понятно</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
             '<div class="alert-head"><i data-icon="wifi-slash" data-size="20"></i><span class="alert-title">Ошейники вне зоны Wi-Fi</span><span class="alert-time">25 мин назад</span></div>' +
             '<p class="t-body" style="font-weight:600;">Корова #0410, #0415 (2 животных)</p>' +
             '<p class="t-caption t-muted">Ошейники удерживают виртуальный забор автономно</p>' +

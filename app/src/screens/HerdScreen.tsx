@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { colors, spacing, radius, typography } from '../theme/tokens';
 
 const ANIMALS = [
@@ -30,7 +30,7 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <View style={styles.searchBar}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Поиск по номеру или бирке..."
+          placeholder="Номер или бирка..."
           placeholderTextColor={colors.ink3}
           value={search}
           onChangeText={setSearch}
@@ -38,18 +38,20 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       </View>
 
       {/* Filter Tabs */}
-      <View style={styles.filterRow}>
-        {(['all', 'ok', 'danger', 'offline'] as const).map((st) => (
-          <TouchableOpacity
-            key={st}
-            style={[styles.filterChip, filter === st && styles.filterChipActive]}
-            onPress={() => setFilter(st)}
-          >
-            <Text style={[styles.chipText, filter === st && styles.chipTextActive]}>
-              {st === 'all' ? 'Все' : st === 'ok' ? 'В зоне' : st === 'danger' ? 'Вне зоны' : 'Без связи'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ marginBottom: spacing.md }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {(['all', 'ok', 'danger', 'offline'] as const).map((st) => (
+            <TouchableOpacity
+              key={st}
+              style={[styles.filterChip, filter === st && styles.filterChipActive]}
+              onPress={() => setFilter(st)}
+            >
+              <Text style={[styles.chipText, filter === st && styles.chipTextActive]}>
+                {st === 'all' ? 'Все' : st === 'ok' ? 'В зоне' : st === 'danger' ? 'Вне зоны' : 'Без связи'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Animal List */}
