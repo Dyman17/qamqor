@@ -22,5 +22,12 @@
 - signal-map #FF5A1F dot vs grass #3A4A2E: 3.06:1 (need 3) PASS
 - herd dot ring #0F2A1C vs sand #E9DDB8: 11.33:1 (need 3) PASS
 - white herd dot vs grass #3A4A2E: 9.55:1 (need 3) PASS
+- white on signal-pressed #8E2106 (destructive pressed): 8.86:1 (need 4.5) PASS
+- ink on tab badge signal-map #FF5A1F: 5.75:1 (need 4.5) PASS
+- badge #FF5A1F vs pill dark end #0D4A2B (non-text, informational): 3.31:1 (need 3) PASS
+- white on ink (toast): 17.94:1 (need 4.5) PASS
+- casing #0F2A1C vs sand #E9DDB8 (non-text): 11.33:1 (need 3) PASS
+- casing #0F2A1C vs signal-map dot (non-text): 4.92:1 (need 3) PASS
+- white ring vs casing (non-text): 15.35:1 (need 3) PASS
 - ok-dot #14934F vs surface-0 (non-text): 3.74:1 (need 3) PASS
 failures 0
