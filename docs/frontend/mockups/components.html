@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru" data-title="mk.title.components">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Компоненты · Qamqor</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="assets/mockups.css">
+</head>
+<body>
+  <a class="mk-skip" href="#main" data-i18n="skip"></a>
+
+  <div class="mk-page">
+    <header class="mk-header">
+      <div>
+        <a class="mk-back" href="index.html"><i data-icon="chevron-right" class="mk-flip" data-size="20"></i><span data-i18n="mk.back"></span></a>
+        <h1 data-i18n="mk.title.components"></h1>
+        <p data-i18n="mk.components.desc"></p>
+        <p class="t-caption t-muted" data-i18n="mk.note.kk"></p>
+      </div>
+      <div class="mk-radios" role="group" data-i18n-attr="aria-label:mk.language">
+        <button type="button" class="chip" data-lang="kk" aria-pressed="false">Қазақша</button>
+        <button type="button" class="chip" data-lang="ru" aria-pressed="false">Русский</button>
+        <button type="button" class="chip" data-lang="en" aria-pressed="false">English</button>
+      </div>
+    </header>
+
+    <main id="main">
+
+      <!-- Fonts and Kazakh letters -->
+      <section class="mk-sec" aria-labelledby="s-type">
+        <h2 id="s-type" data-i18n="mk.sec.type"></h2>
+        <div class="mk-grid">
+          <div class="mk-cell mk-card">
+            <span class="cap">Noto Sans 400 / 500 / 600 / 700</span>
+            <p class="mk-kk fw-400 fs-sample-md">ӘҒҚҢӨҰҮҺІ әғқңөұүһі Qamqor Қазақша</p>
+            <p class="mk-kk fw-500 fs-sample-md">ӘҒҚҢӨҰҮҺІ әғқңөұүһі Qamqor Қазақша</p>
+            <p class="mk-kk fw-600 fs-sample-md">ӘҒҚҢӨҰҮҺІ әғқңөұүһі Qamqor Қазақша</p>
+            <p class="mk-kk fw-700 fs-sample-md">ӘҒҚҢӨҰҮҺІ әғқңөұүһі Qamqor Қазақша</p>
+          </div>
+          <div class="mk-cell mk-card">
+            <span class="cap">Noto Serif 400 / 600</span>
+            <p class="mk-kk ff-serif fw-400 fs-sample-lg">ӘҒҚҢӨҰҮҺІ әғқңөұүһі</p>
+            <p class="mk-kk ff-serif fw-600 fs-sample-lg">ӘҒҚҢӨҰҮҺІ әғқңөұүһі</p>
+          </div>
+          <div class="mk-cell mk-card">
+            <span class="cap">text-transform: uppercase (kk / ru)</span>
+            <p class="mk-kk upper fw-600 fs-sample-sm">қамқор сиыр ұйғыр өріс һәм іс</p>
+            <p class="mk-kk upper fw-600 fs-sample-sm">оповещения ошейники стадо</p>
+            <span class="cap">i · І · і · I · һ · Һ</span>
+            <p class="mk-kk fw-500 fs-sample-lg">i І і I һ Һ</p>
+          </div>
+          <div class="mk-cell mk-card">
+            <span class="cap">display 28/34 · title-1 22/28 · title-2 18/24 · body-l 17/24 · body 16/22 · label 16/20 · caption 13/18 · nav 12/16</span>
+            <p class="t-display">Qamqor 142</p>
+            <p class="t-title-1" data-i18n="herd.title"></p>
+            <p class="t-title-2" data-i18n="pens.title"></p>
+            <p class="t-body-l" data-i18n="empty.herd"></p>
+            <p class="t-body" data-i18n="error.network"></p>
+            <p class="t-label" data-i18n="action.drawFence"></p>
+            <p class="t-caption" data-i18n="status.noConnection"></p>
+            <p class="t-nav-sample" data-i18n="nav.alerts"></p>
+            <p class="t-caption t-muted"><span data-i18n="field.pulseEnergy"></span>: <span data-i18n="field.dash"></span></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Buttons -->
+      <section class="mk-sec" aria-labelledby="s-buttons">
+        <h2 id="s-buttons" data-i18n="mk.sec.buttons"></h2>
+        <div class="mk-grid" id="btn-grid"></div>
+      </section>
+
+      <section class="mk-sec" aria-labelledby="s-fab">
+        <h2 id="s-fab" data-i18n="mk.sec.fab"></h2>
+        <div class="mk-grid" id="fab-grid"></div>
+      </section>
+
+      <!-- Inputs -->
+      <section class="mk-sec" aria-labelledby="s-inputs">
+        <h2 id="s-inputs" data-i18n="mk.sec.inputs"></h2>
+        <div class="mk-grid" id="input-grid"></div>
+      </section>
+
+      <!-- Chips, segment, steps -->
+      <section class="mk-sec" aria-labelledby="s-chips">
+        <h2 id="s-chips" data-i18n="mk.sec.chips"></h2>
+        <div class="mk-grid" id="chip-grid"></div>
+      </section>
+
+      <!-- Badges -->
+      <section class="mk-sec" aria-labelledby="s-badges">
+        <h2 id="s-badges" data-i18n="mk.sec.badges"></h2>
+        <div class="mk-grid" id="badge-grid"></div>
+      </section>
+
+      <!-- Rows -->
+      <section class="mk-sec" aria-labelledby="s-rows">
+        <h2 id="s-rows" data-i18n="mk.sec.rows"></h2>
+        <div class="mk-grid" id="row-grid"></div>
+      </section>
+
+      <!-- Markers -->
+      <section class="mk-sec" aria-labelledby="s-markers">
+        <h2 id="s-markers" data-i18n="mk.sec.markers"></h2>
+        <div class="mk-grid" id="marker-grid"></div>
+      </section>
+
+      <!-- Alert cards -->
+      <section class="mk-sec" aria-labelledby="s-alerts">
+        <h2 id="s-alerts" data-i18n="mk.sec.alerts"></h2>
+        <div class="mk-grid" id="alert-grid"></div>
+      </section>
+
+      <!-- Sheet -->
+      <section class="mk-sec" aria-labelledby="s-sheet">
+        <h2 id="s-sheet" data-i18n="mk.sec.sheet"></h2>
+        <div class="mk-frames" id="sheet-frames"></div>
+      </section>
+
+      <!-- Top bar and bottom nav -->
+      <section class="mk-sec" aria-labelledby="s-nav">
+        <h2 id="s-nav" data-i18n="mk.sec.nav"></h2>
+        <div class="mk-grid" id="nav-grid"></div>
+      </section>
+
+      <!-- Rail -->
+      <section class="mk-sec" aria-labelledby="s-rail">
+        <h2 id="s-rail" data-i18n="mk.sec.rail"></h2>
+        <div class="mk-grid" id="rail-grid"></div>
+      </section>
+
+      <!-- Language -->
+      <section class="mk-sec" aria-labelledby="s-lang">
+        <h2 id="s-lang" data-i18n="mk.sec.lang"></h2>
+        <div class="mk-grid" id="lang-grid"></div>
+      </section>
+
+      <!-- Misc -->
+      <section class="mk-sec" aria-labelledby="s-misc">
+        <h2 id="s-misc" data-i18n="mk.sec.misc"></h2>
+        <div class="mk-grid" id="misc-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/strings.js"></script>
+  <script src="assets/mock.js"></script>
+  <script src="assets/map-app.js"></script>
+  <script src="assets/page-components.js"></script>
+</body>
+</html>

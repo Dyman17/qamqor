@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru" data-title="mk.title.map">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Карта — главный (S2) · Qamqor</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="assets/mockups.css">
+</head>
+<body>
+  <a class="mk-skip" href="#main" data-i18n="skip"></a>
+
+  <div class="mk-page" id="chrome">
+    <header class="mk-header">
+      <div>
+        <a class="mk-back" href="index.html"><i data-icon="chevron-right" class="mk-flip" data-size="20"></i><span data-i18n="mk.back"></span></a>
+        <h1 data-i18n="mk.title.map"></h1>
+        <p data-i18n="mk.map.desc"></p>
+      </div>
+      <div class="mk-radios" role="group" data-i18n-attr="aria-label:mk.language">
+        <button type="button" class="chip" data-lang="kk" aria-pressed="false">Қазақша</button>
+        <button type="button" class="chip" data-lang="ru" aria-pressed="false">Русский</button>
+        <button type="button" class="chip" data-lang="en" aria-pressed="false">English</button>
+      </div>
+    </header>
+
+    <form class="mk-panel" id="panel" aria-labelledby="panel-title" onsubmit="return false">
+      <p class="panel-title" id="panel-title" data-i18n="mk.panel"></p>
+      <fieldset>
+        <legend data-i18n="mk.state"></legend>
+        <div class="mk-radios">
+          <label><input type="radio" name="state" value="normal" checked><span data-i18n="mk.state.normal"></span></label>
+          <label><input type="radio" name="state" value="loading"><span data-i18n="mk.state.loading"></span></label>
+          <label><input type="radio" name="state" value="loadingLong"><span data-i18n="mk.state.loadingLong"></span></label>
+          <label><input type="radio" name="state" value="emptyAnimals"><span data-i18n="mk.state.emptyAnimals"></span></label>
+          <label><input type="radio" name="state" value="emptyPens"><span data-i18n="mk.state.emptyPens"></span></label>
+          <label><input type="radio" name="state" value="error"><span data-i18n="mk.state.error"></span></label>
+          <label><input type="radio" name="state" value="offline"><span data-i18n="mk.state.offline"></span></label>
+          <label><input type="radio" name="state" value="allOk"><span data-i18n="mk.state.allOk"></span></label>
+          <label><input type="radio" name="state" value="wifi"><span data-i18n="mk.state.wifi"></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="mk.sheet"></legend>
+        <div class="mk-radios">
+          <label><input type="radio" name="sheet" value="peek" checked><span data-i18n="mk.sheet.peek"></span></label>
+          <label><input type="radio" name="sheet" value="half"><span data-i18n="mk.sheet.half"></span></label>
+          <label><input type="radio" name="sheet" value="full"><span data-i18n="mk.sheet.full"></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="mk.role"></legend>
+        <div class="mk-radios">
+          <label><input type="radio" name="role" value="owner" checked><span data-i18n="mk.role.owner"></span></label>
+          <label><input type="radio" name="role" value="worker"><span data-i18n="mk.role.worker"></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="mk.scale"></legend>
+        <div class="mk-radios">
+          <label><input type="radio" name="scale" value="1" checked><span>100%</span></label>
+          <label><input type="radio" name="scale" value="0.75"><span>75%</span></label>
+          <label><input type="radio" name="scale" value="0.5"><span>50%</span></label>
+        </div>
+      </fieldset>
+      <p class="t-caption t-muted basis-full" data-i18n="mk.note.kk"></p>
+      <p class="t-caption t-muted basis-full" data-i18n="mk.note.cluster"></p>
+    </form>
+
+    <main id="main">
+      <div class="mk-frames" id="frames"></div>
+    </main>
+  </div>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/strings.js"></script>
+  <script src="assets/mock.js"></script>
+  <script src="assets/map-app.js"></script>
+  <script src="assets/page-map.js"></script>
+</body>
+</html>

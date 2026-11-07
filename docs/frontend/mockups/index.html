@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru" data-title="mk.title.index">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Макеты экранов Qamqor · Qamqor</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="assets/mockups.css">
+</head>
+<body>
+  <a class="mk-skip" href="#main" data-i18n="skip"></a>
+
+  <div class="mk-page">
+    <header class="mk-header">
+      <div>
+        <h1 data-i18n="mk.title.index"></h1>
+        <p data-i18n="mk.lead.index"></p>
+        <p class="t-caption t-muted" data-i18n="mk.note.kk"></p>
+      </div>
+      <div class="mk-radios" role="group" data-i18n-attr="aria-label:mk.language">
+        <button type="button" class="chip" data-lang="kk" aria-pressed="false">Қазақша</button>
+        <button type="button" class="chip" data-lang="ru" aria-pressed="false">Русский</button>
+        <button type="button" class="chip" data-lang="en" aria-pressed="false">English</button>
+      </div>
+    </header>
+
+    <main id="main" class="mk-index-layout">
+      <section aria-labelledby="list-h">
+        <h2 class="t-title-2 mk-heading" id="list-h" data-i18n="mk.list"></h2>
+        <ul class="mk-list">
+          <li>
+            <h3><a href="components.html" data-i18n="mk.components"></a></h3>
+            <p data-i18n="mk.components.desc"></p>
+          </li>
+          <li>
+            <h3><a href="screen-map.html" data-i18n="mk.map"></a></h3>
+            <p data-i18n="mk.map.desc"></p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="mk-stage" aria-labelledby="stage-h">
+        <h2 class="t-title-2 mk-heading" id="stage-h" data-i18n="mk.show"></h2>
+        <form class="mk-panel" id="stage-panel" onsubmit="return false">
+          <fieldset>
+            <legend data-i18n="mk.list"></legend>
+            <div class="mk-radios">
+              <label><input type="radio" name="page" value="screen-map.html" checked><span data-i18n="mk.map"></span></label>
+              <label><input type="radio" name="page" value="components.html"><span data-i18n="mk.components"></span></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="mk.device"></legend>
+            <div class="mk-radios">
+              <label><input type="radio" name="size" value="320x640"><span>320 × 640</span></label>
+              <label><input type="radio" name="size" value="375x812" checked><span>375 × 812</span></label>
+              <label><input type="radio" name="size" value="768x1024"><span>768 × 1024</span></label>
+              <label><input type="radio" name="size" value="1366x1024"><span>1366 × 1024</span></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="mk.fit"></legend>
+            <div class="mk-radios">
+              <label><input type="checkbox" name="fit" checked><span data-i18n="mk.fit"></span></label>
+            </div>
+          </fieldset>
+        </form>
+        <div class="mk-stage-box" id="stage-box">
+          <div class="mk-iframe-holder" id="holder"><iframe id="frame" title="mockup" src="about:blank"></iframe></div>
+        </div>
+        <p class="t-caption mt-2"><a id="open-link" href="screen-map.html" data-i18n="mk.open"></a></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/strings.js"></script>
+  <script src="assets/mock.js"></script>
+  <script src="assets/page-index.js"></script>
+</body>
+</html>

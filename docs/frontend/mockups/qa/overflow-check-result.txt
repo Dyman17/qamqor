@@ -1,0 +1,10 @@
+Run of qa/overflow-check.html (Chrome in the built-in browser pane, mockups served from the mockups folder over http).
+Result (fix pass): 261 frames checked, 0 failures.
+Matrix: screen-map embed x {320x640, 375x812} x 9 states (normal, loading, loadingLong, emptyAnimals, emptyPens, error, offline, allOk, wifi) x sheet {peek, half, full} x {ru, en, kk}
+        screen-map embed x {768x1024, 1366x1024} x 9 states x {ru, en, kk}
+        components.html, index.html, screen-map.html (page chrome) x {320, 375, 768, 1280, 1440} x {ru, en, kk}
+Per frame: documentElement.scrollWidth <= innerWidth; no element outside the frame (map layer excluded, clipped by design);
+no text overflowing its own box (ellipsis fields .farm-name, .row-title, .row-sub, badge text allowed);
+landmarks: at most one <main>, no nested main, every visible <nav> labelled and labels unique per page.
+Top bar at 320: farm button + conn button + settings + gaps + margins = 320 px; farm name "Ферма Демо" shown in full in ru, en, kk.
+Other checks in this folder: contrast-check.py (token pairs, 55 pairs, 0 failures), strings-parity.js (0 errors).

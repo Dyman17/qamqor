@@ -1,0 +1,96 @@
+/*
+  Qamqor mockups: design tokens.
+  Names and values come from docs/frontend/app-design-brief.md (palette B "сочная трава", approved).
+  Naming mirrors the Figma variables (docs/frontend/figma-phase-1.md): Color, Map, Space, Radius, Size.
+  This is the ONLY file in the mockups that may contain raw colour values.
+*/
+
+:root {
+  /* ---- Color (Light, the only mode) ---- */
+  --bg: #F4FBEE;
+  --surface: #FFFFFF;
+  --sunken: #E3EFD3;
+  --ink: #14301A;
+  --ink-2: #3A5540;
+  --ink-3: #4F6A55;
+  --line: #6A8A62;
+  --line-soft: #C6DBB2;
+  --primary: #17802C;
+  --primary-vivid: #5CCB3C;   /* fills only, see brief 2.1 */
+  --primary-pressed: #10601F;
+  --on-primary: #FFFFFF;
+  --primary-tint: #D9F2C4;
+  --accent: #FFB300;
+  --sky: #2A9AE8;
+  --disabled-text: #6B7A66;
+  --focus: #1B4FD6;
+  --danger-pressed: #9E1A10;
+
+  /* semantics: text / bg / solid (solid = fill for a plate or button with white text) */
+  --ok-text: #00705A;       --ok-bg: #D2F1E4;       --ok-solid: #00705A;
+  --warning-text: #8A4B00;  --warning-bg: #FFEBC2;  --warning-solid: #8A4B00;
+  --danger-text: #C21F14;   --danger-bg: #FFE4DF;   --danger-solid: #C21F14;
+  --offline-text: #4D5560;  --offline-bg: #E7EAEE;  --offline-solid: #4D5560;
+  --info-text: #0F62B5;     --info-bg: #DCEBFA;     --info-solid: #0F62B5;
+
+  /* ---- Map ---- */
+  --map-fence: #FFCE1F;
+  --map-active: #5CF2A0;
+  --map-alarm: #FF5A44;
+  --map-casing: #14301A;
+  --marker-ok: #1FBF8F;
+  --marker-warning: #FF9F0A;
+  --marker-danger: #E5352B;
+  --marker-offline: #8A929C;
+  /* placeholder basemap swatches (flat stylised, NOT real imagery) */
+  --map-ph-dark: #23301F;
+  --map-ph-mid: #2F4127;
+  --map-ph-field: #3A5030;
+  --map-ph-sand: #C9C2A8;
+
+  /* ---- Space (4 px step) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- Radius ---- */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 20px;
+
+  /* ---- Elevation ---- */
+  --e0: none;
+  --e1: 0 1px 2px rgba(20, 48, 26, .16);
+  --e2: 0 4px 16px rgba(20, 48, 26, .20);
+
+  /* ---- Fixed sizes ---- */
+  --touch: 48px;
+  --btn-h: 56px;
+  --fab: 52px;
+  --nav-h: 64px;
+  --rail-w: 104px;
+  --topbar-h: 56px;
+
+  /* ---- Type: phone scale (brief 3.2). Tablet overrides live in mockups.css ---- */
+  --font-sans: "Noto Sans", system-ui, sans-serif;
+  --font-serif: "Noto Serif", Georgia, serif;
+  --fs-display: 28px;  --lh-display: 34px;
+  --fs-title-1: 22px;  --lh-title-1: 28px;
+  --fs-title-2: 18px;  --lh-title-2: 24px;
+  --fs-body-l: 17px;   --lh-body-l: 24px;
+  --fs-body: 16px;     --lh-body: 22px;
+  --fs-label: 16px;    --lh-label: 20px;
+  --fs-caption: 13px;  --lh-caption: 18px;
+  --fs-nav: 12px;      --lh-nav: 16px;
+  --fs-nav-rail: 13px; /* tablet rail label: 14 px "Оповещения" does not fit 88 px */
+
+  /* scrim for mockup-only overlays */
+  --scrim: rgba(20, 48, 26, .45);
+}

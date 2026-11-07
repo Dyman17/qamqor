@@ -1,0 +1,6 @@
+keys: ru 176, en 176, kk 27
+product keys (non-mk): 99; kk present: 27; kk falls back to ru: 72
+referenced keys found in code: 152
+ru keys never referenced by a literal in code (may be dynamic): skip, action.undo, stub, sr.markerOk, mk.reduced, mk.lang.menu, mk.lang.radio, mk.topbar, mk.bottomnav, mk.nofence, mk.marker.selected, mk.marker.cluster, mk.marker.sm
+kk missing product keys: skip, nav.collars, action.saveApply, status.noConnectionTime, status.noFence, tag.s0231, alerts.new3, wifi.text, wifi.ok, map.placeholderScheme, field.clear, field.dec, field.inc, farm.demo, farm.switch, conn.long, conn.aria, sheet.expand, sheet.collapse, sheet.summary, sheet.allOk, pens.title, pen.applied, pen.draft, pen.animals, alerts.nearest, alert.show, alert.profile, alert.markRead, time.ago, map.placeholder, map.layers, map.locate, map.fitAll, map.loading, map.slow, map.updated, map.cluster, empty.animals, empty.addCollar, empty.pens, banner.offline, banner.server, write.disabled, write.disabledServer, mini.profile, mini.pick, mini.close, tag.sample, tag.short, pen.north, pen.south, lang.aria, field.password, field.hint, field.show, field.error, field.search, field.limit, filter.all, filter.pen, seg.new, seg.all, step.title, step.who, dlg.title, dlg.text, dlg.back, toast.saved, battery.label, stub, sr.markerOk
+no errors

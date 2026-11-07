@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mockups QA: overflow and font check</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; }
+    iframe { position: absolute; left: -9999px; top: 0; border: 0; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <!--
+    QA helper (not part of the mockups). Serve the mockups folder over http (python -m http.server) and open this page.
+    It loads the mockups into same-origin iframes at exact sizes and records:
+      - documentElement.scrollWidth <= innerWidth inside each frame (the check required by CLAUDE.md section 6)
+      - elements inside the app that stick out of the frame (map layer excluded, it is clipped by design)
+      - text that overflows its own box (ellipsis fields are allowed)
+    Results: window.__RESULT (JSON) and the <pre> below.
+  -->
+  <h1>Mockups QA</h1>
+  <button id="run" type="button">Run</button>
+  <pre id="out"></pre>
+  <iframe id="f" title="qa"></iframe>
+  <script>
+    var f = document.getElementById("f");
+    var out = document.getElementById("out");
+    var results = [];
+    var TEXT_OK = ".farm-name, .row-title, .row-sub, .badge > span, .map-ph-label";
+
+    function load(url, w, h) {
+      return new Promise(function (resolve) {
+        f.style.width = w + "px"; f.style.height = h + "px";
+        f.onload = function () { setTimeout(resolve, 80); };
+        f.src = url;
+      });
+    }
+    function measure(label, url, w, h, opts) {
+      return load(url, w, h).then(function () {
+        var d = f.contentDocument, win = f.contentWindow;
+        var r = { label: label, w: w, h: h, scrollWidth: d.documentElement.scrollWidth, innerWidth: win.innerWidth, scrollHeight: d.documentElement.scrollHeight, innerHeight: win.innerHeight };
+        r.pageOverflow = r.scrollWidth > r.innerWidth;
+        var bad = [], txt = [];
+        var isApp = !(opts && opts.scope);
+        var scope = isApp ? (d.querySelector(".device") || d.body) : null;
+        var sr = scope ? scope.getBoundingClientRect() : { left: 0, right: win.innerWidth };
+        d.querySelectorAll((opts && opts.scope ? opts.scope : ".app") + " *").forEach(function (el) {
+          if (el.closest(".map") || el.closest("svg") || el.closest("[hidden]") || el.closest(".menu[hidden]") || el.matches(".sr-only, input") || (!isApp && el.closest(".mk-scroll"))) { return; }
+          if (el.matches(".sheet-title") && !d.querySelector('.app[data-sheet="full"]') && !(win.innerWidth >= 768)) { return; }
+          var cs = win.getComputedStyle(el);
+          if (cs.display === "none" || cs.visibility === "hidden") { return; }
+          var b = el.getBoundingClientRect();
+          if (b.width === 0 && b.height === 0) { return; }
+          if (b.right > sr.right + 0.5 || b.left < sr.left - 0.5) { bad.push(el.tagName + "." + String(el.className).slice(0, 40) + " [" + Math.round(b.left) + "," + Math.round(b.right) + "]"); }
+          if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !el.matches(TEXT_OK) && cs.overflowX !== "auto" && cs.overflowX !== "scroll" && el.children.length === 0) {
+            txt.push(el.tagName + "." + String(el.className).slice(0, 30) + " '" + (el.textContent || "").trim().slice(0, 24) + "' " + el.scrollWidth + ">" + el.clientWidth);
+          }
+        });
+        r.sticksOut = bad.slice(0, 6); r.textOverflow = txt.slice(0, 6);
+        // landmarks: at most one <main> per page, no nested main, visible navs have unique labels, no console-noise
+        var mains = d.querySelectorAll("main");
+        var navs = Array.prototype.filter.call(d.querySelectorAll("nav"), function (n) { return win.getComputedStyle(n).display !== "none"; }).map(function (n) { return n.getAttribute("aria-label"); });
+        var dupNav = navs.filter(function (x, i) { return navs.indexOf(x) !== i; });
+        var land = [];
+        if (mains.length > 1) { land.push("main x" + mains.length); }
+        if (d.querySelector("main main")) { land.push("nested main"); }
+        if (dupNav.length) { land.push("duplicate nav labels: " + dupNav.join("|")); }
+        if (navs.some(function (x) { return !x; })) { land.push("nav without label"); }
+        r.landmarks = land;
+        r.ok = !r.pageOverflow && !bad.length && !txt.length && !land.length;
+        if (opts && opts.fonts) {
+          var fs = [];
+          win.document.fonts.forEach(function (ff) { fs.push(ff.family + " " + ff.status); });
+          r.fonts = fs;
+        }
+        results.push(r);
+        return r;
+      });
+    }
+
+    async function run() {
+      results = [];
+      var langs = ["ru", "en", "kk"];
+      var states = ["normal", "loading", "loadingLong", "emptyAnimals", "emptyPens", "error", "offline", "allOk", "wifi"];
+      var base = "../screen-map.html?embed=1";
+      var phones = [[320, 640], [375, 812]];
+      for (var li = 0; li < langs.length; li++) {
+        for (var si = 0; si < states.length; si++) {
+          for (var pi = 0; pi < phones.length; pi++) {
+            for (var sh of ["peek", "half", "full"]) {
+              await measure("map " + phones[pi][0] + " " + langs[li] + " " + states[si] + " " + sh, base + "&lang=" + langs[li] + "&state=" + states[si] + "&sheet=" + sh, phones[pi][0], phones[pi][1], { fonts: states[si] === "normal" && sh === "peek" });
+            }
+          }
+          for (var tw of [[768, 1024], [1366, 1024]]) {
+            await measure("map " + tw[0] + " " + langs[li] + " " + states[si], base + "&lang=" + langs[li] + "&state=" + states[si], tw[0], tw[1], {});
+          }
+        }
+        for (var cw of [320, 375, 768, 1280, 1440]) {
+          await measure("components " + cw + " " + langs[li], "../components.html?lang=" + langs[li], cw, 900, { scope: ".mk-page main" });
+          await measure("index " + cw + " " + langs[li], "../index.html?lang=" + langs[li], cw, 900, { scope: ".mk-page" });
+          await measure("screen-map page " + cw + " " + langs[li], "../screen-map.html?lang=" + langs[li], cw, 900, { scope: ".mk-page > header, .mk-panel" });
+        }
+      }
+      var failed = results.filter(function (r) { return !r.ok; });
+      window.__RESULT = { total: results.length, failed: failed.length, failures: failed, fonts: results.filter(function (r) { return r.fonts; }).slice(0, 1).map(function (r) { return r.fonts; }) };
+      out.textContent = JSON.stringify(window.__RESULT, null, 1);
+      document.title = "DONE " + failed.length + "/" + results.length;
+    }
+    document.getElementById("run").addEventListener("click", run);
+    if (location.hash === "#auto") { run(); }
+  </script>
+</body>
+</html>
