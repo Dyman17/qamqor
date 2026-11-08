@@ -5,7 +5,8 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    # builds the site SPA (if site/package.json exists) first; the server then serves site/dist
+    buildCommand: if [ -f ../site/package.json ]; then (cd ../site && npm ci --include=dev && npm run build); fi && npm ci --include=dev && npx prisma generate && npm run build
     # free plan has no preDeployCommand, so migrations run at start
     startCommand: npx prisma migrate deploy && npm run start:prod
     healthCheckPath: /health

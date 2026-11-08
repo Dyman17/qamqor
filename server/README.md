@@ -10,12 +10,12 @@ NestJS 11 (TypeScript), Prisma 6, PostgreSQL, JWT (Passport), bcrypt (стоим
 
 ## Маршруты
 
-Все маршруты, кроме `GET /` и `GET /health`, находятся под префиксом `/api/v1`. Права: **O** владелец, **W** владелец и работник, **B** владелец или работник при включённом `workerCanEditBoundaries`, **Д** ошейник (`Authorization: Bearer <deviceSecret>`).
+Все маршруты, кроме `GET /api/info` и `GET /health`, находятся под префиксом `/api/v1`. Права: **O** владелец, **W** владелец и работник, **B** владелец или работник при включённом `workerCanEditBoundaries`, **Д** ошейник (`Authorization: Bearer <deviceSecret>`).
 Данные фермы читаются с заголовком `x-farm-id` (если ферма одна, заголовок можно опустить).
 
 Служебные (без авторизации):
 
-- `GET /` — статус сервиса
+- `GET /api/info` — статус сервиса и версия (корень `/` отдаёт сайт `site/dist`, если он собран)
 - `GET /health` — проверка работоспособности
 
 Аутентификация:
@@ -83,6 +83,7 @@ NestJS 11 (TypeScript), Prisma 6, PostgreSQL, JWT (Passport), bcrypt (стоим
 | `OFFLINE_CHECK_INTERVAL_SEC`, `SCHEDULER_ENABLED` | период фоновой проверки (60 с) и её отключение |
 | `TELEMETRY_MAX_AGE_SEC` / `TELEMETRY_MAX_FUTURE_SEC` | окно допустимого `timestamp` пинга, 600 / 120 |
 | `TRUST_PROXY_HOPS` | сколько прокси-узлов доверять для IP клиента (по умолчанию 1 в production, 0 иначе; значение пишется в лог при старте) |
+| `SITE_DIST_DIR` | каталог собранного сайта (по умолчанию `../site/dist` относительно `server/`); если его нет, сайт не раздаётся, API работает. Всё, что не под `/api` и `/health`, отдаёт SPA (fallback на `index.html`). CSP задаётся в `src/config/csp.ts` |
 | `APP_BASE_URL` | база ссылок в письмах (необязательна) |
 | `SEED_OWNER_PASSWORD` | только для `prisma:seed` в разработке; пусто = случайный пароль, печатается один раз |
 

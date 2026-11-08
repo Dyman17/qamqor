@@ -27,7 +27,7 @@ import { routesOf } from './helpers/routes';
 
 const V = '/api/v1';
 const EXPECTED_ROUTES = [
-  'GET /', 'GET /health',
+  'GET /api/info', 'GET /health',
   `POST ${V}/auth/register`, `POST ${V}/auth/login`, `GET ${V}/auth/me`,
   `POST ${V}/auth/password-reset/request`, `POST ${V}/auth/password-reset/confirm`, `POST ${V}/auth/invitations/accept`,
   `GET ${V}/farms`, `POST ${V}/farms`, `GET ${V}/farms/:id`, `PATCH ${V}/farms/:id`,
