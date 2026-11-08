@@ -1,24 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 import { Animal } from '../types';
 
 export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
 
   return (
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.topbar}>
-        <TouchableOpacity style={styles.farmButton}>
+        <TouchableOpacity style={styles.farmButton} hitSlop={hit(36)}>
           <Text style={styles.farmName}>Ферма Демо</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.connPill} onPress={() => navigation.navigate('Herd')}>
+        <TouchableOpacity style={styles.connPill} hitSlop={hit(36)} onPress={() => navigation.navigate('Herd')}>
           <View style={styles.sdot} />
           <Text style={styles.connText}>138/142</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.gearButton} onPress={() => navigation.navigate('Settings')}>
-          <Text style={{ color: colors.ink, fontSize: 18 }}>⚙</Text>
+        <TouchableOpacity style={styles.gearButton} hitSlop={hit(48)} accessibilityLabel="Настройки" onPress={() => navigation.navigate('Settings')}>
+          <Text style={{ color: colors.ink, fontSize: fs(18) }}>⚙</Text>
         </TouchableOpacity>
       </View>
 
@@ -72,7 +75,8 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -97,7 +101,7 @@ const styles = StyleSheet.create({
   },
   farmName: {
     ...typography.bodyL,
-    fontSize: 14,
+    fontSize: fs(14),
   },
   connPill: {
     flexDirection: 'row',
@@ -111,10 +115,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   sdot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.ok,
+    width: sz(8),
+    height: sz(8),
+    borderRadius: sz(4),
+    backgroundColor: colors.okDot,
   },
   connText: {
     ...typography.caption,
@@ -122,9 +126,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   gearButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: sizes.fab,
+    height: sizes.fab,
+    borderRadius: sizes.fab / 2,
     backgroundColor: colors.surfaceGlass,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -133,7 +137,7 @@ const styles = StyleSheet.create({
   },
   mapCanvas: {
     flex: 1,
-    backgroundColor: '#0a160e',
+    backgroundColor: colors.markerCasing,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -141,11 +145,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '25%',
     left: '20%',
-    width: 220,
-    height: 140,
+    width: sz(220),
+    height: sz(140),
     borderWidth: 1.5,
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(188, 240, 111, 0.08)',
+    borderColor: colors.mapLine,
+    backgroundColor: colors.mapFill,
     borderRadius: radius.md,
     padding: spacing.xs,
   },
@@ -153,17 +157,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: '25%',
     left: '30%',
-    width: 200,
-    height: 120,
+    width: sz(200),
+    height: sz(120),
     borderWidth: 1.5,
-    borderColor: colors.ok,
-    backgroundColor: 'rgba(34, 197, 94, 0.08)',
+    borderColor: colors.mapLine,
+    backgroundColor: colors.mapFillActive,
     borderRadius: radius.md,
     padding: spacing.xs,
   },
   penLabel: {
     ...typography.caption,
-    color: colors.ink2,
+    color: colors.mapLine,
   },
   marker: {
     position: 'absolute',
@@ -171,18 +175,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   markerInnerOut: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.signal,
-    borderWidth: 2,
-    borderColor: '#ffffff',
+    width: sz(16),
+    height: sz(16),
+    borderRadius: sz(8),
+    backgroundColor: colors.signalMap,
+    borderWidth: 2.5,
+    borderColor: colors.mapLine,
   },
   markerText: {
     ...typography.caption,
-    fontSize: 10,
-    color: colors.ink,
-    marginTop: 2,
+    fontSize: fs(11),
+    color: colors.mapLine,
+    marginTop: sz(2),
   },
   sheet: {
     position: 'absolute',
@@ -190,17 +194,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.surface1,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     padding: spacing.lg,
     borderTopWidth: 1,
     borderColor: colors.borderSubtle,
     gap: spacing.md,
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: sz(36),
+    height: sz(4),
+    borderRadius: sz(2),
     backgroundColor: colors.ink3,
     alignSelf: 'center',
     marginBottom: spacing.xs,
@@ -217,11 +221,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sumTileDanger: {
-    borderColor: colors.signal,
-    borderWidth: 1,
+    backgroundColor: colors.surface2White,
   },
   tileNumber: {
-    ...typography.title1,
+    ...typography.display,
     color: colors.primary,
   },
   tileLabel: {
@@ -235,8 +238,8 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    height: 48,
-    borderRadius: radius.md,
+    minHeight: sizes.btn,
+    borderRadius: radius.btn,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -249,8 +252,6 @@ const styles = StyleSheet.create({
   },
   btnSecondary: {
     backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
   },
   btnSecondaryText: {
     ...typography.bodyL,

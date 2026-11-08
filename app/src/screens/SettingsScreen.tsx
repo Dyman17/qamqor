@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 
 export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   const [workerCanEdit, setWorkerCanEdit] = React.useState(true);
 
   return (
@@ -32,7 +35,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           <Switch
             value={workerCanEdit}
             onValueChange={setWorkerCanEdit}
-            trackColor={{ false: colors.surface2, true: colors.primary }}
+            trackColor={{ false: colors.line, true: colors.primary }}
           />
         </View>
       </View>
@@ -56,7 +59,8 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -88,17 +92,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   btnLogout: {
-    backgroundColor: 'rgba(248, 113, 113, 0.15)',
+    backgroundColor: colors.signal,
+    minHeight: sizes.btn,
+    justifyContent: 'center',
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.btn,
     alignItems: 'center',
     marginVertical: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.signal,
   },
   btnLogoutText: {
-    ...typography.bodyL,
-    color: colors.signal,
+    ...typography.label,
+    color: colors.onPrimary,
   },
 });
 

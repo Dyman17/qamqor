@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { colors } from '../theme/tokens';
+import { useTheme } from '../theme/scale';
 
 import { MapScreen } from '../screens/MapScreen';
 import { HerdScreen } from '../screens/HerdScreen';
@@ -16,19 +16,25 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
+  const { colors, sizes, typography, spacing, radius } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.surface1,
-          borderTopColor: colors.borderSubtle,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
+          backgroundColor: colors.surface3,
+          borderTopWidth: 0,
+          height: sizes.nav,
+          paddingBottom: spacing.sm,
+          paddingTop: spacing.sm,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.ink2,
+        tabBarLabelStyle: {
+          fontSize: typography.nav.fontSize,
+          lineHeight: typography.nav.lineHeight,
+          fontWeight: typography.nav.fontWeight,
+        },
+        tabBarActiveTintColor: colors.onPrimary,
+        tabBarInactiveTintColor: colors.navText,
       }}
     >
       <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Карта' }} />
@@ -36,7 +42,7 @@ function MainTabs() {
       <Tab.Screen
         name="Alerts"
         component={AlertsScreen}
-        options={{ tabBarLabel: 'Оповещения', tabBarBadge: 3, tabBarBadgeStyle: { backgroundColor: colors.signal } }}
+        options={{ tabBarLabel: 'Оповещения', tabBarBadge: 3, tabBarBadgeStyle: { backgroundColor: colors.signalMap, color: colors.ink } }}
       />
       <Tab.Screen name="Collars" component={CollarsScreen} options={{ tabBarLabel: 'Ошейники' }} />
     </Tab.Navigator>
@@ -44,6 +50,7 @@ function MainTabs() {
 }
 
 export function AppNavigator() {
+  const { colors } = useTheme();
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface0 } }}>

@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 import { api } from '../services/api';
 
 export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({ route, navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   const animalId = route?.params?.animalId || '0142';
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
 
@@ -26,7 +29,7 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
 
   return (
     <ScrollView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+      <TouchableOpacity style={styles.backButton} hitSlop={hit(36)} onPress={() => navigation.goBack()}>
         <Text style={styles.backText}>← Назад к списку</Text>
       </TouchableOpacity>
 
@@ -61,7 +64,7 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
           </View>
         </View>
 
-        <TouchableOpacity style={styles.btnMap} onPress={() => navigation.navigate('Map')}>
+        <TouchableOpacity style={styles.btnMap} hitSlop={hit(44)} onPress={() => navigation.navigate('Map')}>
           <Text style={styles.btnMapText}>Показать на карте</Text>
         </TouchableOpacity>
       </View>
@@ -87,7 +90,7 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
               <Text style={styles.triggerTitle}>Звуковой сигнал</Text>
               <Text style={styles.triggerSub}>0.5 Вт · 800–2400 Гц свип</Text>
             </View>
-            <TouchableOpacity style={styles.triggerActionBtn} onPress={() => handleTrigger('sound')}>
+            <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} onPress={() => handleTrigger('sound')}>
               <Text style={styles.triggerActionText}>Тест звука</Text>
             </TouchableOpacity>
           </View>
@@ -100,7 +103,7 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
               <Text style={styles.triggerTitle}>Вибромотор</Text>
               <Text style={styles.triggerSub}>ERM мотор · 2 секунды</Text>
             </View>
-            <TouchableOpacity style={styles.triggerActionBtn} onPress={() => handleTrigger('vibro')}>
+            <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} onPress={() => handleTrigger('vibro')}>
               <Text style={styles.triggerActionText}>Тест вибро</Text>
             </TouchableOpacity>
           </View>
@@ -113,8 +116,8 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
               <Text style={styles.triggerTitle}>Электро-импульс</Text>
               <Text style={styles.triggerSub}>150 мс · 400 кВ при границе</Text>
             </View>
-            <TouchableOpacity style={[styles.triggerActionBtn, styles.triggerActionBtnDanger]} onPress={() => handleTrigger('shock')}>
-              <Text style={[styles.triggerActionText, { color: '#ffffff' }]}>Импульс</Text>
+            <TouchableOpacity style={[styles.triggerActionBtn, styles.triggerActionBtnDanger]} hitSlop={hit(36)} onPress={() => handleTrigger('shock')}>
+              <Text style={[styles.triggerActionText, { color: colors.onPrimary }]}>Импульс</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -129,7 +132,8 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -158,7 +162,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badgeDanger: {
-    backgroundColor: 'rgba(248, 113, 113, 0.2)',
+    backgroundColor: colors.surface2,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
@@ -186,18 +190,18 @@ const styles = StyleSheet.create({
   gridVal: {
     ...typography.body,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: sz(2),
   },
   btnMap: {
     backgroundColor: colors.surface2,
-    height: 44,
-    borderRadius: radius.md,
+    minHeight: sz(44),
+    borderRadius: radius.btn,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnMapText: {
     ...typography.bodyL,
-    fontSize: 14,
+    fontSize: fs(14),
     color: colors.ink,
   },
   panel: {
@@ -206,7 +210,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    marginBottom: 40,
+    marginBottom: spacing.x10,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -215,16 +219,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   badgeOk: {
-    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    backgroundColor: colors.surface2,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: sz(2),
     borderRadius: radius.pill,
   },
   badgeOkText: {
     ...typography.caption,
     color: colors.ok,
     fontWeight: '700',
-    fontSize: 11,
   },
   triggerList: {
     gap: spacing.sm,
@@ -240,18 +243,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   triggerIconBox: {
-    width: 38,
-    height: 38,
+    width: sz(38),
+    height: sz(38),
     borderRadius: radius.sm,
     backgroundColor: colors.surface2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   triggerIconBoxDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.surface2White,
   },
   triggerIcon: {
-    fontSize: 18,
+    fontSize: fs(18),
   },
   triggerInfo: {
     flex: 1,
@@ -264,10 +267,9 @@ const styles = StyleSheet.create({
   triggerSub: {
     ...typography.caption,
     color: colors.ink2,
-    fontSize: 11,
   },
   triggerActionBtn: {
-    height: 34,
+    minHeight: sizes.btnCompact,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface2,
     borderRadius: radius.sm,
@@ -290,7 +292,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surface2,
-    borderLeftWidth: 3,
+    borderLeftWidth: sz(3),
     borderLeftColor: colors.primary,
   },
   feedbackText: {

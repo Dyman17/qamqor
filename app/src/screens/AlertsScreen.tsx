@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 
 const ALERTS = [
   {
@@ -27,6 +27,9 @@ const ALERTS = [
 ];
 
 export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   return (
     <View style={styles.container}>
       <Text style={[typography.title1, styles.header]}>Оповещения</Text>
@@ -67,12 +70,14 @@ export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.btnSecondary}
+                hitSlop={hit(36)}
                 onPress={() => navigation.navigate('Map')}
               >
                 <Text style={styles.btnText}>На карте</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.btnPrimary}
+                hitSlop={hit(36)}
                 onPress={() => navigation.navigate('Profile', { animalId: '0142' })}
               >
                 <Text style={styles.btnPrimaryText}>Профиль</Text>
@@ -85,7 +90,8 @@ export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -104,11 +110,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardDanger: {
-    borderLeftWidth: 4,
+    borderLeftWidth: sz(4),
     borderLeftColor: colors.signal,
   },
   cardWarning: {
-    borderLeftWidth: 4,
+    borderLeftWidth: sz(4),
     borderLeftColor: colors.warning,
   },
   cardHeader: {

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 
 const COLLARS = [
   { id: 'QAM-0001', animal: 'Корова #0142', status: 'ONLINE', signal: -68, gps: 4.5 },
@@ -10,11 +10,14 @@ const COLLARS = [
 ];
 
 export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={typography.title1}>Ошейники (145)</Text>
-        <TouchableOpacity style={styles.btnAdd}>
+        <TouchableOpacity style={styles.btnAdd} hitSlop={hit(36)}>
           <Text style={styles.btnAddText}>+ Добавить</Text>
         </TouchableOpacity>
       </View>
@@ -25,7 +28,7 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
                 <Text style={[typography.bodyL, typography.tabular]}>{item.id}</Text>
                 <View
                   style={[
@@ -45,6 +48,7 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
             <TouchableOpacity
               style={styles.btnAction}
+              hitSlop={hit(36)}
               onPress={() => navigation.navigate('Profile', { animalId: '0142' })}
             >
               <Text style={styles.btnActionText}>
@@ -58,7 +62,8 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -95,21 +100,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: sz(2),
     borderRadius: radius.pill,
   },
   badgeOk: {
-    backgroundColor: 'rgba(56, 224, 120, 0.2)',
+    backgroundColor: colors.surface2,
   },
   badgeFree: {
-    backgroundColor: 'rgba(188, 240, 111, 0.2)',
+    backgroundColor: colors.surface1,
   },
   badgeOff: {
-    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    backgroundColor: colors.surface0,
   },
   badgeText: {
     ...typography.caption,
-    fontSize: 10,
+    fontSize: fs(11),
     fontWeight: '700',
     color: colors.ink,
   },

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 
 const ANIMALS = [
   { id: '0142', tag: 'DEMO-A42', pen: 'Загон «Северный»', status: 'danger', ago: 5 },
@@ -13,6 +13,9 @@ const ANIMALS = [
 ];
 
 export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -44,6 +47,7 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <TouchableOpacity
               key={st}
               style={[styles.filterChip, filter === st && styles.filterChipActive]}
+              hitSlop={hit(36)}
               onPress={() => setFilter(st)}
             >
               <Text style={[styles.chipText, filter === st && styles.chipTextActive]}>
@@ -69,7 +73,7 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 {
                   backgroundColor:
                     item.status === 'ok'
-                      ? colors.ok
+                      ? colors.okDot
                       : item.status === 'danger'
                       ? colors.signal
                       : item.status === 'offline'
@@ -90,7 +94,8 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -106,7 +111,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
-    height: 48,
+    minHeight: sizes.touch,
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
@@ -148,9 +153,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: sz(8),
+    height: sz(8),
+    borderRadius: sz(4),
   },
   rowMain: {
     flex: 1,
@@ -162,7 +167,7 @@ const styles = StyleSheet.create({
   rowSub: {
     ...typography.caption,
     color: colors.ink2,
-    marginTop: 2,
+    marginTop: sz(2),
   },
   rowTime: {
     ...typography.caption,

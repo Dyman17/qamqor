@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { useTheme, Theme } from '../theme/scale';
 
 export const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const t = useTheme();
+  const { colors, spacing, typography, sz, fs, hit } = t;
+  const styles = useMemo(() => createStyles(t), [t]);
   const [email, setEmail] = useState('owner@qamqor.kz');
   const [password, setPassword] = useState('password123');
 
@@ -48,7 +51,8 @@ export const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, hairline }: Theme) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface0,
@@ -66,7 +70,7 @@ const styles = StyleSheet.create({
     ...typography.display,
     color: colors.primary,
     textAlign: 'center',
-    letterSpacing: 2,
+    letterSpacing: sz(2),
   },
   subTitle: {
     ...typography.caption,
@@ -86,7 +90,7 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.surface0,
     borderRadius: radius.md,
-    height: 48,
+    minHeight: sizes.touch,
     paddingHorizontal: spacing.md,
     color: colors.ink,
     borderWidth: 1,
@@ -94,8 +98,8 @@ const styles = StyleSheet.create({
   },
   btnLogin: {
     backgroundColor: colors.primary,
-    height: 48,
-    borderRadius: radius.md,
+    minHeight: sizes.btn,
+    borderRadius: radius.btn,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.lg,
