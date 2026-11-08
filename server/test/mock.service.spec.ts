@@ -13,7 +13,7 @@ describe('MockService isolation', () => {
       },
       device: { upsert: jest.fn(), findUnique: jest.fn() },
     };
-    const svc = new MockService(prisma, telemetry, {} as any);
+    const svc = new MockService(prisma, telemetry);
     await expect(svc.injectManualTelemetry('u', 'f', { animalId: 'a', latitude: 1, longitude: 1 } as any)).rejects.toThrow(ForbiddenException);
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
     expect(prisma.device.upsert).not.toHaveBeenCalled();
@@ -25,7 +25,7 @@ describe('MockService isolation', () => {
       animal: { findFirst: jest.fn(async () => ({ id: 'a', tagNumber: 'T-1', device: null })) },
       device: { upsert: jest.fn(), findUnique: jest.fn(async () => ({ isSimulated: false })) },
     };
-    const svc = new MockService(prisma, {} as any, {} as any);
+    const svc = new MockService(prisma, {} as any);
     await expect(svc.injectManualTelemetry('u', 'f', { animalId: 'a', latitude: 1, longitude: 1 } as any)).rejects.toThrow(ForbiddenException);
     expect(prisma.device.upsert).not.toHaveBeenCalled();
   });

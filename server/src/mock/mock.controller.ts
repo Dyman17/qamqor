@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { MockService } from './mock.service';
-import { InjectTelemetryDto, SimulateActionDto, InjectPhotoDto } from './dto/mock.dto';
+import { InjectTelemetryDto, SimulateActionDto } from './dto/mock.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
 import { PermissionsGuard } from '../farms/permissions.guard';
 import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
@@ -55,17 +55,4 @@ export class MockController {
   ) {
     return this.mockService.simulateReturn(user.id, farmId, dto.animalId);
   }
-
-  /**
-   * 4. Кнопка «Сделать тестовый снимок камеры с ошейника»
-   */
-  @Post('inject-photo')
-  async injectPhoto(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: InjectPhotoDto,
-    @FarmId() farmId: string,
-  ) {
-    return this.mockService.injectPhoto(user.id, farmId, dto);
-  }
 }
-

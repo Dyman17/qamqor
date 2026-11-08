@@ -182,21 +182,19 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 | `GET /health` (вне префикса) | — | `{status, timestamp}` |
 | `GET /` | — | `{status, service, version, telemetryEndpoint}`; ссылка `dashboard` удалена (URL не проверен) |
 
-### Камера (если владелец оставит модуль, см. план)
+### Камера (модуль отключён)
 
-`POST /camera/request-photo` (W), `GET /camera/snapshots` (W), `GET /camera/snapshots/:id/image` (W, с проверкой фермы, заголовок `Content-Type` по реальному формату, `X-Content-Type-Options: nosniff`). Публичный маршрут `/camera/snapshots/image/:fileName` удаляется.
+Решение владельца 2026-11-08: до появления железа модуль камеры **не подключён** (`CameraModule` не входит в `AppModule`), маршрутов `/camera/*` на сервере нет. Код оставлен и усилен на случай подключения: только JPEG/PNG по сигнатуре, до 1 МБ (413 при превышении), случайное имя файла, отдача только `GET /camera/snapshots/:id/image` с JWT и проверкой фермы (`nosniff`, `inline`), публичный маршрут по имени файла удалён, SVG-заглушки нет, `photoUrl` животного автоматически не подставляется.
 
 ### Симулятор (только `NODE_ENV !== 'production'`)
 
-`POST /mock/inject-telemetry`, `/mock/simulate-breach`, `/mock/simulate-return`, `/mock/inject-photo`: права W, работают только с ошейниками `isSimulated = true`, в production маршруты не существуют (модуль не подключается).
+`POST /mock/inject-telemetry`, `/mock/simulate-breach`, `/mock/simulate-return`: права W, работают только с ошейниками `isSimulated = true`, в production маршруты не существуют (модуль не подключается).
 
 ## 4. Эндпоинты ошейника (Д)
 
 | Метод и путь | Запрос | Ответ |
 |---|---|---|
 | `POST /device/telemetry` | `{deviceId, timestamp(ISO, не старше 10 мин и не позже +2 мин), latitude, longitude, accuracy, signal?(−130…0 dBm), speedKmh?(0–300), hdop?(0–99), satellites?(0–64)}` — **без `battery`**; `timestamp` — ISO 8601 с часовым поясом, окно задаётся `TELEMETRY_MAX_AGE_SEC` (600) и `TELEMETRY_MAX_FUTURE_SEC` (120) | см. ниже |
-| `GET /camera/commands?deviceId` | — | `{hasCommand, commandId?, command?, payload?}` |
-| `POST /camera/upload` | multipart `image` (≤ 1 МБ, JPEG/PNG по сигнатуре) | `{success, snapshotId}` |
 
 Ответ телеметрии (убраны `shock`, `shockDurationMs`, числа импульса, эмодзи и «400кВ» из `warningMessage`):
 

@@ -7,8 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelemetryService } from '../telemetry/telemetry.service';
-import { CameraService } from '../camera/camera.service';
-import { InjectTelemetryDto, InjectPhotoDto } from './dto/mock.dto';
+import { InjectTelemetryDto } from './dto/mock.dto';
 import { DeviceStatus } from '@prisma/client';
 import { generateDeviceSecret, hashDeviceSecret } from '../devices/device-secret';
 
@@ -19,7 +18,6 @@ export class MockService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telemetryService: TelemetryService,
-    private readonly cameraService: CameraService,
   ) {}
 
   /**
@@ -192,96 +190,4 @@ export class MockService {
       longitude: safeLng,
     });
   }
-
-  /**
-   * 4. Inject a test photo snapshot from the website (camera simulator)
-   */
-  async injectPhoto(userId: string, farmId: string, dto: InjectPhotoDto) {
-
-    const animal = await this.prisma.animal.findFirst({
-      where: { id: dto.animalId, farmId },
-      include: { device: true },
-    });
-
-    if (!animal) {
-      throw new NotFoundException('Животное не найдено');
-    }
-
-    if (animal.device && !animal.device.isSimulated) {
-      throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
-    }
-    let deviceId = animal.device?.deviceId;
-    if (!deviceId) {
-      deviceId = `QAM-MOCK-${animal.tagNumber.replace(/[^a-zA-Z0-9]/g, '')}`;
-      const clash = await this.prisma.device.findUnique({ where: { deviceId: deviceId } });
-      if (clash && !clash.isSimulated) {
-        throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
-      }
-      await this.prisma.device.upsert({
-        where: { deviceId },
-        update: { animalId: animal.id, farmId },
-        create: {
-          deviceId,
-          secretHash: hashDeviceSecret(generateDeviceSecret()),
-          isSimulated: true,
-          animalId: animal.id,
-          farmId,
-          status: DeviceStatus.ONLINE,
-        },
-      });
-    }
-
-    // Generate simulated camera frame
-    const timeStr = new Date().toLocaleString('kk-KZ', { timeZone: 'Asia/Almaty' });
-    const animalTitle = `${animal.species} — "${animal.name}" (${animal.tagNumber})`;
-
-    const svgContent = `
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-  <defs>
-    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="100%" stop-color="#bae6fd" />
-    </linearGradient>
-    <linearGradient id="steppe" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#84cc16" />
-      <stop offset="100%" stop-color="#4d7c0f" />
-    </linearGradient>
-  </defs>
-  <!-- Background Steppe Landscape -->
-  <rect width="800" height="340" fill="url(#sky)" />
-  <ellipse cx="680" cy="100" rx="45" ry="45" fill="#fde047" opacity="0.9" />
-  <rect y="320" width="800" height="280" fill="url(#steppe)" />
-  
-  <!-- Steppe hills -->
-  <path d="M0,340 Q200,280 400,340 T800,330 L800,600 L0,600 Z" fill="#65a30d" opacity="0.8"/>
-  <path d="M0,370 Q300,320 600,370 T800,360 L800,600 L0,600 Z" fill="#4d7c0f"/>
-
-  <!-- ESP32-CAM Collar Overlay HUD -->
-  <rect x="20" y="20" width="760" height="60" rx="8" fill="#0f172a" opacity="0.85" />
-  <text x="40" y="45" fill="#38bdf8" font-family="sans-serif" font-weight="bold" font-size="16">📹 QAMQOR SMART COLLAR ESP32-CAM [LIVE SNAPSHOT]</text>
-  <text x="40" y="66" fill="#94a3b8" font-family="monospace" font-size="13">Device: ${deviceId} | Lat: ${(animal.lastLatitude || 43.65).toFixed(4)} N | Lng: ${(animal.lastLongitude || 51.15).toFixed(4)} E | ${timeStr}</text>
-
-  <!-- Crosshair center -->
-  <circle cx="400" cy="300" r="30" stroke="#10b981" stroke-width="2" fill="none" opacity="0.6"/>
-  <line x1="400" y1="260" x2="400" y2="340" stroke="#10b981" stroke-width="2" opacity="0.6"/>
-  <line x1="360" y1="300" x2="440" y2="300" stroke="#10b981" stroke-width="2" opacity="0.6"/>
-
-  <!-- Animal Card bottom HUD -->
-  <rect x="20" y="520" width="760" height="60" rx="8" fill="#0f172a" opacity="0.85" />
-  <text x="40" y="546" fill="#10b981" font-family="sans-serif" font-weight="bold" font-size="18">${animalTitle}</text>
-  <text x="40" y="567" fill="#cbd5e1" font-family="sans-serif" font-size="13">Статус: ${animal.isOutsideGeofence ? '🚨 ВНЕ ПАСТБИЩА' : '🌿 ВНУТРИ ПАСТБИЩА'}</text>
-</svg>
-    `.trim();
-
-    const snapshotDevice = await this.prisma.device.findUnique({
-      where: { deviceId },
-      include: { farm: true, animal: true },
-    });
-    return this.cameraService.saveSnapshot(snapshotDevice, {
-      deviceId,
-      trigger: 'MOCK_TEST',
-      fileBuffer: Buffer.from(svgContent, 'utf-8'),
-    });
-  }
 }
-

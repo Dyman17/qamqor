@@ -10,11 +10,11 @@ import { GeofenceModule } from './geofences/geofence.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { AnalyticsModule } from './analytics/analytics.module';
-import { CameraModule } from './camera/camera.module';
 import { MockModule } from './mock/mock.module';
 import { MailModule } from './mail/mail.module';
 import { validateEnv } from './config/env.validation';
 
+// CameraModule is intentionally not mounted: there is no camera hardware yet (owner decision 2026-11-08).
 const devOnlyModules = process.env.NODE_ENV === 'production' ? [] : [MockModule];
 
 @Module({
@@ -34,7 +34,6 @@ const devOnlyModules = process.env.NODE_ENV === 'production' ? [] : [MockModule]
     AlertsModule,
     TelemetryModule,
     AnalyticsModule,
-    CameraModule,
     ...devOnlyModules,
   ],
   controllers: [AppController],

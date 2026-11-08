@@ -30,22 +30,3 @@ export class SimulateActionDto {
   @IsNotEmpty({ message: 'ID животного обязателен' })
   animalId!: string;
 }
-
-export class InjectPhotoDto {
-  @IsString()
-  @IsNotEmpty({ message: 'ID животного обязателен' })
-  animalId!: string;
-
-  @IsOptional()
-  @IsString()
-  caption?: string;
-
-  @IsOptional()
-  @IsString()
-  sampleType?: 'steppe_horse' | 'desert_camel' | 'pasture_cow' | 'hills_sheep';
-
-  @IsOptional()
-  @IsString()
-  imageBase64?: string;
-}
-

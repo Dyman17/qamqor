@@ -5,7 +5,6 @@ import {
   Body,
   Query,
   Param,
-  Headers,
   Res,
   UseGuards,
   UseInterceptors,
@@ -15,9 +14,10 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { CameraService } from './camera.service';
-import { UploadCameraSnapshotDto, RequestPhotoCommandDto } from './dto/camera.dto';
+import { UploadCameraSnapshotDto, RequestPhotoCommandDto, ListSnapshotsQueryDto } from './dto/camera.dto';
+import { MAX_IMAGE_BYTES } from './image-type';
 import { DeviceAuthGuard } from '../devices/device-auth.guard';
 import { CurrentDevice } from '../devices/current-device.decorator';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
@@ -26,18 +26,16 @@ import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
+/** Not mounted (see CameraService). */
 @Controller('api/v1/camera')
 export class CameraController {
   constructor(private readonly cameraService: CameraService) {}
 
-  /**
-   * 1. ESP32-CAM Endpoint: Upload snapshot photo
-   * Supports both multipart/form-data (field 'image') and JSON base64
-   */
+  /** Camera collar: upload a snapshot (multipart field `image`, JPEG/PNG, up to 1 MB). */
   @Post('upload')
   @UseGuards(DeviceAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 8 } }))
   async uploadSnapshot(
     @CurrentDevice() device: any,
     @Body() dto: UploadCameraSnapshotDto,
@@ -48,31 +46,19 @@ export class CameraController {
       trigger: dto.trigger,
       fileBuffer: file?.buffer,
       imageBase64: dto.imageBase64,
-      originalName: file?.originalname,
     });
   }
 
-  /**
-   * 2. ESP32-CAM Endpoint: Poll pending commands
-   * ESP32 queries: does the farmer want me to take a picture now?
-   */
+  /** Camera collar: poll pending commands. */
   @Get('commands')
   @UseGuards(DeviceAuthGuard)
-  async pollCommands(
-    @CurrentDevice() device: any,
-    @Query('deviceId') deviceId: string,
-  ) {
-    if (!deviceId) {
-      throw new BadRequestException('Параметр deviceId обязателен');
-    }
-
+  async pollCommands(@CurrentDevice() device: any, @Query('deviceId') deviceId: string) {
+    if (!deviceId) throw new BadRequestException('Параметр deviceId обязателен');
     return this.cameraService.pollPendingCommands(device, deviceId);
   }
 
-  /**
-   * 3. Farmer / Web Endpoint: Request immediate photo from ESP32-CAM
-   */
   @Post('request-photo')
+  @HttpCode(HttpStatus.ACCEPTED)
   @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
   async requestPhoto(
     @CurrentUser() user: AuthenticatedUser,
@@ -82,31 +68,21 @@ export class CameraController {
     return this.cameraService.requestPhoto(user.id, farmId, dto.deviceId, dto.resolution);
   }
 
-  /**
-   * 4. Farmer / Web Endpoint: Gallery of snapshots
-   */
   @Get('snapshots')
   @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
-  async listSnapshots(
-    @CurrentUser() user: AuthenticatedUser,
-    @FarmId() farmId: string,
-    @Query('animalId') animalId?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.cameraService.listSnapshots(
-      farmId,
-      animalId,
-      limit ? parseInt(limit, 10) : 50,
-    );
+  async listSnapshots(@FarmId() farmId: string, @Query() q: ListSnapshotsQueryDto) {
+    return this.cameraService.listSnapshots(farmId, q.animalId, q.limit ?? 50);
   }
 
-  /**
-   * 5. Public Endpoint: Serve snapshot image file
-   */
-  @Get('snapshots/image/:fileName')
-  async serveImage(@Param('fileName') fileName: string, @Res() res: Response) {
-    const filePath = this.cameraService.getImageFilePath(fileName);
+  /** Image of a snapshot: JWT + membership of the snapshot's farm; the type comes from the stored file. */
+  @Get('snapshots/:id/image')
+  @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
+  async serveImage(@FarmId() farmId: string, @Param('id') id: string, @Res() res: Response) {
+    const { filePath, mime } = await this.cameraService.getSnapshotFile(farmId, id);
+    res.setHeader('Content-Type', mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=300');
     return res.sendFile(filePath);
   }
 }
-

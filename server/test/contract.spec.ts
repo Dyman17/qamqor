@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { RequestMethod, ValidationPipe, ConflictException, NotFoundException, BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
+import { ValidationPipe, ConflictException, NotFoundException, BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
 import { AppController } from '../src/app.controller';
 import { AuthController } from '../src/auth/auth.controller';
 import { FarmsController } from '../src/farms/farms.controller';
@@ -23,21 +23,7 @@ import { CreateGeofenceInputDto } from '../src/geofences/dto/geofence.dto';
 import { pageOf } from '../src/common/pagination';
 import { toErrorBody } from '../src/common/api-exception.filter';
 import { forbiddenFarm, forbiddenRole } from '../src/common/errors';
-
-export function routesOf(ctrl: any): string[] {
-  const base: string = Reflect.getMetadata('path', ctrl) ?? '';
-  const out: string[] = [];
-  for (const name of Object.getOwnPropertyNames(ctrl.prototype)) {
-    if (name === 'constructor') continue;
-    const h = ctrl.prototype[name];
-    const p = Reflect.getMetadata('path', h);
-    const m = Reflect.getMetadata('method', h);
-    if (p === undefined || m === undefined) continue;
-    const full = `/${base}/${p}`.replace(/\/+/g, '/').replace(/(.)\/$/, '$1');
-    out.push(`${RequestMethod[m]} ${full}`);
-  }
-  return out;
-}
+import { routesOf } from './helpers/routes';
 
 const V = '/api/v1';
 const EXPECTED_ROUTES = [
@@ -58,7 +44,7 @@ const EXPECTED_ROUTES = [
   `GET ${V}/alerts`, `GET ${V}/alerts/stats`, `POST ${V}/alerts/read-all`, `PATCH ${V}/alerts/:id/status`,
   `GET ${V}/analytics/overview`,
   `POST ${V}/device/telemetry`,
-  `POST ${V}/mock/inject-telemetry`, `POST ${V}/mock/simulate-breach`, `POST ${V}/mock/simulate-return`, `POST ${V}/mock/inject-photo`,
+  `POST ${V}/mock/inject-telemetry`, `POST ${V}/mock/simulate-breach`, `POST ${V}/mock/simulate-return`,
 ];
 
 describe('route inventory matches the contract', () => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -7,156 +8,85 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
+import { randomUUID } from 'crypto';
+import { MAX_IMAGE_BYTES, decodeBase64Image, detectImageType } from './image-type';
 
+/**
+ * NOTE: the camera module is NOT mounted in AppModule (no camera hardware yet; owner decision
+ * 2026-11-08). The code is kept hardened so that mounting it later is safe: JPEG/PNG by
+ * signature, 1 MB cap, random file names outside the web root, authenticated download.
+ */
 @Injectable()
 export class CameraService {
   private readonly logger = new Logger(CameraService.name);
-  private readonly uploadDir = path.join(process.cwd(), 'uploads', 'snapshots');
+  private readonly uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'snapshots');
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
     }
   }
 
-  /**
-   * Save snapshot received from ESP32-CAM or Mock
-   */
+  /** Save a snapshot received from an authenticated camera collar. */
   async saveSnapshot(
     device: any,
-    data: {
-      deviceId?: string;
-      trigger?: string;
-      fileBuffer?: Buffer;
-      imageBase64?: string;
-      originalName?: string;
-    },
+    data: { deviceId?: string; trigger?: string; fileBuffer?: Buffer; imageBase64?: string },
   ) {
-    // `device` is already authenticated (DeviceAuthGuard) or a simulated device (MockService).
+    // `device` is already authenticated (DeviceAuthGuard).
     if (!device || (data.deviceId && data.deviceId !== device.deviceId)) {
       throw new UnauthorizedException('Invalid device credentials');
     }
-    data = { ...data, deviceId: device.deviceId } as typeof data & { deviceId: string };
-
     if (!device.farmId) {
-      throw new NotFoundException(`Устройство "${data.deviceId}" не привязано к хозяйству`);
+      throw new NotFoundException(`Устройство "${device.deviceId}" не привязано к хозяйству`);
     }
 
-    // 2. Process image buffer
-    let buffer: Buffer;
-    if (data.fileBuffer) {
-      buffer = data.fileBuffer;
-    } else if (data.imageBase64) {
-      const base64Clean = data.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      buffer = Buffer.from(base64Clean, 'base64');
-    } else {
-      // Create a default placeholder SVG/JPEG pattern if nothing sent
-      buffer = Buffer.from(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="100%" height="100%" fill="#1e293b"/><text x="50%" y="50%" fill="#10b981" font-size="24" text-anchor="middle">ESP32-CAM: ${data.deviceId}</text></svg>`,
-      );
-    }
+    const buffer = data.fileBuffer ?? decodeBase64Image(data.imageBase64);
+    if (!buffer) throw new BadRequestException('Изображение не передано или повреждено');
+    if (buffer.length > MAX_IMAGE_BYTES) throw new BadRequestException('Изображение больше 1 МБ');
+    const type = detectImageType(buffer);
+    if (!type) throw new BadRequestException('Допустимы только JPEG и PNG');
 
-    const fileName = `${data.deviceId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`;
-    const filePath = path.join(this.uploadDir, fileName);
-    fs.writeFileSync(filePath, buffer);
+    // The file name is a random id; nothing from the request reaches the path.
+    const fileName = `${randomUUID()}.${type.ext}`;
+    fs.writeFileSync(path.join(this.uploadDir, fileName), buffer);
 
-    const imageUrl = `/api/v1/camera/snapshots/image/${fileName}`;
-
-    // 3. Save database record
     const snapshot = await this.prisma.cameraSnapshot.create({
       data: {
         deviceId: device.deviceId,
         animalId: device.animalId,
         farmId: device.farmId,
-        imageUrl,
+        imageUrl: fileName, // stored file name; never served by name, only through the snapshot id
         trigger: data.trigger || 'MANUAL_REQUEST',
         fileSize: buffer.length,
       },
     });
 
-    // 4. Update animal's photoUrl if animal has no photo
-    if (device.animalId && !device.animal?.photoUrl) {
-      await this.prisma.animal.update({
-        where: { id: device.animalId },
-        data: { photoUrl: imageUrl },
-      });
-    }
-
-    // 5. Mark pending photo command as EXECUTED
     await this.prisma.deviceCommand.updateMany({
-      where: {
-        deviceId: device.deviceId,
-        command: 'CAPTURE_PHOTO',
-        status: 'PENDING',
-      },
-      data: {
-        status: 'EXECUTED',
-        executedAt: new Date(),
-      },
+      where: { deviceId: device.deviceId, command: 'CAPTURE_PHOTO', status: 'PENDING' },
+      data: { status: 'EXECUTED', executedAt: new Date() },
     });
 
-    this.logger.log(`📸 New snapshot saved for device ${device.deviceId} (Size: ${buffer.length} bytes)`);
-
-    return {
-      success: true,
-      snapshotId: snapshot.id,
-      imageUrl: snapshot.imageUrl,
-      capturedAt: snapshot.capturedAt,
-      deviceId: device.deviceId,
-      animalName: device.animal?.name,
-    };
+    this.logger.log(`Snapshot ${snapshot.id} saved for device ${device.deviceId} (${buffer.length} bytes)`);
+    return { success: true, snapshotId: snapshot.id };
   }
 
-  /**
-   * ESP32-CAM queries: Are there any pending commands for me?
-   * (e.g. CAPTURE_PHOTO, BUZZER_ON, etc.)
-   */
+  /** The camera polls for pending commands (CAPTURE_PHOTO). */
   async pollPendingCommands(device: any, deviceId: string) {
     if (!device || device.deviceId !== deviceId) {
       throw new UnauthorizedException('Invalid device credentials');
     }
-
-    const pendingCommand = await this.prisma.deviceCommand.findFirst({
-      where: {
-        deviceId,
-        status: 'PENDING',
-        command: 'CAPTURE_PHOTO',
-      },
+    const pending = await this.prisma.deviceCommand.findFirst({
+      where: { deviceId, status: 'PENDING', command: 'CAPTURE_PHOTO' },
       orderBy: { createdAt: 'desc' },
     });
-
-    if (!pendingCommand) {
-      return {
-        hasCommand: false,
-        serverTime: new Date().toISOString(),
-      };
-    }
-
-    return {
-      hasCommand: true,
-      commandId: pendingCommand.id,
-      command: pendingCommand.command,
-      payload: pendingCommand.payload,
-      createdAt: pendingCommand.createdAt,
-    };
+    if (!pending) return { hasCommand: false };
+    return { hasCommand: true, commandId: pending.id, command: pending.command, payload: pending.payload };
   }
 
-  /**
-   * Farmer orders ESP32-CAM to take a photo
-   */
+  /** Farmer asks the camera for a photo. */
   async requestPhoto(userId: string, farmId: string, deviceId: string, resolution = 'SVGA') {
-    const device = await this.prisma.device.findFirst({
-      where: { deviceId, farmId },
-      include: { animal: true },
-    });
-
-    if (!device) {
-      throw new NotFoundException(`Ошейник/камера "${deviceId}" не найдена в этом хозяйстве`);
-    }
-
+    const device = await this.prisma.device.findFirst({ where: { deviceId, farmId } });
+    if (!device) throw new NotFoundException(`Ошейник/камера "${deviceId}" не найдена в этом хозяйстве`);
     const command = await this.prisma.deviceCommand.create({
       data: {
         deviceId,
@@ -165,50 +95,26 @@ export class CameraService {
         payload: { resolution, requestedBy: userId },
       },
     });
-
-    this.logger.log(`User ${userId} requested snapshot for device ${deviceId}`);
-
-    return {
-      success: true,
-      commandId: command.id,
-      command: command.command,
-      deviceId,
-      animalName: device.animal?.name,
-      message: `Команда "Сделать снимок" поставлена в очередь для ${deviceId}. Камера сделает фото при следующем выходе на связь.`,
-    };
+    return { commandId: command.id };
   }
 
-  /**
-   * List gallery of camera snapshots for farm / animal
-   */
   async listSnapshots(farmId: string, animalId?: string, limit = 50) {
-    const where: any = { farmId };
-    if (animalId) {
-      where.animalId = animalId;
-    }
-
-    return this.prisma.cameraSnapshot.findMany({
-      where,
-      include: {
-        animal: {
-          select: { id: true, name: true, tagNumber: true, species: true },
-        },
-      },
+    const rows = await this.prisma.cameraSnapshot.findMany({
+      where: { farmId, ...(animalId && { animalId }) },
+      select: { id: true, deviceId: true, animalId: true, trigger: true, fileSize: true, capturedAt: true },
       orderBy: { capturedAt: 'desc' },
       take: limit,
     });
+    return rows.map((r) => ({ ...r, imageUrl: `/api/v1/camera/snapshots/${r.id}/image` }));
   }
 
-  /**
-   * Get physical file path
-   */
-  getImageFilePath(fileName: string): string {
-    const safeFileName = path.basename(fileName);
-    const filePath = path.join(this.uploadDir, safeFileName);
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundException('Изображение не найдено');
-    }
-    return filePath;
+  /** File of a snapshot of this farm (404 for anything else). */
+  async getSnapshotFile(farmId: string, snapshotId: string): Promise<{ filePath: string; mime: string }> {
+    const snap = await this.prisma.cameraSnapshot.findFirst({ where: { id: snapshotId, farmId } });
+    if (!snap) throw new NotFoundException('Изображение не найдено');
+    const fileName = path.basename(snap.imageUrl);
+    const filePath = path.join(this.uploadDir, fileName);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Изображение не найдено');
+    return { filePath, mime: fileName.endsWith('.png') ? 'image/png' : 'image/jpeg' };
   }
 }
-
