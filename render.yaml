@@ -4,7 +4,6 @@ services:
     name: qamqor-api
     runtime: node
     plan: free
-    region: frankfurt
     rootDir: server
     buildCommand: npm ci --include=dev && npx prisma generate && npm run build
     # free plan has no preDeployCommand, so migrations run at start
