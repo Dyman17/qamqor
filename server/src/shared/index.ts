@@ -40,6 +40,7 @@ export enum AlertType {
   DEVICE_OFFLINE = 'DEVICE_OFFLINE',
   GPS_LOST = 'GPS_LOST',
   DEVICE_RESTORED = 'DEVICE_RESTORED',
+  SIGNAL_LIMIT_REACHED = 'SIGNAL_LIMIT_REACHED',
 }
 
 export enum AlertSeverity {

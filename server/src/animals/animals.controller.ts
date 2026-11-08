@@ -12,6 +12,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AnimalsService } from './animals.service';
+import { SignalsService } from '../signals/signals.service';
 import { CreateAnimalInputDto, UpdateAnimalInputDto, TrackQueryDto, TRACK_DEFAULT_LIMIT } from './dto/animal.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
 import { PermissionsGuard } from '../farms/permissions.guard';
@@ -24,7 +25,10 @@ import { AnimalSpecies } from '@prisma/client';
 @Controller('api/v1/animals')
 @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class AnimalsController {
-  constructor(private readonly animalsService: AnimalsService) {}
+  constructor(
+    private readonly animalsService: AnimalsService,
+    private readonly signalsService: SignalsService,
+  ) {}
 
   @Get()
   async listAnimals(
@@ -49,6 +53,13 @@ export class AnimalsController {
     @FarmId() farmId: string,
   ) {
     return this.animalsService.getAnimalById(user.id, farmId, animalId);
+  }
+
+  /** Signals delivered to the animal today (farm time zone) against the daily limits. */
+  @Get(':id/signals')
+  async getAnimalSignals(@Param('id') animalId: string, @FarmId() farmId: string) {
+    await this.animalsService.ensureInFarm(farmId, animalId); // 404 for foreign animals
+    return this.signalsService.daySummary(farmId, animalId);
   }
 
   @Get(':id/track')

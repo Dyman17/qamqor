@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
 import { generateDeviceSecret, hashDeviceSecret } from './device-secret';
 import { DeviceStatus } from '@prisma/client';
+import { ConnState, computeConnState } from './connectivity';
 
 /** Explicit projection: secrets and hashes are never selected. */
 const COLLAR_SELECT = {
@@ -20,9 +21,7 @@ const COLLAR_SELECT = {
   animal: { select: { id: true, name: true } },
 } as const;
 
-const ONLINE_WINDOW_MS = 900 * 1000;
-
-export type ConnState = 'ONLINE' | 'OFFLINE' | 'UNASSIGNED';
+export type { ConnState } from './connectivity';
 
 export interface CollarDto {
   deviceId: string;
@@ -36,12 +35,10 @@ export interface CollarDto {
 
 export function toCollarDto(d: any): CollarDto {
   const last: Date | null = d.lastHeartbeatAt ?? null;
-  let status: ConnState;
-  if (!d.animal) status = 'UNASSIGNED';
-  else status = last && Date.now() - last.getTime() < ONLINE_WINDOW_MS ? 'ONLINE' : 'OFFLINE';
   return {
     deviceId: d.deviceId,
-    status,
+    // Derived from the last ping on every read; the stored Device.status is not trusted.
+    status: computeConnState({ hasAnimal: !!d.animal, lastSeenAt: last }),
     animalId: d.animal?.id ?? null,
     animalName: d.animal?.name ?? null,
     signalRssi: d.signal ?? null,

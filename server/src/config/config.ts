@@ -8,6 +8,14 @@ export interface AppConfig {
   telemetryMaxAgeSec: number;
   /** Telemetry stamped later than now + this is rejected (seconds). */
   telemetryMaxFutureSec: number;
+  /** A collar is OFFLINE after this many missed normal pings. */
+  offlineAfterMissedPings: number;
+  /** offlineAfterMissedPings x normalPingIntervalSec. */
+  offlineThresholdSec: number;
+  /** How often the offline watcher runs (seconds). */
+  offlineCheckIntervalSec: number;
+  /** The offline watcher is off in tests and when SCHEDULER_ENABLED=false. */
+  schedulerEnabled: boolean;
 }
 
 function intOr(v: string | undefined, def: number): number {
@@ -16,6 +24,8 @@ function intOr(v: string | undefined, def: number): number {
 }
 
 export function loadAppConfig(env: Record<string, string | undefined> = process.env): AppConfig {
+  const normalPingIntervalSec = intOr(env.NORMAL_PING_INTERVAL_SEC, 300);
+  const offlineAfterMissedPings = intOr(env.OFFLINE_AFTER_MISSED_PINGS, 3);
   return {
     port: intOr(env.PORT, 4000),
     isProduction: env.NODE_ENV === 'production',
@@ -23,9 +33,13 @@ export function loadAppConfig(env: Record<string, string | undefined> = process.
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    normalPingIntervalSec: intOr(env.NORMAL_PING_INTERVAL_SEC, 300),
+    normalPingIntervalSec,
     emergencyPingIntervalSec: intOr(env.EMERGENCY_PING_INTERVAL_SEC, 60),
     telemetryMaxAgeSec: intOr(env.TELEMETRY_MAX_AGE_SEC, 600),
     telemetryMaxFutureSec: intOr(env.TELEMETRY_MAX_FUTURE_SEC, 120),
+    offlineAfterMissedPings,
+    offlineThresholdSec: offlineAfterMissedPings * normalPingIntervalSec,
+    offlineCheckIntervalSec: intOr(env.OFFLINE_CHECK_INTERVAL_SEC, 60),
+    schedulerEnabled: env.NODE_ENV !== 'test' && env.SCHEDULER_ENABLED !== 'false',
   };
 }

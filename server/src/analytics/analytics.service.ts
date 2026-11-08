@@ -3,7 +3,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AlertStatus, DeviceStatus } from '@prisma/client';
+import { AlertStatus } from '@prisma/client';
+import { offlineThresholdMs } from '../devices/connectivity';
 
 @Injectable()
 export class AnalyticsService {
@@ -29,7 +30,10 @@ export class AnalyticsService {
 
       // Devices
       this.prisma.device.count({ where: { farmId } }),
-      this.prisma.device.count({ where: { farmId, status: DeviceStatus.ONLINE } }),
+      // Online = heard within the offline threshold (derived from the last ping, not the stored status).
+      this.prisma.device.count({
+        where: { farmId, lastHeartbeatAt: { gte: new Date(Date.now() - offlineThresholdMs()) } },
+      }),
 
       // Active alerts
       this.prisma.alert.count({ where: { farmId, status: AlertStatus.ACTIVE } }),

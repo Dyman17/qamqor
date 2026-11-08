@@ -96,6 +96,11 @@ export class AnimalsService {
     return animal;
   }
 
+  /** 404 unless the animal belongs to the farm. */
+  async ensureInFarm(farmId: string, animalId: string): Promise<void> {
+    await assertSameFarm(this.prisma, farmId, { animalId });
+  }
+
   /** Latest `limit` points in the optional [from, to] range, oldest first. */
   async getAnimalTrack(
     userId: string,

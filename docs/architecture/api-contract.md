@@ -129,6 +129,8 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 
 `POST /animals/:id/steer` из README не создаётся: перегон групповой (спека S4), поэтому единый `POST /animals/steer`. Приложение вызова пока не делает, добавит.
 
+Суточные лимиты: при достижении лимита уровня (`SOUND`/`VIBRATION`) сервер не подаёт этот сигнал (`suppressedBy: 'SIGNAL_LIMIT'` в ответе пинга) и создаёт одно оповещение `SIGNAL_LIMIT_REACHED` на животное, уровень и сутки. `dailyLimit = null` — не задан (без подавления), целое ≥ 1 — лимит, `0` отклоняется; `unlimited = true` — без подавления. Границы суток — по `Farm.timezone` (по умолчанию Asia/Aqtau, UTC+5). Тестовые сигналы из приложения в счётчик не входят.
+
 Счётчики сигналов за сутки (блок «Сигналы за сутки», A7): `GET /animals/:id/signals` -> `{day, sound:{used,limit|null}, vibration:{…}, impulse:{used:0,limit|null,available:false}}`. Энергия импульса не отдаётся.
 
 ### Загоны
@@ -155,6 +157,8 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | `DELETE /devices/:deviceId` | O | — | `204` |
 | `POST /devices/:deviceId/test-signal` | W | `{signal: 'SOUND' \| 'VIBRATION'}` | `202 {commandId}`; ставит команду в очередь, ошейник получит её в ответе на следующий пинг. Значение `IMPULSE` отклоняется (`400`) |
 
+`status` ошейника вычисляется при чтении по времени последнего пинга: `UNASSIGNED` (нет животного), `OFFLINE` (последний пинг старше `OFFLINE_AFTER_MISSED_PINGS` x `NORMAL_PING_INTERVAL_SEC` = 3 x 300 = 900 с, либо ещё не выходил на связь), иначе `ONLINE`. Фоновая проверка раз в минуту создаёт одно `DEVICE_OFFLINE` на животное (нет сигнала дольше порога), пинг закрывает его и создаёт `DEVICE_RESTORED`.
+
 Заменяет `POST /device/trigger`. Приложение (`AnimalProfileScreen`) вызывает сейчас `triggerActuator('QAM-0001', {shock: true})` с зашитым идентификатором: меняется приложение (идентификатор из `collarId` животного, кнопка «Импульс» убирается).
 
 ### Оповещения
@@ -162,7 +166,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | Метод и путь | Права | Запрос | Ответ |
 |---|---|---|---|
 | `GET /alerts` | W | `?status&type&animalId&cursor` | `AlertDto[]` |
-| `GET /alerts/stats` | W | — | `{activeTotal, activeBreaches, offline}` (без battery) |
+| `GET /alerts/stats` | W | — | `{activeTotal, activeBreaches, offline}` (без battery); `offline` = активные `DEVICE_OFFLINE` |
 | `PATCH /alerts/:id/status` | W | `{status}` | `AlertDto` |
 | `POST /alerts/read-all` | W | — | `{updated}` |
 

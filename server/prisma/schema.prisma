@@ -45,6 +45,7 @@ enum AlertType {
   DEVICE_OFFLINE
   GPS_LOST
   DEVICE_RESTORED
+  SIGNAL_LIMIT_REACHED
 }
 
 enum AlertSeverity {
@@ -98,6 +99,7 @@ model Farm {
   alerts          Alert[]
   cameraSnapshots CameraSnapshot[]
   signalLimits    SignalLimit[]
+  signalEvents    SignalEvent[]
   invitations     Invitation[]
 
   @@map("farms")
@@ -169,6 +171,7 @@ model Animal {
   telemetries       Telemetry[]
   alerts            Alert[]
   cameraSnapshots   CameraSnapshot[]
+  signalEvents      SignalEvent[]
 
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -319,4 +322,21 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// One signal actually delivered to an animal (counted against the daily limits).
+/// Test signals requested from the app are not recorded.
+model SignalEvent {
+  id       String      @id @default(uuid())
+  farmId   String
+  farm     Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animalId String
+  animal   Animal      @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  deviceId String?
+  level    SignalLevel
+  at       DateTime    @default(now())
+
+  @@index([farmId, animalId, at])
+  @@index([animalId, level, at])
+  @@map("signal_events")
 }

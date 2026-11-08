@@ -100,6 +100,73 @@ export class AlertsService {
     });
   }
 
+  /** The collar of an animal has been silent longer than the offline threshold. */
+  async triggerDeviceOffline(data: {
+    farmId: string;
+    animalId: string;
+    animalName: string;
+    deviceId: string;
+    lastSeenAt: Date;
+  }) {
+    return this.createActiveOnce({
+      farmId: data.farmId,
+      animalId: data.animalId,
+      deviceId: data.deviceId,
+      type: AlertType.DEVICE_OFFLINE,
+      severity: AlertSeverity.WARNING,
+      message: `Нет связи с ошейником ${data.deviceId} (животное "${data.animalName}"). Последний сигнал: ${data.lastSeenAt.toISOString()}.`,
+      dedupeKey: `${AlertType.DEVICE_OFFLINE}:${data.animalId}`,
+    });
+  }
+
+  /** The collar pinged again: close ACTIVE DEVICE_OFFLINE alerts and leave a DEVICE_RESTORED note. */
+  async restoreDevice(data: { farmId: string; animalId: string; animalName: string; deviceId: string }) {
+    const closed = await this.prisma.alert.updateMany({
+      where: { animalId: data.animalId, type: AlertType.DEVICE_OFFLINE, status: AlertStatus.ACTIVE },
+      data: { status: AlertStatus.RESOLVED, resolvedAt: new Date() },
+    });
+    if (closed.count === 0) return null;
+    return this.prisma.alert.create({
+      data: {
+        farmId: data.farmId,
+        animalId: data.animalId,
+        deviceId: data.deviceId,
+        type: AlertType.DEVICE_RESTORED,
+        severity: AlertSeverity.INFO,
+        status: AlertStatus.RESOLVED,
+        resolvedAt: new Date(),
+        message: `Связь с ошейником ${data.deviceId} (животное "${data.animalName}") восстановлена.`,
+      },
+    });
+  }
+
+  /**
+   * A daily signal limit suppressed a signal. One alert per animal, level and local day,
+   * even if it was acknowledged in the meantime.
+   */
+  async triggerSignalLimit(data: {
+    farmId: string;
+    animalId: string;
+    animalName: string;
+    deviceId: string;
+    level: 'SOUND' | 'VIBRATION';
+    day: string;
+  }) {
+    const dedupeKey = `${AlertType.SIGNAL_LIMIT_REACHED}:${data.animalId}:${data.level}:${data.day}`;
+    const existing = await this.prisma.alert.findFirst({ where: { dedupeKey } });
+    if (existing) return existing;
+    const label = data.level === 'SOUND' ? 'звук' : 'вибрация';
+    return this.createActiveOnce({
+      farmId: data.farmId,
+      animalId: data.animalId,
+      deviceId: data.deviceId,
+      type: AlertType.SIGNAL_LIMIT_REACHED,
+      severity: AlertSeverity.WARNING,
+      message: `Достигнут суточный лимит сигнала «${label}» для животного "${data.animalName}". Дальнейшие сигналы сегодня подавляются.`,
+      dedupeKey,
+    });
+  }
+
   async resolveGeofenceBreach(data: {
     farmId: string;
     animalId: string;
@@ -214,7 +281,7 @@ export class AlertsService {
 
   async getAlertStats(userId: string, farmId: string) {
 
-    const [activeTotal, activeBreaches] = await Promise.all([
+    const [activeTotal, activeBreaches, offline] = await Promise.all([
       this.prisma.alert.count({
         where: { farmId, status: AlertStatus.ACTIVE },
       }),
@@ -225,11 +292,15 @@ export class AlertsService {
           type: AlertType.GEOFENCE_BREACH,
         },
       }),
+      this.prisma.alert.count({
+        where: { farmId, status: AlertStatus.ACTIVE, type: AlertType.DEVICE_OFFLINE },
+      }),
     ]);
 
     return {
       activeTotal,
       activeBreaches,
+      offline,
     };
   }
 }

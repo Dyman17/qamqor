@@ -2,6 +2,10 @@ import { UnauthorizedException } from '@nestjs/common';
 import { TelemetryService } from '../src/telemetry/telemetry.service';
 import { GeofenceService } from '../src/geofences/geofence.service';
 
+const passThroughSignals: any = {
+  applyLimits: jest.fn(async (a: any) => ({ sound: a.sound, vibrate: a.vibrate, suppressed: false })),
+};
+
 const poly = {
   type: 'Polygon',
   coordinates: [[[51.15, 43.645], [51.165, 43.645], [51.165, 43.655], [51.15, 43.655], [51.15, 43.645]]],
@@ -17,9 +21,9 @@ function setup(pendingCommand: any = null) {
       updateMany: jest.fn(async () => ({ count: 1 })),
     },
   };
-  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn(), triggerGpsLost: jest.fn(), resolveGpsLost: jest.fn() };
+  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn(), triggerGpsLost: jest.fn(), resolveGpsLost: jest.fn(), restoreDevice: jest.fn() };
   const config: any = { get: (_k: string, d: string) => d };
-  const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config);
+  const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config, passThroughSignals);
   const device: any = {
     id: 'd1', deviceId: 'QAM-0001', farmId: 'f1',
     animal: { id: 'a1', name: 'A', isOutsideGeofence: false, activeGeofence: { polygonJson: poly } },

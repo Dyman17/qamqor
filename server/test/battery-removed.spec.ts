@@ -52,7 +52,7 @@ describe('battery is removed everywhere', () => {
       device: { count: jest.fn(async () => 1) },
     };
     const stats = await new AlertsService(prisma).getAlertStats('u', 'f');
-    expect(Object.keys(stats).sort()).toEqual(['activeBreaches', 'activeTotal']);
+    expect(Object.keys(stats).sort()).toEqual(['activeBreaches', 'activeTotal', 'offline']);
     const overview: any = await new AnalyticsService(prisma).getOverview('u', 'f');
     expect(Object.keys(overview.stats)).not.toContain('lowBatteryDevices');
   });

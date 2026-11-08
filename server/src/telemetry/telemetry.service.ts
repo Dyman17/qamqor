@@ -12,6 +12,7 @@ import { DeviceTelemetryDto } from './dto/device-telemetry.dto';
 import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
 import { DeviceStatus } from '@qamqor/shared';
 import { DEVICE_AUTH_ERROR } from '../devices/device-auth.guard';
+import { SignalsService } from '../signals/signals.service';
 
 type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
 
@@ -24,6 +25,7 @@ export class TelemetryService {
     private readonly geofenceService: GeofenceService,
     private readonly alertsService: AlertsService,
     private readonly configService: ConfigService,
+    private readonly signals: SignalsService,
   ) {}
 
   private num(key: string, def: number): number {
@@ -64,6 +66,7 @@ export class TelemetryService {
     let sound = false;
     let vibrate = false;
     let unknownReason: string | null = 'NO_BOUNDARY';
+    let suppressedBy: 'SIGNAL_LIMIT' | null = null;
 
     let nextInterval = this.num('NORMAL_PING_INTERVAL_SEC', 300);
     const emergencyInterval = this.num('EMERGENCY_PING_INTERVAL_SEC', 60);
@@ -96,6 +99,23 @@ export class TelemetryService {
 
         if (device.farmId) {
           await this.alertsService.resolveGpsLost(animal.id);
+
+          // Daily limits: a level that reached its limit is suppressed and an alert is raised.
+          const limited = await this.signals.applyLimits({
+            farmId: device.farmId,
+            timezone: device.farm?.timezone ?? 'Asia/Aqtau',
+            animal: { id: animal.id, name: animal.name },
+            deviceId: device.deviceId,
+            sound,
+            vibrate,
+            now,
+          });
+          if (limited.suppressed) {
+            suppressedBy = 'SIGNAL_LIMIT';
+            if (!limited.sound) toneFrequencyHz = 0;
+          }
+          sound = limited.sound;
+          vibrate = limited.vibrate;
         }
 
         if (isOutside) {
@@ -154,6 +174,16 @@ export class TelemetryService {
       },
     });
 
+    // The collar is heard again: close its DEVICE_OFFLINE alert.
+    if (animal && device.farmId) {
+      await this.alertsService.restoreDevice({
+        farmId: device.farmId,
+        animalId: animal.id,
+        animalName: animal.name,
+        deviceId: device.deviceId,
+      });
+    }
+
     // Record Telemetry Point
     await this.prisma.telemetry.create({
       data: {
@@ -194,6 +224,8 @@ export class TelemetryService {
               : 'Zone UNKNOWN: no boundary is set for this animal. No signals.';
     }
 
+    if (suppressedBy) warningMessage += ' Some signals are suppressed by the daily limit.';
+
     // Deliver at most one queued test signal per ping (once only).
     let command: { id: string; type: 'TEST_SOUND' | 'TEST_VIBRATION' } | undefined;
     const pending = await this.prisma.deviceCommand.findFirst({
@@ -223,6 +255,7 @@ export class TelemetryService {
       sound,
       vibrate,
       vibrateDurationMs: vibrate ? 3000 : 0,
+      suppressedBy,
       warningMessage,
     };
   }

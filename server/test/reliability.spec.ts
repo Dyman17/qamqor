@@ -103,9 +103,13 @@ describe('TelemetryService', () => {
       resolveGeofenceBreach: jest.fn(),
       triggerGpsLost: jest.fn(),
       resolveGpsLost: jest.fn(),
+      restoreDevice: jest.fn(),
+    };
+    const signals: any = {
+      applyLimits: jest.fn(async (a: any) => ({ sound: a.sound, vibrate: a.vibrate, suppressed: false })),
     };
     const config: any = { get: (_k: string, d: string) => d };
-    const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config);
+    const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config, signals);
     const animal =
       opts.animal === undefined
         ? { id: 'a1', name: 'A', isOutsideGeofence: false, activeGeofence: { polygonJson: square() } }
