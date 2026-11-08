@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertType, AlertSeverity, AlertStatus } from '@qamqor/shared';
+import { ALERT_INCLUDE, AlertDto, toAlertDto } from './mappers';
+import { Page, PAGE_DEFAULT_LIMIT } from '../common/pagination';
 
 @Injectable()
 export class AlertsService {
@@ -219,34 +221,24 @@ export class AlertsService {
   async listAlerts(
     userId: string,
     farmId: string,
-    filters?: {
-      status?: AlertStatus;
-      type?: AlertType;
-      severity?: AlertSeverity;
-      animalId?: string;
-    },
-  ) {
-
+    q: { status?: AlertStatus; type?: AlertType; animalId?: string; limit?: number; cursor?: string } = {},
+  ): Promise<Page<AlertDto>> {
     const where: any = { farmId };
+    if (q.status) where.status = q.status;
+    if (q.type) where.type = q.type;
+    if (q.animalId) where.animalId = q.animalId;
 
-    if (filters?.status) where.status = filters.status;
-    if (filters?.type) where.type = filters.type;
-    if (filters?.severity) where.severity = filters.severity;
-    if (filters?.animalId) where.animalId = filters.animalId;
-
-    return this.prisma.alert.findMany({
+    const limit = q.limit ?? PAGE_DEFAULT_LIMIT;
+    const rows = await this.prisma.alert.findMany({
       where,
-      include: {
-        animal: {
-          select: { id: true, name: true, tagNumber: true, species: true },
-        },
-        device: {
-          select: { id: true, deviceId: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+      include: ALERT_INCLUDE,
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: limit + 1,
+      ...(q.cursor && { cursor: { id: q.cursor }, skip: 1 }),
     });
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit).map(toAlertDto);
+    return { items, nextCursor: hasMore && items.length ? items[items.length - 1].id : null };
   }
 
   async updateAlertStatus(
@@ -254,8 +246,7 @@ export class AlertsService {
     farmId: string,
     alertId: string,
     status: AlertStatus,
-  ) {
-
+  ): Promise<AlertDto> {
     const alert = await this.prisma.alert.findFirst({
       where: { id: alertId, farmId },
     });
@@ -265,18 +256,27 @@ export class AlertsService {
     }
 
     try {
-      return await this.prisma.alert.update({
+      const updated = await this.prisma.alert.update({
         where: { id: alertId },
         data: {
           status,
+          // Handling an alert marks it as seen.
+          ...(status !== AlertStatus.ACTIVE && { isRead: true }),
           ...(status === AlertStatus.RESOLVED && { resolvedAt: new Date() }),
         },
+        include: ALERT_INCLUDE,
       });
+      return toAlertDto(updated);
     } catch (e: any) {
       // Re-activating while another ACTIVE alert of the same kind exists (partial unique index).
       if (e?.code === 'P2002') throw new ConflictException('Для этого животного уже есть активное оповещение такого типа');
       throw e;
     }
+  }
+
+  async markAllRead(userId: string, farmId: string): Promise<{ updated: number }> {
+    const res = await this.prisma.alert.updateMany({ where: { farmId, isRead: false }, data: { isRead: true } });
+    return { updated: res.count };
   }
 
   async getAlertStats(userId: string, farmId: string) {

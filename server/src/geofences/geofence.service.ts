@@ -7,8 +7,30 @@ import {
 import { assertSameFarm } from '../farms/same-farm';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeofenceStatus } from '@qamqor/shared';
-import { exteriorRing, polygonProblem } from './polygon';
+import { exteriorRing, polygonProblem, polygonAreaHa } from './polygon';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
+
+export interface PenDto {
+  id: string;
+  farmId: string;
+  name: string;
+  color: string;
+  polygon: any;
+  animalsCount: number;
+  areaHa: number;
+}
+
+export function toPenDto(g: any, animalsCount?: number): PenDto {
+  return {
+    id: g.id,
+    farmId: g.farmId,
+    name: g.name,
+    color: g.color,
+    polygon: g.polygonJson,
+    animalsCount: animalsCount ?? g._count?.animals ?? 0,
+    areaHa: polygonAreaHa(g.polygonJson),
+  };
+}
 
 @Injectable()
 export class GeofenceService {
@@ -217,71 +239,48 @@ export class GeofenceService {
   // CRUD OPERATIONS
   // ==========================================
 
-  async listGeofences(userId: string, farmId: string) {
-
+  async listGeofences(userId: string, farmId: string): Promise<PenDto[]> {
     const geofences = await this.prisma.geofence.findMany({
       where: { farmId },
-      include: {
-        _count: {
-          select: { animals: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { animals: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
-
-    return geofences.map((g) => ({
-      ...g,
-      animalsCount: g._count.animals,
-    }));
+    return geofences.map((g) => toPenDto(g));
   }
 
-  async getGeofenceById(userId: string, farmId: string, geofenceId: string) {
-
+  async getGeofenceById(userId: string, farmId: string, geofenceId: string): Promise<PenDto & { animalIds: string[] }> {
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },
-      include: {
-        animals: {
-          select: {
-            id: true,
-            name: true,
-            tagNumber: true,
-            species: true,
-            isOutsideGeofence: true,
-            lastLatitude: true,
-            lastLongitude: true,
-          },
-        },
-      },
+      include: { animals: { select: { id: true } } },
     });
-
     if (!geofence) {
       throw new NotFoundException('Геозона (пастбище) не найдена');
     }
-
-    return geofence;
+    return { ...toPenDto(geofence, geofence.animals.length), animalIds: geofence.animals.map((a) => a.id) };
   }
 
   async createGeofence(userId: string, farmId: string, dto: CreateGeofenceInputDto) {
     await assertSameFarm(this.prisma, farmId, { animalIds: dto.animalIds });
 
-    const geofence = await this.prisma.geofence.create({
-      data: {
-        farmId,
-        name: dto.name.trim(),
-        description: dto.description?.trim(),
-        color: dto.color || '#10B981',
-        polygonJson: dto.polygonJson as any,
-      },
+    const geofenceId = await this.prisma.$transaction(async (tx) => {
+      const geofence = await tx.geofence.create({
+        data: {
+          farmId,
+          name: dto.name.trim(),
+          color: dto.color || '#10B981',
+          polygonJson: dto.polygon as any,
+        },
+      });
+      if (dto.animalIds && dto.animalIds.length > 0) {
+        await tx.animal.updateMany({
+          where: { id: { in: dto.animalIds }, farmId },
+          data: { activeGeofenceId: geofence.id },
+        });
+      }
+      return geofence.id;
     });
 
-    if (dto.animalIds && Array.isArray(dto.animalIds) && dto.animalIds.length > 0) {
-      await this.prisma.animal.updateMany({
-        where: { id: { in: dto.animalIds }, farmId },
-        data: { activeGeofenceId: geofence.id },
-      });
-    }
-
-    return this.getGeofenceById(userId, farmId, geofence.id);
+    return this.getGeofenceById(userId, farmId, geofenceId);
   }
 
   async updateGeofence(
@@ -290,7 +289,6 @@ export class GeofenceService {
     geofenceId: string,
     dto: UpdateGeofenceInputDto,
   ) {
-
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },
     });
@@ -300,36 +298,35 @@ export class GeofenceService {
     }
     await assertSameFarm(this.prisma, farmId, { animalIds: dto.animalIds });
 
-    const updated = await this.prisma.geofence.update({
-      where: { id: geofenceId },
-      data: {
-        ...(dto.name && { name: dto.name.trim() }),
-        ...(dto.description !== undefined && { description: dto.description?.trim() }),
-        ...(dto.color && { color: dto.color }),
-        ...(dto.polygonJson && { polygonJson: dto.polygonJson as any }),
-      },
-    });
-
-    if (dto.animalIds && Array.isArray(dto.animalIds)) {
-      // Unassign existing
-      await this.prisma.animal.updateMany({
-        where: { activeGeofenceId: geofenceId, farmId },
-        data: { activeGeofenceId: null },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.geofence.update({
+        where: { id: geofenceId },
+        data: {
+          ...(dto.name && { name: dto.name.trim() }),
+          ...(dto.color && { color: dto.color }),
+          ...(dto.polygon && { polygonJson: dto.polygon as any }),
+        },
       });
-      // Assign new
-      if (dto.animalIds.length > 0) {
-        await this.prisma.animal.updateMany({
-          where: { id: { in: dto.animalIds }, farmId },
-          data: { activeGeofenceId: geofenceId },
+
+      if (dto.animalIds) {
+        // The listed animals become the herd of this pen; the others are released.
+        await tx.animal.updateMany({
+          where: { activeGeofenceId: geofenceId, farmId },
+          data: { activeGeofenceId: null },
         });
+        if (dto.animalIds.length > 0) {
+          await tx.animal.updateMany({
+            where: { id: { in: dto.animalIds }, farmId },
+            data: { activeGeofenceId: geofenceId },
+          });
+        }
       }
-    }
+    });
 
     return this.getGeofenceById(userId, farmId, geofenceId);
   }
 
-  async deleteGeofence(userId: string, farmId: string, geofenceId: string) {
-
+  async deleteGeofence(userId: string, farmId: string, geofenceId: string): Promise<void> {
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },
     });
@@ -338,14 +335,9 @@ export class GeofenceService {
       throw new NotFoundException('Геозона не найдена');
     }
 
-    // Unassign animals
-    await this.prisma.animal.updateMany({
-      where: { activeGeofenceId: geofenceId },
-      data: { activeGeofenceId: null },
-    });
-
-    return this.prisma.geofence.delete({
-      where: { id: geofenceId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.animal.updateMany({ where: { activeGeofenceId: geofenceId, farmId }, data: { activeGeofenceId: null } });
+      await tx.geofence.delete({ where: { id: geofenceId } });
     });
   }
 }

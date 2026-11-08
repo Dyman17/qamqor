@@ -6,9 +6,9 @@ import {
   Delete,
   Param,
   Body,
-  Headers,
   UseGuards,
-  BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { GeofenceService } from './geofence.service';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
@@ -64,12 +64,13 @@ export class GeofenceController {
 
   @Delete(':id')
   @FarmRoles('OWNER')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async deleteGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,
     @FarmId() farmId: string,
   ) {
-    return this.geofenceService.deleteGeofence(user.id, farmId, geofenceId);
+    await this.geofenceService.deleteGeofence(user.id, farmId, geofenceId);
   }
 }
 

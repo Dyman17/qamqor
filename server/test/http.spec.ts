@@ -73,6 +73,7 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
   it('unknown routes also carry the headers', async () => {
     const r = await fetch(`${base}/nope`);
     expect(r.status).toBe(404);
+    expect(((await r.json()) as any).code).toBe('NOT_FOUND');
     expect(r.headers.get('x-content-type-options')).toBe('nosniff');
     expect(r.headers.get('x-powered-by')).toBeNull();
   });
@@ -94,7 +95,7 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
     const r = await post({ junk: true });
     expect(r.status).toBe(401);
     const body: any = await r.json();
-    expect(body.message).toBe('Invalid device credentials');
+    expect(body).toMatchObject({ statusCode: 401, code: 'UNAUTHENTICATED', message: 'Invalid device credentials' });
     expect(JSON.stringify(body)).not.toMatch(/latitude|timestamp|must be|should not exist/i);
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
   });

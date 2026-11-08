@@ -71,11 +71,11 @@ describe('AnimalsService / GeofenceService tenancy', () => {
     };
     const svc = new AnimalsService(prisma);
     await expect(
-      svc.createAnimal('u', 'A', { name: 'n', tagNumber: 't', species: 'CATTLE', activeGeofenceId: 'foreign' } as any),
+      svc.createAnimal('u', 'A', { name: 'n', tag: 't', species: 'CATTLE', penId: 'foreign' } as any),
     ).rejects.toThrow(NotFoundException);
     prisma.geofence.count.mockResolvedValue(1);
     await expect(
-      svc.createAnimal('u', 'A', { name: 'n', tagNumber: 't', species: 'CATTLE', deviceId: 'QAM-B' } as any),
+      svc.createAnimal('u', 'A', { name: 'n', tag: 't', species: 'CATTLE', collarId: 'QAM-B' } as any),
     ).rejects.toThrow(NotFoundException);
     expect(prisma.animal.create).not.toHaveBeenCalled();
     expect(prisma.device.update).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe('AnimalsService / GeofenceService tenancy', () => {
       geofence: { count: jest.fn() },
     };
     const svc = new AnimalsService(prisma);
-    await expect(svc.createAnimal('u', 'A', { name: 'n', tagNumber: 't', species: 'CATTLE' } as any)).rejects.toThrow(/уже/);
+    await expect(svc.createAnimal('u', 'A', { name: 'n', tag: 't', species: 'CATTLE' } as any)).rejects.toThrow(/уже/);
     expect(prisma.animal.findUnique).toHaveBeenCalledWith({ where: { farmId_tagNumber: { farmId: 'A', tagNumber: 't' } } });
   });
 
@@ -99,7 +99,7 @@ describe('AnimalsService / GeofenceService tenancy', () => {
     };
     const svc = new GeofenceService(prisma);
     await expect(
-      svc.createGeofence('u', 'A', { name: 'g', polygonJson: { type: 'Polygon', coordinates: [] }, animalIds: ['b1'] } as any),
+      svc.createGeofence('u', 'A', { name: 'g', polygon: { type: 'Polygon', coordinates: [] }, animalIds: ['b1'] } as any),
     ).rejects.toThrow(NotFoundException);
     expect(prisma.geofence.create).not.toHaveBeenCalled();
     expect(prisma.animal.updateMany).not.toHaveBeenCalled();

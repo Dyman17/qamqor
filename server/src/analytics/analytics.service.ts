@@ -5,6 +5,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertStatus } from '@prisma/client';
 import { offlineThresholdMs } from '../devices/connectivity';
+import { ALERT_INCLUDE, toAlertDto } from '../alerts/mappers';
+import { ANIMAL_INCLUDE, toAnimalDto } from '../animals/mappers';
 
 @Injectable()
 export class AnalyticsService {
@@ -50,40 +52,14 @@ export class AnalyticsService {
         where: { farmId },
         orderBy: { createdAt: 'desc' },
         take: 5,
-        include: {
-          animal: { select: { name: true, tagNumber: true, species: true } },
-        },
+        include: ALERT_INCLUDE,
       }),
 
       // Animals for quick map rendering
       this.prisma.animal.findMany({
         where: { farmId },
-        select: {
-          id: true,
-          name: true,
-          tagNumber: true,
-          species: true,
-          gender: true,
-          isOutsideGeofence: true,
-          lastLatitude: true,
-          lastLongitude: true,
-          lastAccuracy: true,
-          lastSeenAt: true,
-          device: {
-            select: {
-              deviceId: true,
-              signal: true,
-              status: true,
-            },
-          },
-          activeGeofence: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-            },
-          },
-        },
+        include: ANIMAL_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
     ]);
 
@@ -106,8 +82,8 @@ export class AnalyticsService {
         activeAlertsCount,
       },
       speciesBreakdown,
-      recentAlerts,
-      liveAnimals,
+      recentAlerts: recentAlerts.map(toAlertDto),
+      liveAnimals: liveAnimals.map((a) => toAnimalDto(a)),
     };
   }
 }

@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppConfig } from './config/config';
+import { ApiExceptionFilter } from './common/api-exception.filter';
 import { securityHeaders } from './config/security-headers';
 
 /**
@@ -21,8 +22,11 @@ export function configureApp(app: NestExpressApplication, cfg: AppConfig): void 
     origin: cfg.corsOrigins.length ? cfg.corsOrigins : false,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: ['authorization', 'content-type', 'x-farm-id'],
+    exposedHeaders: ['x-next-cursor'],
     credentials: true,
   });
+
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

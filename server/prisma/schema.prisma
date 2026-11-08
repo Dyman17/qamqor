@@ -234,6 +234,7 @@ model Alert {
   latitude    Float?
   longitude   Float?
   resolvedAt  DateTime?
+  isRead      Boolean       @default(false)
   // "<type>:<animalId>" while ACTIVE; a partial UNIQUE index (WHERE status = 'ACTIVE' AND dedupeKey
   // IS NOT NULL) created in migration 0007_alert_dedupe makes alert creation idempotent under races.
   // Prisma cannot express partial indexes; do not let `migrate dev` drop it.

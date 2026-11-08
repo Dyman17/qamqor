@@ -78,9 +78,9 @@ describe('polygon validator', () => {
     expect(polygonProblem(square(ring))).toMatch(/500/);
   });
   it('DTO rejects an invalid polygon and accepts a valid one', async () => {
-    const bad = await validate(plainToInstance(CreateGeofenceInputDto, { name: 'g', polygonJson: square([[0, 0], [2, 2], [2, 0], [0, 2], [0, 0]]) }));
+    const bad = await validate(plainToInstance(CreateGeofenceInputDto, { name: 'g', polygon: square([[0, 0], [2, 2], [2, 0], [0, 2], [0, 0]]) }));
     expect(bad).toHaveLength(1);
-    const ok = await validate(plainToInstance(CreateGeofenceInputDto, { name: 'g', polygonJson: square() }));
+    const ok = await validate(plainToInstance(CreateGeofenceInputDto, { name: 'g', polygon: square() }));
     expect(ok).toHaveLength(0);
   });
   it('area in hectares is plausible (0.015 deg x 0.01 deg at 43.65 N: ~1208 m x 1105 m ~ 133 ha)', () => {

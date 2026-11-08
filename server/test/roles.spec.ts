@@ -110,13 +110,13 @@ describe('FarmAccessGuard boundary switch', () => {
 });
 
 describe('Animals: assigning a pen needs boundary rights', () => {
-  it('worker without the switch cannot set activeGeofenceId on create/update', async () => {
+  it('worker without the switch cannot set penId on create/update', async () => {
     const prisma: any = { animal: { findFirst: jest.fn(async () => ({ id: 'a1', tagNumber: 't' })) } };
     const svc = new AnimalsService(prisma);
     await expect(
-      svc.createAnimal('u', 'A', { name: 'n', tagNumber: 't', species: 'CATTLE', activeGeofenceId: 'g' } as any, false),
+      svc.createAnimal('u', 'A', { name: 'n', tag: 't', species: 'CATTLE', penId: 'g' } as any, false),
     ).rejects.toThrow(ForbiddenException);
-    await expect(svc.updateAnimal('u', 'A', 'a1', { activeGeofenceId: null } as any, false)).rejects.toThrow(
+    await expect(svc.updateAnimal('u', 'A', 'a1', { penId: null } as any, false)).rejects.toThrow(
       ForbiddenException,
     );
   });

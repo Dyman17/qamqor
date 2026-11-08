@@ -7,21 +7,11 @@ export class RegisterDeviceDto {
   deviceId!: string; // e.g. "QAM-0005"
 
   @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  firmwareVersion?: string;
-
-  @IsOptional()
   @IsUUID()
   animalId?: string;
 }
 
 export class UpdateDeviceDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  firmwareVersion?: string;
-
   /** UUID of the animal to assign, or null to unassign. */
   @IsOptional()
   @IsUUID()

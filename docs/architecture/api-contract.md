@@ -25,7 +25,7 @@ Status: draft
 - Авторизация приложения: `Authorization: Bearer <JWT>`. Авторизация ошейника: `Authorization: Bearer <deviceSecret>` (отдельный секрет на ошейник, показывается один раз).
 - Ошибки: `{ "statusCode": number, "code": string, "message": string }`. Коды: `VALIDATION`, `UNAUTHENTICATED`, `FORBIDDEN_ROLE`, `FORBIDDEN_FARM`, `NOT_FOUND`, `CONFLICT`, `RATE_LIMITED`.
 - Права: **O** — только владелец; **W** — владелец и работник; **B** — владелец, либо работник при `farm.workerCanEditBoundaries = true`; **Д** — ошейник; **—** — без авторизации.
-- Пагинация списков: `?limit` (1–100, по умолчанию 50) и `?cursor`.
+- Пагинация списков (`GET /animals`, `GET /alerts`): `?limit` (1–100, по умолчанию 50) и `?cursor` (id последнего элемента предыдущей страницы). Ответ остаётся массивом; курсор следующей страницы приходит в заголовке `X-Next-Cursor` (его нет на последней странице).
 
 ## 2. Типы (ответы)
 
@@ -45,6 +45,8 @@ interface FarmDto {
 }
 interface SignalLimitDto { level: 'SOUND' | 'VIBRATION' | 'IMPULSE'; dailyLimit: number | null; unlimited: boolean; }
 
+// status: danger — последняя позиция вне границы; offline — нет ошейника или он молчит дольше порога;
+// warning — активное GPS_LOST / SIGNAL_LIMIT_REACHED; иначе ok. DELETE /geofences/:id и /animals/:id отвечают 204.
 interface AnimalDto {
   id; farmId; name; tag: string;              // tag = tagNumber
   species: 'CATTLE' | 'HORSE' | 'CAMEL' | 'SHEEP' | 'GOAT'; gender; breed?: string; birthDate?: string; photoUrl?: string;
@@ -119,13 +121,13 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | `GET /animals` | W | `?search&status&penId&species&cursor` | `AnimalDto[]` |
 | `GET /animals/:id` | W | — | `AnimalDto` |
 | `GET /animals/:id/track` | W | `?from&to` (ISO 8601) `&limit` (целое 1–500, по умолчанию 100; иное -> 400); возвращает последние `limit` точек по возрастанию времени | `{animal, points: [{lat,lng,accuracyM,at,isOutside}]}` |
-| `GET /animals/:id/events` | W | `?limit` | `AlertDto[]` и счётчики сигналов за сутки (см. ниже) |
-| `POST /animals` | W | `{name, tag, species, gender?, breed?, birthDate?, penId?, collarId?}` | `AnimalDto`; `tag` уникален в пределах фермы |
+| `GET /animals/:id/events` | W | `?limit` (1–100, по умолчанию 20) | `{alerts: AlertDto[], signals: <как в /signals>}` |
+| `POST /animals` | W | `{name, tag, species, gender?, breed?, birthDate?(ISO), photoUrl?(http/https), penId?, collarId?}` | `AnimalDto`; `tag` уникален в пределах фермы |
 | `PATCH /animals/:id` | W | любое из полей создания | `AnimalDto`; `penId` меняет только B |
 | `DELETE /animals/:id` | W (допущение: удаление животного не ограничено; **открытый вопрос владельцу**) | — | `204` |
 | `POST /animals/:id/assign-collar` | W | `{deviceId}` | `AnimalDto`; ошейник должен быть в этой же ферме; прежняя привязка снимается; `409`, если занят другим животным |
 | `POST /animals/:id/unassign-collar` | W | — | `AnimalDto` |
-| `POST /animals/steer` | B | `{animalIds: string[], targetPenId: string}` | `{updated: number, skippedOffline: string[]}`; переназначает `penId`, сервер сам отдаёт ошейникам новую границу при следующем пинге |
+| `POST /animals/steer` | B | `{animalIds: string[], targetPenId: string}` | `{updated: number, skippedOffline: string[]}`; `penId` меняется у всех выбранных (чужое животное или загон -> 404, ничего не записывается); `skippedOffline` — id животных без ошейника или с ошейником офлайн: они обновлены, но новую границу получат только при следующем пинге |
 
 `POST /animals/:id/steer` из README не создаётся: перегон групповой (спека S4), поэтому единый `POST /animals/steer`. Приложение вызова пока не делает, добавит.
 
@@ -138,8 +140,8 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | Метод и путь | Права | Запрос | Ответ |
 |---|---|---|---|
 | `GET /geofences` | W | — | `PenDto[]` |
-| `GET /geofences/:id` | W | — | `PenDto` и список `animalIds` |
-| `POST /geofences` | B | `{name, color?, polygon, animalIds?}` | `PenDto` |
+| `GET /geofences/:id` | W | — | `PenDto` и список `animalIds` (`areaHa` и `animalsCount` считает сервер) |
+| `POST /geofences` | B | `{name, color?(#RRGGBB), polygon, animalIds?}` | `PenDto` |
 | `PATCH /geofences/:id` | B | `{name?, color?, polygon?, animalIds?}` | `PenDto` |
 | `DELETE /geofences/:id` | **O** | — | `204`; животные получают `penId = null` |
 
@@ -151,7 +153,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 |---|---|---|---|
 | `GET /devices` | W | — | `CollarDto[]` |
 | `GET /devices/:deviceId` | W | — | `CollarDto` |
-| `POST /devices` | W | `{deviceId, animalId?}` | `{collar: CollarDto, deviceSecret: string}` — секрет **показывается один раз**, на сервере хранится только хеш |
+| `POST /devices` | W | `{deviceId(3–40: A-Za-z0-9_-), animalId?}` | `{collar: CollarDto, deviceSecret: string}` — секрет **показывается один раз**, на сервере хранится только хеш |
 | `POST /devices/:deviceId/rotate-secret` | W | — | `{deviceSecret}` |
 | `PATCH /devices/:deviceId` | W | `{animalId?: string\|null}` | `CollarDto` |
 | `DELETE /devices/:deviceId` | O | — | `204` |

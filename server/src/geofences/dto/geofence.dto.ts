@@ -19,16 +19,11 @@ export class CreateGeofenceInputDto {
   name!: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  description?: string;
-
-  @IsOptional()
   @Matches(HEX_COLOR, { message: 'color: HEX-цвет вида #10B981' })
   color?: string;
 
   @IsGeoJsonPolygon()
-  polygonJson!: {
+  polygon!: {
     type: 'Polygon';
     coordinates: number[][][]; // [[[lng, lat], [lng, lat], ...]]
   };
@@ -48,17 +43,12 @@ export class UpdateGeofenceInputDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  description?: string;
-
-  @IsOptional()
   @Matches(HEX_COLOR, { message: 'color: HEX-цвет вида #10B981' })
   color?: string;
 
   @IsOptional()
   @IsGeoJsonPolygon()
-  polygonJson?: {
+  polygon?: {
     type: 'Polygon';
     coordinates: number[][][];
   };

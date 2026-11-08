@@ -93,7 +93,6 @@ export class DevicesService {
         deviceId,
         secretHash: hashDeviceSecret(deviceSecret),
         farmId,
-        firmwareVersion: dto.firmwareVersion || '1.0.0',
         status: DeviceStatus.INACTIVE,
         animalId: dto.animalId,
       },
@@ -129,7 +128,6 @@ export class DevicesService {
       where: { id: device.id },
       data: {
         ...(dto.animalId !== undefined && { animalId: dto.animalId }),
-        ...(dto.firmwareVersion && { firmwareVersion: dto.firmwareVersion }),
       },
       select: COLLAR_SELECT,
     });
