@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { assertSameFarm } from '../farms/same-farm';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAnimalInputDto, UpdateAnimalInputDto } from './dto/animal.dto';
 import { AnimalSpecies } from '@prisma/client';
@@ -11,16 +12,6 @@ import { AnimalSpecies } from '@prisma/client';
 @Injectable()
 export class AnimalsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-    return membership;
-  }
 
   async listAnimals(
     userId: string,
@@ -31,7 +22,6 @@ export class AnimalsService {
       search?: string;
     },
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const where: any = { farmId };
 
@@ -77,7 +67,6 @@ export class AnimalsService {
   }
 
   async getAnimalById(userId: string, farmId: string, animalId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
@@ -114,7 +103,6 @@ export class AnimalsService {
     animalId: string,
     limit: number = 100,
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
@@ -146,10 +134,14 @@ export class AnimalsService {
   }
 
   async createAnimal(userId: string, farmId: string, dto: CreateAnimalInputDto) {
-    await this.verifyFarmAccess(userId, farmId);
+
+    await assertSameFarm(this.prisma, farmId, {
+      geofenceId: dto.activeGeofenceId,
+      deviceId: dto.deviceId,
+    });
 
     const existingTag = await this.prisma.animal.findUnique({
-      where: { tagNumber: dto.tagNumber.trim() },
+      where: { farmId_tagNumber: { farmId, tagNumber: dto.tagNumber.trim() } },
     });
 
     if (existingTag) {
@@ -171,9 +163,9 @@ export class AnimalsService {
 
     // Link device if provided
     if (dto.deviceId) {
-      await this.prisma.device.update({
-        where: { deviceId: dto.deviceId },
-        data: { animalId: animal.id, farmId },
+      await this.prisma.device.updateMany({
+        where: { deviceId: dto.deviceId, farmId },
+        data: { animalId: animal.id },
       });
     }
 
@@ -186,7 +178,6 @@ export class AnimalsService {
     animalId: string,
     dto: UpdateAnimalInputDto,
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
@@ -198,12 +189,17 @@ export class AnimalsService {
 
     if (dto.tagNumber && dto.tagNumber !== animal.tagNumber) {
       const conflict = await this.prisma.animal.findUnique({
-        where: { tagNumber: dto.tagNumber.trim() },
+        where: { farmId_tagNumber: { farmId, tagNumber: dto.tagNumber.trim() } },
       });
       if (conflict) {
         throw new ConflictException(`Бирка "${dto.tagNumber}" уже занята`);
       }
     }
+
+    await assertSameFarm(this.prisma, farmId, {
+      geofenceId: dto.activeGeofenceId,
+      deviceId: dto.deviceId,
+    });
 
     // Handle device attachment / detachment
     if (dto.deviceId !== undefined) {
@@ -219,9 +215,9 @@ export class AnimalsService {
           where: { animalId },
           data: { animalId: null },
         });
-        await this.prisma.device.update({
-          where: { deviceId: dto.deviceId },
-          data: { animalId, farmId },
+        await this.prisma.device.updateMany({
+          where: { deviceId: dto.deviceId, farmId },
+          data: { animalId },
         });
       }
     }
@@ -243,7 +239,6 @@ export class AnimalsService {
   }
 
   async deleteAnimal(userId: string, farmId: string, animalId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },

@@ -22,20 +22,10 @@ export class MockService {
     private readonly cameraService: CameraService,
   ) {}
 
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-  }
-
   /**
    * 1. Manually inject GPS telemetry & battery from website interface
    */
   async injectManualTelemetry(userId: string, farmId: string, dto: InjectTelemetryDto) {
-    await this.verifyFarmAccess(userId, farmId);
 
     // Look up by animalId or deviceId
     const animal = await this.prisma.animal.findFirst({
@@ -137,7 +127,6 @@ export class MockService {
    * 2. One-click button: Simulate animal escaping outside pasture
    */
   async simulateBreach(userId: string, farmId: string, animalId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
@@ -176,7 +165,6 @@ export class MockService {
    * 3. One-click button: Return animal back inside pasture
    */
   async simulateReturn(userId: string, farmId: string, animalId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
@@ -214,7 +202,6 @@ export class MockService {
    * 4. Inject a test photo snapshot from the website (camera simulator)
    */
   async injectPhoto(userId: string, farmId: string, dto: InjectPhotoDto) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: dto.animalId, farmId },

@@ -32,15 +32,11 @@ export class CreateAnimalInputDto {
   photoUrl?: string;
 
   @IsOptional()
-  @IsUUID('4', { message: 'ID фермы должен быть UUID' })
-  farmId?: string;
-
-  @IsOptional()
   @IsString()
   deviceId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   activeGeofenceId?: string;
 }
 
@@ -74,7 +70,7 @@ export class UpdateAnimalInputDto {
   deviceId?: string | null;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   activeGeofenceId?: string | null;
 }
 

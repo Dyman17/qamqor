@@ -14,28 +14,21 @@ import {
 } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
+import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/devices')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard)
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
-
-  private resolveFarmId(user: AuthenticatedUser, headerFarmId?: string): string {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-    return farmId;
-  }
 
   @Get()
   async listDevices(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.listDevices(user.id, farmId);
   }
 
@@ -43,9 +36,8 @@ export class DevicesController {
   async getDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.getDeviceById(user.id, farmId, deviceId);
   }
 
@@ -53,9 +45,8 @@ export class DevicesController {
   async registerDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDeviceDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.registerDevice(user.id, farmId, dto);
   }
 
@@ -64,9 +55,8 @@ export class DevicesController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,
     @Body() dto: UpdateDeviceDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.updateDevice(user.id, farmId, deviceId, dto);
   }
 
@@ -74,9 +64,8 @@ export class DevicesController {
   async rotateSecret(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.rotateSecret(user.id, farmId, deviceId);
   }
 
@@ -86,9 +75,8 @@ export class DevicesController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,
     @Body() dto: TestSignalDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.queueTestSignal(user.id, farmId, deviceId, dto);
   }
 
@@ -97,9 +85,8 @@ export class DevicesController {
   async deleteDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.devicesService.deleteDevice(user.id, farmId, deviceId);
   }
 }

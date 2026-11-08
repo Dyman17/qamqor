@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { assertSameFarm } from '../farms/same-farm';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeofenceStatus } from '@qamqor/shared';
 import { VirtualFenceZone } from '@qamqor/contracts';
@@ -14,15 +15,6 @@ export class GeofenceService {
   private readonly logger = new Logger(GeofenceService.name);
 
   constructor(private readonly prisma: PrismaService) {}
-
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-  }
 
   // ==========================================
   // SPATIAL COMPUTATIONS
@@ -220,7 +212,6 @@ export class GeofenceService {
   // ==========================================
 
   async listGeofences(userId: string, farmId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const geofences = await this.prisma.geofence.findMany({
       where: { farmId },
@@ -239,7 +230,6 @@ export class GeofenceService {
   }
 
   async getGeofenceById(userId: string, farmId: string, geofenceId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },
@@ -266,7 +256,7 @@ export class GeofenceService {
   }
 
   async createGeofence(userId: string, farmId: string, dto: CreateGeofenceInputDto) {
-    await this.verifyFarmAccess(userId, farmId);
+    await assertSameFarm(this.prisma, farmId, { animalIds: dto.animalIds });
 
     const geofence = await this.prisma.geofence.create({
       data: {
@@ -294,7 +284,6 @@ export class GeofenceService {
     geofenceId: string,
     dto: UpdateGeofenceInputDto,
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },
@@ -303,6 +292,7 @@ export class GeofenceService {
     if (!geofence) {
       throw new NotFoundException('Геозона не найдена');
     }
+    await assertSameFarm(this.prisma, farmId, { animalIds: dto.animalIds });
 
     const updated = await this.prisma.geofence.update({
       where: { id: geofenceId },
@@ -333,7 +323,6 @@ export class GeofenceService {
   }
 
   async deleteGeofence(userId: string, farmId: string, geofenceId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const geofence = await this.prisma.geofence.findFirst({
       where: { id: geofenceId, farmId },

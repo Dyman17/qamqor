@@ -13,15 +13,6 @@ export class AlertsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-  }
-
   // ==========================================
   // INGESTION EVENT HANDLERS
   // ==========================================
@@ -154,7 +145,6 @@ export class AlertsService {
       animalId?: string;
     },
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const where: any = { farmId };
 
@@ -184,7 +174,6 @@ export class AlertsService {
     alertId: string,
     status: AlertStatus,
   ) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const alert = await this.prisma.alert.findFirst({
       where: { id: alertId, farmId },
@@ -204,7 +193,6 @@ export class AlertsService {
   }
 
   async getAlertStats(userId: string, farmId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const [activeTotal, activeBreaches, lowBatteries] = await Promise.all([
       this.prisma.alert.count({

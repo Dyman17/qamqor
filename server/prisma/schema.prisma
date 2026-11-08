@@ -129,6 +129,7 @@ model Device {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@index([farmId])
   @@map("devices")
 }
 
@@ -137,7 +138,7 @@ model Animal {
   farmId            String
   farm              Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
   name              String           // e.g. "Қарагер"
-  tagNumber         String           @unique // Ear tag number
+  tagNumber         String           // Ear tag number (unique within a farm)
   species           AnimalSpecies
   gender            AnimalGender     @default(UNKNOWN)
   breed             String?
@@ -162,6 +163,8 @@ model Animal {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@unique([farmId, tagNumber])
+  @@index([farmId])
   @@map("animals")
 }
 
@@ -180,6 +183,7 @@ model Geofence {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([farmId])
   @@map("geofences")
 }
 

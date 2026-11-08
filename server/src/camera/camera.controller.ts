@@ -20,6 +20,8 @@ import { CameraService } from './camera.service';
 import { UploadCameraSnapshotDto, RequestPhotoCommandDto } from './dto/camera.dto';
 import { DeviceAuthGuard } from '../devices/device-auth.guard';
 import { CurrentDevice } from '../devices/current-device.decorator';
+import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
@@ -70,17 +72,12 @@ export class CameraController {
    * 3. Farmer / Web Endpoint: Request immediate photo from ESP32-CAM
    */
   @Post('request-photo')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, FarmAccessGuard)
   async requestPhoto(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId: string | undefined,
+    @FarmId() farmId: string,
     @Body() dto: RequestPhotoCommandDto,
   ) {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-
     return this.cameraService.requestPhoto(user.id, farmId, dto.deviceId, dto.resolution);
   }
 
@@ -88,18 +85,13 @@ export class CameraController {
    * 4. Farmer / Web Endpoint: Gallery of snapshots
    */
   @Get('snapshots')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, FarmAccessGuard)
   async listSnapshots(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId: string | undefined,
+    @FarmId() farmId: string,
     @Query('animalId') animalId?: string,
     @Query('limit') limit?: string,
   ) {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-
     return this.cameraService.listSnapshots(
       farmId,
       animalId,

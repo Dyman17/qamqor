@@ -123,7 +123,7 @@ async function main() {
   for (const item of initialAnimals) {
     // Upsert animal
     const animal = await prisma.animal.upsert({
-      where: { tagNumber: item.tagNumber },
+      where: { farmId_tagNumber: { farmId: farm.id, tagNumber: item.tagNumber } },
       update: {
         activeGeofenceId: geofence.id,
       },

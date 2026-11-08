@@ -8,21 +8,15 @@ import {
 } from '@nestjs/common';
 import { MockService } from './mock.service';
 import { InjectTelemetryDto, SimulateActionDto, InjectPhotoDto } from './dto/mock.dto';
+import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/mock')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard)
 export class MockController {
   constructor(private readonly mockService: MockService) {}
-
-  private resolveFarmId(user: AuthenticatedUser, headerFarmId?: string): string {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-    return farmId;
-  }
 
   /**
    * 1. Ввести координаты вручную с сайта (вместо физического ESP)
@@ -31,9 +25,8 @@ export class MockController {
   async injectTelemetry(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: InjectTelemetryDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.mockService.injectManualTelemetry(user.id, farmId, dto);
   }
 
@@ -44,9 +37,8 @@ export class MockController {
   async simulateBreach(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: SimulateActionDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.mockService.simulateBreach(user.id, farmId, dto.animalId);
   }
 
@@ -57,9 +49,8 @@ export class MockController {
   async simulateReturn(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: SimulateActionDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.mockService.simulateReturn(user.id, farmId, dto.animalId);
   }
 
@@ -70,9 +61,8 @@ export class MockController {
   async injectPhoto(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: InjectPhotoDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.mockService.injectPhoto(user.id, farmId, dto);
   }
 }

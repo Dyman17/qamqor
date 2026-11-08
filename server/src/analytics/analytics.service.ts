@@ -9,17 +9,7 @@ import { AlertStatus, DeviceStatus } from '@prisma/client';
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-  }
-
   async getOverview(userId: string, farmId: string) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const [
       totalAnimals,

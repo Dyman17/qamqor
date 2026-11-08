@@ -10,33 +10,26 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
+import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 import { AlertStatus, AlertType, AlertSeverity } from '@qamqor/shared';
 
 @Controller('api/v1/alerts')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard)
 export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
-
-  private resolveFarmId(user: AuthenticatedUser, headerFarmId?: string): string {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-    return farmId;
-  }
 
   @Get()
   async listAlerts(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
     @Query('status') status?: AlertStatus,
     @Query('type') type?: AlertType,
     @Query('severity') severity?: AlertSeverity,
     @Query('animalId') animalId?: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.alertsService.listAlerts(user.id, farmId, {
       status,
       type,
@@ -48,9 +41,8 @@ export class AlertsController {
   @Get('stats')
   async getAlertStats(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.alertsService.getAlertStats(user.id, farmId);
   }
 
@@ -59,9 +51,8 @@ export class AlertsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') alertId: string,
     @Body('status') status: AlertStatus,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     if (!status || !Object.values(AlertStatus).includes(status)) {
       throw new BadRequestException('Некорректный статус оповещения');
     }

@@ -12,28 +12,21 @@ import {
 } from '@nestjs/common';
 import { GeofenceService } from './geofence.service';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
+import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/geofences')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard)
 export class GeofenceController {
   constructor(private readonly geofenceService: GeofenceService) {}
-
-  private resolveFarmId(user: AuthenticatedUser, headerFarmId?: string): string {
-    const farmId = headerFarmId || user.farmId;
-    if (!farmId) {
-      throw new BadRequestException('ID хозяйства не указан');
-    }
-    return farmId;
-  }
 
   @Get()
   async listGeofences(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.geofenceService.listGeofences(user.id, farmId);
   }
 
@@ -41,9 +34,8 @@ export class GeofenceController {
   async getGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.geofenceService.getGeofenceById(user.id, farmId, geofenceId);
   }
 
@@ -51,9 +43,8 @@ export class GeofenceController {
   async createGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateGeofenceInputDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.geofenceService.createGeofence(user.id, farmId, dto);
   }
 
@@ -62,9 +53,8 @@ export class GeofenceController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,
     @Body() dto: UpdateGeofenceInputDto,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.geofenceService.updateGeofence(user.id, farmId, geofenceId, dto);
   }
 
@@ -72,9 +62,8 @@ export class GeofenceController {
   async deleteGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,
-    @Headers('x-farm-id') headerFarmId?: string,
+    @FarmId() farmId: string,
   ) {
-    const farmId = this.resolveFarmId(user, headerFarmId);
     return this.geofenceService.deleteGeofence(user.id, farmId, geofenceId);
   }
 }

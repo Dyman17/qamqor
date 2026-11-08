@@ -54,15 +54,6 @@ export function toCollarDto(d: any): CollarDto {
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async verifyFarmAccess(userId: string, farmId: string) {
-    const membership = await this.prisma.farmMember.findUnique({
-      where: { userId_farmId: { userId, farmId } },
-    });
-    if (!membership) {
-      throw new ForbiddenException('У вас нет доступа к этому хозяйству');
-    }
-  }
-
   private async findOwned(farmId: string, deviceId: string) {
     const device = await this.prisma.device.findFirst({ where: { deviceId, farmId } });
     if (!device) throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
@@ -70,7 +61,6 @@ export class DevicesService {
   }
 
   async listDevices(userId: string, farmId: string) {
-    await this.verifyFarmAccess(userId, farmId);
     const rows = await this.prisma.device.findMany({
       where: { farmId },
       select: COLLAR_SELECT,
@@ -80,7 +70,6 @@ export class DevicesService {
   }
 
   async getDeviceById(userId: string, farmId: string, deviceId: string) {
-    await this.verifyFarmAccess(userId, farmId);
     const device = await this.prisma.device.findFirst({
       where: { deviceId, farmId },
       select: COLLAR_SELECT,
@@ -90,7 +79,6 @@ export class DevicesService {
   }
 
   async registerDevice(userId: string, farmId: string, dto: RegisterDeviceDto) {
-    await this.verifyFarmAccess(userId, farmId);
 
     const deviceId = dto.deviceId.trim();
     // Same answer whichever farm owns the id: do not reveal ownership.
@@ -119,7 +107,6 @@ export class DevicesService {
   }
 
   async rotateSecret(userId: string, farmId: string, deviceId: string) {
-    await this.verifyFarmAccess(userId, farmId);
     const device = await this.findOwned(farmId, deviceId);
     const deviceSecret = generateDeviceSecret();
     await this.prisma.device.update({
@@ -130,12 +117,15 @@ export class DevicesService {
   }
 
   async updateDevice(userId: string, farmId: string, deviceId: string, dto: UpdateDeviceDto) {
-    await this.verifyFarmAccess(userId, farmId);
     const device = await this.findOwned(farmId, deviceId);
 
     if (dto.animalId) {
       const animal = await this.prisma.animal.findFirst({ where: { id: dto.animalId, farmId } });
       if (!animal) throw new NotFoundException('Животное не найдено');
+      const taken = await this.prisma.device.findFirst({
+        where: { animalId: dto.animalId, NOT: { id: device.id } },
+      });
+      if (taken) throw new ConflictException('У животного уже есть ошейник');
     }
 
     const updated = await this.prisma.device.update({
@@ -150,13 +140,11 @@ export class DevicesService {
   }
 
   async deleteDevice(userId: string, farmId: string, deviceId: string) {
-    await this.verifyFarmAccess(userId, farmId);
     const device = await this.findOwned(farmId, deviceId);
     await this.prisma.device.delete({ where: { id: device.id } });
   }
 
   async queueTestSignal(userId: string, farmId: string, deviceId: string, dto: TestSignalDto) {
-    await this.verifyFarmAccess(userId, farmId);
     const device = await this.findOwned(farmId, deviceId);
     const command = await this.prisma.deviceCommand.create({
       data: {
