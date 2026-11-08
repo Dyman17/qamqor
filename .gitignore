@@ -32,3 +32,6 @@ postgres_data/
 .DS_Store
 Thumbs.db
 
+
+# Runtime uploads
+server/uploads/
