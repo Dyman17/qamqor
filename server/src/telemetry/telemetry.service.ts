@@ -13,6 +13,8 @@ import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
 import { DeviceStatus } from '@qamqor/shared';
 import { DEVICE_AUTH_ERROR } from '../devices/device-auth.guard';
 
+type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+
 @Injectable()
 export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
@@ -24,9 +26,17 @@ export class TelemetryService {
     private readonly configService: ConfigService,
   ) {}
 
+  private num(key: string, def: number): number {
+    const n = parseInt(this.configService.get<string>(key, String(def)), 10);
+    return Number.isInteger(n) && n > 0 ? n : def;
+  }
+
   /**
    * Handles a ping from an already authenticated device (see DeviceAuthGuard).
    * Devices are never created here.
+   *
+   * Fail-closed: without a usable boundary, or with an unreliable fix, the zone is UNKNOWN,
+   * every actuator is off and the position is still stored. The impulse is never produced.
    */
   async processDeviceTelemetry(
     device: any,
@@ -36,114 +46,94 @@ export class TelemetryService {
       throw new UnauthorizedException(DEVICE_AUTH_ERROR);
     }
 
-    // 2. Anti-replay and timestamp validation
+    // Anti-replay and timestamp window
     const pingTime = new Date(dto.timestamp);
     const now = new Date();
-    const diffMinutes = Math.abs((now.getTime() - pingTime.getTime()) / (1000 * 60));
-    if (Number.isNaN(pingTime.getTime()) || !(diffMinutes <= 1440 * 7)) {
-      // Reject coordinates older than 7 days or far in future
-      throw new BadRequestException('Telemetry timestamp is out of acceptable time window.');
+    const maxAgeMs = this.num('TELEMETRY_MAX_AGE_SEC', 600) * 1000;
+    const maxFutureMs = this.num('TELEMETRY_MAX_FUTURE_SEC', 120) * 1000;
+    const skew = pingTime.getTime() - now.getTime(); // negative = in the past
+    if (Number.isNaN(skew) || skew < -maxAgeMs || skew > maxFutureMs) {
+      throw new BadRequestException('Telemetry timestamp is invalid or outside the acceptable time window.');
     }
 
-    // 3. Geofencing check & 4-Zone Livestock Steering
-    let isOutside = false;
-    let zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' = 'GREEN';
-    let distanceToBorderMeters = 9999;
+    let isOutside: boolean = device.animal?.isOutsideGeofence ?? false;
+    let zone: ZoneName = 'UNKNOWN';
+    let inFence: boolean | null = null;
+    let distanceToBorderMeters: number | null = null;
     let toneFrequencyHz = 0;
     let sound = false;
     let vibrate = false;
+    let unknownReason: string | null = 'NO_BOUNDARY';
 
-    let nextInterval = parseInt(
-      this.configService.get<string>('NORMAL_PING_INTERVAL_SEC', '300'),
-      10,
-    );
-    const emergencyInterval = parseInt(
-      this.configService.get<string>('EMERGENCY_PING_INTERVAL_SEC', '60'),
-      10,
-    );
+    let nextInterval = this.num('NORMAL_PING_INTERVAL_SEC', 300);
+    const emergencyInterval = this.num('EMERGENCY_PING_INTERVAL_SEC', 60);
 
-    if (device.animal && device.animal.activeGeofence) {
+    const animal = device.animal;
+    const polygon = animal?.activeGeofence?.polygonJson ?? null;
+
+    if (animal) {
       const evaluation = this.geofenceService.evaluateLocation(
         {
           latitude: dto.latitude,
           longitude: dto.longitude,
           accuracy: dto.accuracy,
+          speed: dto.speedKmh,
         },
-        device.animal.activeGeofence.polygonJson,
+        polygon,
       );
+      zone = evaluation.zone;
+      unknownReason = evaluation.reason;
+      distanceToBorderMeters = evaluation.distanceMeters;
 
-      // Only trigger if accuracy is reliable (prevent false positives)
-      if (evaluation.isReliable) {
-        zone = evaluation.zone;
-        distanceToBorderMeters = evaluation.distanceMeters;
+      if (zone !== 'UNKNOWN') {
         toneFrequencyHz = evaluation.toneFrequencyHz;
-        isOutside = (zone === 'RED' || zone === 'ESCAPE');
+        inFence = !(zone === 'RED' || zone === 'ESCAPE');
+        isOutside = !inFence;
 
-        // GREEN: none; YELLOW: sound; ORANGE: sound+vibration; RED: sound+vibration; ESCAPE: none (anti-panic).
-        // The impulse is never produced by the server.
-        switch (zone) {
-          case 'GREEN':
-            sound = false;
-            vibrate = false;
-            break;
-          case 'YELLOW':
-            sound = true;
-            vibrate = false;
-            break;
-          case 'ORANGE':
-            sound = true;
-            vibrate = true;
-            break;
-          case 'RED':
-            sound = true;
-            vibrate = true;
-            break;
-          case 'ESCAPE':
-            sound = false;
-            vibrate = false;
-            break;
+        // GREEN: none; YELLOW: sound; ORANGE/RED: sound+vibration; ESCAPE: none (anti-panic).
+        sound = zone === 'YELLOW' || zone === 'ORANGE' || zone === 'RED';
+        vibrate = zone === 'ORANGE' || zone === 'RED';
+
+        if (device.farmId) {
+          await this.alertsService.resolveGpsLost(animal.id);
         }
 
         if (isOutside) {
           // Скот сбежал — сокращаем интервал пинга для частого трекинга
           nextInterval = emergencyInterval;
-
           if (device.farmId) {
             await this.alertsService.triggerGeofenceBreach({
               farmId: device.farmId,
-              animalId: device.animal.id,
-              animalName: device.animal.name,
+              animalId: animal.id,
+              animalName: animal.name,
               deviceId: device.deviceId,
               latitude: dto.latitude,
               longitude: dto.longitude,
             });
           }
-        } else if (device.animal.isOutsideGeofence) {
+        } else if (animal.isOutsideGeofence && device.farmId) {
           // Животное вернулось назад в зону
-          if (device.farmId) {
-            await this.alertsService.resolveGeofenceBreach({
-              farmId: device.farmId,
-              animalId: device.animal.id,
-              animalName: device.animal.name,
-              deviceId: device.deviceId,
-              latitude: dto.latitude,
-              longitude: dto.longitude,
-            });
-          }
+          await this.alertsService.resolveGeofenceBreach({
+            farmId: device.farmId,
+            animalId: animal.id,
+            animalName: animal.name,
+            deviceId: device.deviceId,
+            latitude: dto.latitude,
+            longitude: dto.longitude,
+          });
         }
-      } else {
-        // Retain prior status if accuracy is low
-        isOutside = device.animal.isOutsideGeofence;
-        zone = isOutside ? 'RED' : 'GREEN';
-        sound = isOutside;
-        vibrate = isOutside;
-        distanceToBorderMeters = evaluation.distanceMeters;
-        toneFrequencyHz = isOutside ? 2400 : 0;
+      } else if (evaluation.reason === 'LOW_ACCURACY' && device.farmId) {
+        await this.alertsService.triggerGpsLost({
+          farmId: device.farmId,
+          animalId: animal.id,
+          animalName: animal.name,
+          deviceId: device.deviceId,
+        });
       }
 
-      // Update animal state
+      // The last known position is stored on every valid ping, whatever the zone.
       await this.prisma.animal.update({
-        where: { id: device.animal.id },
+        where: { id: animal.id },
         data: {
           lastLatitude: dto.latitude,
           lastLongitude: dto.longitude,
@@ -154,7 +144,7 @@ export class TelemetryService {
       });
     }
 
-    // 4. Update Device Status
+    // Device status: last contact is the server receive time.
     await this.prisma.device.update({
       where: { id: device.id },
       data: {
@@ -164,11 +154,11 @@ export class TelemetryService {
       },
     });
 
-    // 6. Record Telemetry Point
+    // Record Telemetry Point
     await this.prisma.telemetry.create({
       data: {
         deviceId: device.deviceId,
-        animalId: device.animal?.id,
+        animalId: animal?.id,
         latitude: dto.latitude,
         longitude: dto.longitude,
         accuracy: dto.accuracy,
@@ -195,6 +185,13 @@ export class TelemetryService {
       case 'ESCAPE':
         warningMessage = `Zone ESCAPE (${distanceToBorderMeters} m outside): signals disabled to avoid panic.`;
         break;
+      default:
+        warningMessage =
+          unknownReason === 'LOW_ACCURACY'
+            ? 'Zone UNKNOWN: GPS fix is not reliable. No signals.'
+            : unknownReason === 'INVALID_BOUNDARY'
+              ? 'Zone UNKNOWN: the boundary is invalid. No signals.'
+              : 'Zone UNKNOWN: no boundary is set for this animal. No signals.';
     }
 
     // Deliver at most one queued test signal per ping (once only).
@@ -219,7 +216,7 @@ export class TelemetryService {
       nextInterval,
       configVersion: 1,
       command,
-      inFence: !isOutside,
+      inFence,
       zone,
       distanceToBorderMeters,
       toneFrequencyHz,

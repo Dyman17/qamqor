@@ -1,13 +1,27 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max } from 'class-validator';
+import {
+  IsInt,
+  IsISO8601,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { DeviceTelemetryRequestDto } from '@qamqor/contracts';
 
 export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[A-Za-z0-9_-]{3,40}$/, { message: 'deviceId: 3-40 символов (латиница, цифры, _ и -)' })
   deviceId!: string;
 
-  @IsString()
-  @IsNotEmpty()
+  /** ISO 8601 with a time zone designator; the acceptance window is checked by the service. */
+  @IsISO8601({ strict: true, strictSeparator: true })
+  @Matches(/(Z|[+-]\d{2}:?\d{2})$/, { message: 'timestamp: нужен часовой пояс (Z или +hh:mm)' })
+  @MaxLength(40)
   timestamp!: string;
 
   @IsNumber()
@@ -22,10 +36,31 @@ export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
 
   @IsNumber()
   @Min(0)
+  @Max(100000)
   accuracy!: number;
+
+  /** RSSI, dBm. */
+  @IsOptional()
+  @IsNumber()
+  @Min(-130)
+  @Max(0)
+  signal?: number;
 
   @IsOptional()
   @IsNumber()
-  signal?: number;
-}
+  @Min(0)
+  @Max(300)
+  speedKmh?: number;
 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(99)
+  hdop?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(64)
+  satellites?: number;
+}

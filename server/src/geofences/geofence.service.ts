@@ -7,7 +7,7 @@ import {
 import { assertSameFarm } from '../farms/same-farm';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeofenceStatus } from '@qamqor/shared';
-import { VirtualFenceZone } from '@qamqor/contracts';
+import { exteriorRing, polygonProblem } from './polygon';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
 
 @Injectable()
@@ -23,15 +23,12 @@ export class GeofenceService {
   /**
    * Ray-casting algorithm to determine if a point (lat, lng) is inside a GeoJSON Polygon
    * coordinates: [[[lng, lat], [lng, lat], ...]]
+   * Fail-closed: a missing or malformed boundary is NEVER "inside" (callers must treat it as UNKNOWN).
    */
   isPointInPolygon(point: { latitude: number; longitude: number }, polygonGeoJson: any): boolean {
-    if (!polygonGeoJson || !polygonGeoJson.coordinates || !Array.isArray(polygonGeoJson.coordinates)) {
-      return true; // No boundary configured, assume inside safe zone
-    }
-
-    const ring = polygonGeoJson.coordinates[0]; // Exterior ring
-    if (!ring || ring.length < 3) {
-      return true;
+    const ring = exteriorRing(polygonGeoJson);
+    if (!ring || ring.length < 4) {
+      return false;
     }
 
     const x = point.longitude;
@@ -137,8 +134,11 @@ export class GeofenceService {
    * - Green Zone (>20m inside): safe, all triggers off.
    * - Yellow Zone (5m to 20m inside): warning audio siren (scaled frequency: 800 - 1600 Hz).
    * - Orange Zone (0m to 5m inside): pre-border warning (audio siren 1600 - 2400 Hz + vibration).
-   * - Red Zone (0m to 100m outside): active breach (audio 2400 Hz + vibration + shock).
-   * - Escape / Anti-Panic (speed > 15 km/h or >100m outside): disarm shock to prevent stampede distress.
+   * - Red Zone (0m to 100m outside): active breach (audio 2400 Hz + vibration).
+   * - Escape / Anti-Panic (speed > 15 km/h or >100m outside): signals disarmed to prevent stampede distress.
+   * - UNKNOWN (fail-closed): no boundary, malformed boundary or unreliable fix (> 35 m). Never GREEN,
+   *   never any signal; `reason` says why.
+   * The impulse is never produced by the server.
    */
   evaluateLocation(
     point: { latitude: number; longitude: number; accuracy: number; speed?: number },
@@ -146,26 +146,31 @@ export class GeofenceService {
   ): {
     status: GeofenceStatus;
     isReliable: boolean;
-    distanceMeters: number;
-    zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
+    distanceMeters: number | null;
+    zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
     toneFrequencyHz: number;
+    reason: null | 'NO_BOUNDARY' | 'INVALID_BOUNDARY' | 'LOW_ACCURACY';
   } {
     // If accuracy is poor (> 35 meters), mark as unreliable to prevent false breach alerts
     const isReliable = point.accuracy <= 35;
 
-    if (!polygonGeoJson) {
-      return {
-        status: GeofenceStatus.INSIDE,
-        isReliable,
-        distanceMeters: 9999,
-        zone: 'GREEN',
-        toneFrequencyHz: 0,
-      };
-    }
+    const unknown = (reason: 'NO_BOUNDARY' | 'INVALID_BOUNDARY' | 'LOW_ACCURACY') => ({
+      status: GeofenceStatus.UNKNOWN,
+      isReliable,
+      distanceMeters: null,
+      zone: 'UNKNOWN' as const,
+      toneFrequencyHz: 0,
+      reason,
+    });
+
+    if (!polygonGeoJson) return unknown('NO_BOUNDARY');
+    if (polygonProblem(polygonGeoJson) !== null) return unknown('INVALID_BOUNDARY');
+    if (!isReliable) return unknown('LOW_ACCURACY');
 
     const inside = this.isPointInPolygon(point, polygonGeoJson);
     const rawDistance = this.distanceToPolygonEdgeMeters(point, polygonGeoJson);
-    const distanceMeters = rawDistance === Infinity ? 9999 : Math.round(rawDistance * 10) / 10;
+    if (!Number.isFinite(rawDistance)) return unknown('INVALID_BOUNDARY');
+    const distanceMeters = Math.round(rawDistance * 10) / 10;
 
     let zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE';
     let toneFrequencyHz = 0;
@@ -204,6 +209,7 @@ export class GeofenceService {
       distanceMeters,
       zone,
       toneFrequencyHz,
+      reason: null,
     };
   }
 

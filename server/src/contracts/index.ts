@@ -24,95 +24,8 @@ export enum Zone {
 export const VirtualFenceZone = Zone;
 export type VirtualFenceZone = Zone;
 
-export type OperatingMode = 'ACTIVE' | 'TRAINING' | 'SOUND_ONLY';
-
-export interface ShockSpec {
-  voltageEstimateV: number;
-  energyJoules: number;
-  maxPulseDurationMs: number;
-  minCooldownMs: number;
-  maxShocksInWindow: number;
-  windowSeconds: number;
-}
-
-export const DEFAULT_SHOCK_SPEC: ShockSpec = {
-  voltageEstimateV: 7000,
-  energyJoules: 0.1,
-  maxPulseDurationMs: 150,
-  minCooldownMs: 6000,
-  maxShocksInWindow: 3,
-  windowSeconds: 600,
-};
-
-export interface FixQuality {
-  hdop: number;
-  satellites: number;
-  accuracyM: number;
-  ageMs: number;
-}
-
-export interface ActuatorState {
-  sound: boolean;
-  vibrate: boolean;
-  shock: boolean;
-  shockDurationMs: number;
-}
-
-export interface ShockBudget {
-  used: number;
-  limit: number;
-  windowSec: number;
-}
-
-export function toneLevelFromDistance(distanceMeters: number): number {
-  if (distanceMeters > 20) return 0;
-  if (distanceMeters > 17) return 1;
-  if (distanceMeters > 14) return 2;
-  if (distanceMeters > 11) return 3;
-  if (distanceMeters > 8) return 4;
-  return 5;
-}
-
-export function toneFreqHz(toneLevel: number): number {
-  if (toneLevel <= 0) return 0;
-  return 800 + (Math.min(5, Math.max(1, toneLevel)) - 1) * 400;
-}
-
-export interface DeviceStatusV2 {
-  deviceId: string;
-  contractVersion: number;
-  computedAt: number;
-  source: 'DEVICE' | 'SERVER';
-  zone: Zone;
-  distanceToBorderMeters: number | null;
-  toneLevel: number | null;
-  toneFreqHz: number | null;
-  actuators: ActuatorState;
-  fixQuality: FixQuality;
-  blockReason: string | null;
-  mode: OperatingMode;
-  shockBudget: ShockBudget;
-  configVersion: number;
-  firmwareVersion: string;
-  speedKmh: number | null;
-  signal: number | null;
-}
-
-export interface DeviceConfigV2 {
-  deviceId: string;
-  configVersion: number;
-  mode: OperatingMode;
-  shockSpec: ShockSpec;
-  geofence: {
-    id: string;
-    polygon: {
-      type: 'Polygon';
-      coordinates: number[][][];
-    };
-  };
-  gates: any[];
-  hmacSignature: string;
-}
+// The impulse (shock) is not part of the API: it is never requested, returned or described here
+// until hardware and a veterinary opinion are approved.
 
 // ==========================================
 // 2. ESP32 DEVICE INGESTION CONTRACT
@@ -121,6 +34,7 @@ export interface DeviceConfigV2 {
 
 export interface DeviceTelemetryRequestDto {
   deviceId: string;
+  /** ISO 8601; accepted when not older than 10 min and not later than +2 min (configurable). */
   timestamp: string;
   latitude: number;
   longitude: number;
@@ -137,15 +51,16 @@ export interface DeviceTelemetryResponseDto {
   nextInterval: number;
   configVersion: number;
   command?: { id: string; type: 'TEST_SOUND' | 'TEST_VIBRATION' };
-  inFence: boolean;
-  zone?: Zone | 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
-  distanceToBorderMeters?: number;
-  toneFrequencyHz?: number;
-  toneLevel?: number;
+  /** null = boundary not set / invalid or unreliable fix (zone UNKNOWN). */
+  inFence: boolean | null;
+  zone: Zone | 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+  distanceToBorderMeters: number | null;
+  toneFrequencyHz: number;
   vibrate: boolean;
   vibrateDurationMs: number;
   sound: boolean;
-  blockReason?: string | null;
+  /** Set when a daily signal limit suppressed a signal. */
+  suppressedBy?: 'SIGNAL_LIMIT' | null;
   warningMessage?: string;
 }
 

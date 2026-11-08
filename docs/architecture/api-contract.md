@@ -118,7 +118,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 |---|---|---|---|
 | `GET /animals` | W | `?search&status&penId&species&cursor` | `AnimalDto[]` |
 | `GET /animals/:id` | W | — | `AnimalDto` |
-| `GET /animals/:id/track` | W | `?from&to&limit(≤500)` | `{animal, points: [{lat,lng,accuracyM,at,isOutside}]}` |
+| `GET /animals/:id/track` | W | `?from&to` (ISO 8601) `&limit` (целое 1–500, по умолчанию 100; иное -> 400); возвращает последние `limit` точек по возрастанию времени | `{animal, points: [{lat,lng,accuracyM,at,isOutside}]}` |
 | `GET /animals/:id/events` | W | `?limit` | `AlertDto[]` и счётчики сигналов за сутки (см. ниже) |
 | `POST /animals` | W | `{name, tag, species, gender?, breed?, birthDate?, penId?, collarId?}` | `AnimalDto`; `tag` уникален в пределах фермы |
 | `PATCH /animals/:id` | W | любое из полей создания | `AnimalDto`; `penId` меняет только B |
@@ -174,7 +174,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 |---|---|---|
 | `GET /analytics/overview` | W | счётчики без `lowBatteryDevices` |
 | `GET /health` (вне префикса) | — | `{status, timestamp}` |
-| `GET /` | — | убирается ссылка `dashboard` (URL не проверен) |
+| `GET /` | — | `{status, service, version, telemetryEndpoint}`; ссылка `dashboard` удалена (URL не проверен) |
 
 ### Камера (если владелец оставит модуль, см. план)
 
@@ -188,7 +188,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 
 | Метод и путь | Запрос | Ответ |
 |---|---|---|
-| `POST /device/telemetry` | `{deviceId, timestamp(ISO, не старше 10 мин и не позже +2 мин), latitude, longitude, accuracy, signal?, speedKmh?, hdop?, satellites?}` — **без `battery`** | см. ниже |
+| `POST /device/telemetry` | `{deviceId, timestamp(ISO, не старше 10 мин и не позже +2 мин), latitude, longitude, accuracy, signal?(−130…0 dBm), speedKmh?(0–300), hdop?(0–99), satellites?(0–64)}` — **без `battery`**; `timestamp` — ISO 8601 с часовым поясом, окно задаётся `TELEMETRY_MAX_AGE_SEC` (600) и `TELEMETRY_MAX_FUTURE_SEC` (120) | см. ниже |
 | `GET /camera/commands?deviceId` | — | `{hasCommand, commandId?, command?, payload?}` |
 | `POST /camera/upload` | multipart `image` (≤ 1 МБ, JPEG/PNG по сигнатуре) | `{success, snapshotId}` |
 
@@ -204,7 +204,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
   command?: { id, type: 'TEST_SOUND' | 'TEST_VIBRATION' } }
 ```
 
-Поле `buzzer` (дубль `sound`) удаляется. Прошивки пока нет (`esp/` содержит только README), поэтому изменение не ломает существующий код. Ошибки: неизвестный `deviceId` и неверный секрет дают одинаковый `401`; неверный `timestamp` — `400`.
+Зона `UNKNOWN` (fail-closed): граница не задана или некорректна, либо точность GPS хуже 35 м; все исполнительные выключены, `inFence = null`, положение животного всё равно сохраняется; при плохой точности создаётся оповещение `GPS_LOST`. Поле `buzzer` (дубль `sound`) удаляется. Прошивки пока нет (`esp/` содержит только README), поэтому изменение не ломает существующий код. Ошибки: неизвестный `deviceId` и неверный секрет дают одинаковый `401`; неверный `timestamp` — `400`.
 
 **Удаляются** эндпоинты без авторизации: `POST /device/trigger`, `POST|GET /device/buzzer[/:id]`, `GET /device/status[/:id]`. Статус ошейника для людей отдаёт `GET /devices/:deviceId`.
 

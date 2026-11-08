@@ -2,7 +2,7 @@ import { securityHeaders } from '../src/config/security-headers';
 
 function run(isProd: boolean) {
   const headers: Record<string, string> = {};
-  const res: any = { setHeader: (k: string, v: string) => (headers[k] = v) };
+  const res: any = { setHeader: (k: string, v: string) => (headers[k] = v), removeHeader: jest.fn() };
   const next = jest.fn();
   securityHeaders(isProd)({} as any, res, next);
   return { headers, next };

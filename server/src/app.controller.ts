@@ -1,16 +1,15 @@
-import { Controller, Get, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get } from '@nestjs/common';
 
 @Controller()
 export class AppController {
   @Get()
-  getRoot(@Res() res: Response) {
-    return res.json({
+  getRoot() {
+    return {
       status: 'online',
       service: 'Qamqor Ingestion & REST API',
       version: '1.2.0',
       telemetryEndpoint: 'POST /api/v1/device/telemetry',
-    });
+    };
   }
 
   @Get('health')
@@ -18,4 +17,3 @@ export class AppController {
     return { status: 'healthy', timestamp: new Date().toISOString() };
   }
 }
-

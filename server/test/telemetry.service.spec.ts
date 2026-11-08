@@ -17,7 +17,7 @@ function setup(pendingCommand: any = null) {
       updateMany: jest.fn(async () => ({ count: 1 })),
     },
   };
-  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn() };
+  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn(), triggerGpsLost: jest.fn(), resolveGpsLost: jest.fn() };
   const config: any = { get: (_k: string, d: string) => d };
   const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config);
   const device: any = {

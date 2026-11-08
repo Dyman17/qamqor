@@ -12,7 +12,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AnimalsService } from './animals.service';
-import { CreateAnimalInputDto, UpdateAnimalInputDto } from './dto/animal.dto';
+import { CreateAnimalInputDto, UpdateAnimalInputDto, TrackQueryDto, TRACK_DEFAULT_LIMIT } from './dto/animal.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
 import { PermissionsGuard } from '../farms/permissions.guard';
 import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
@@ -56,14 +56,13 @@ export class AnimalsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') animalId: string,
     @FarmId() farmId: string,
-    @Query('limit') limit?: string,
+    @Query() query: TrackQueryDto,
   ) {
-    return this.animalsService.getAnimalTrack(
-      user.id,
-      farmId,
-      animalId,
-      limit ? parseInt(limit, 10) : 100,
-    );
+    return this.animalsService.getAnimalTrack(user.id, farmId, animalId, {
+      limit: query.limit ?? TRACK_DEFAULT_LIMIT,
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined,
+    });
   }
 
   @Post()

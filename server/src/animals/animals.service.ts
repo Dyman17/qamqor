@@ -96,13 +96,13 @@ export class AnimalsService {
     return animal;
   }
 
+  /** Latest `limit` points in the optional [from, to] range, oldest first. */
   async getAnimalTrack(
     userId: string,
     farmId: string,
     animalId: string,
-    limit: number = 100,
+    opts: { limit: number; from?: Date; to?: Date },
   ) {
-
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
       select: { id: true, name: true, tagNumber: true },
@@ -112,10 +112,15 @@ export class AnimalsService {
       throw new NotFoundException('Животное не найдено');
     }
 
-    const points = await this.prisma.telemetry.findMany({
-      where: { animalId },
-      orderBy: { timestamp: 'asc' },
-      take: limit,
+    const rows = await this.prisma.telemetry.findMany({
+      where: {
+        animalId,
+        ...((opts.from || opts.to) && {
+          timestamp: { ...(opts.from && { gte: opts.from }), ...(opts.to && { lte: opts.to }) },
+        }),
+      },
+      orderBy: { timestamp: 'desc' },
+      take: opts.limit,
       select: {
         latitude: true,
         longitude: true,
@@ -126,8 +131,14 @@ export class AnimalsService {
     });
 
     return {
-      animal,
-      points,
+      animal: { id: animal.id, name: animal.name, tag: animal.tagNumber },
+      points: rows.reverse().map((r) => ({
+        lat: r.latitude,
+        lng: r.longitude,
+        accuracyM: r.accuracy,
+        at: r.timestamp.toISOString(),
+        isOutside: r.isOutsideGeofence,
+      })),
     };
   }
 
