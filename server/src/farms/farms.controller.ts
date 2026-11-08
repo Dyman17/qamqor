@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FarmsService } from './farms.service';
 import { CreateFarmDto, UpdateFarmDto } from './dto/farm.dto';
@@ -42,21 +43,21 @@ export class FarmsController {
   }
 
   @Get(':id')
-  async getFarm(@CurrentUser() user: AuthenticatedUser, @Param('id') farmId: string) {
+  async getFarm(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) farmId: string) {
     return this.farmsService.getFarmById(user.id, farmId);
   }
 
   @Patch(':id')
   async updateFarm(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') farmId: string,
+    @Param('id', ParseUUIDPipe) farmId: string,
     @Body() dto: UpdateFarmDto,
   ) {
     return this.farmsService.updateFarm(user.id, farmId, dto);
   }
 
   @Get(':id/members')
-  async listMembers(@CurrentUser() user: AuthenticatedUser, @Param('id') farmId: string) {
+  async listMembers(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) farmId: string) {
     const members = await this.farmsService.listMembers(user.id, farmId);
     const invitations = await this.invitations.list(user.id, farmId);
     return { members, invitations };
@@ -65,7 +66,7 @@ export class FarmsController {
   @Post(':id/invitations')
   async createInvitation(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') farmId: string,
+    @Param('id', ParseUUIDPipe) farmId: string,
     @Body() dto: CreateInvitationDto,
   ) {
     return this.invitations.create(user.id, farmId, dto.email, dto.lang);
@@ -75,8 +76,8 @@ export class FarmsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeInvitation(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') farmId: string,
-    @Param('invId') invitationId: string,
+    @Param('id', ParseUUIDPipe) farmId: string,
+    @Param('invId', ParseUUIDPipe) invitationId: string,
   ) {
     await this.invitations.revoke(user.id, farmId, invitationId);
   }
@@ -85,21 +86,21 @@ export class FarmsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') farmId: string,
-    @Param('userId') targetUserId: string,
+    @Param('id', ParseUUIDPipe) farmId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
   ) {
     await this.farmsService.removeMember(user.id, farmId, targetUserId);
   }
 
   @Get(':id/signal-limits')
-  async getSignalLimits(@CurrentUser() user: AuthenticatedUser, @Param('id') farmId: string) {
+  async getSignalLimits(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) farmId: string) {
     return this.farmsService.getSignalLimits(user.id, farmId);
   }
 
   @Put(':id/signal-limits')
   async putSignalLimits(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') farmId: string,
+    @Param('id', ParseUUIDPipe) farmId: string,
     @Body() body: unknown,
   ) {
     return this.farmsService.putSignalLimits(user.id, farmId, parseSignalLimits(body));

@@ -242,6 +242,8 @@ model Alert {
   createdAt   DateTime      @default(now())
 
   @@index([farmId, status])
+  @@index([farmId, createdAt(sort: Desc)])
+  @@index([animalId, type, status])
   @@map("alerts")
 }
 

@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -77,7 +78,7 @@ export class CameraController {
   /** Image of a snapshot: JWT + membership of the snapshot's farm; the type comes from the stored file. */
   @Get('snapshots/:id/image')
   @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
-  async serveImage(@FarmId() farmId: string, @Param('id') id: string, @Res() res: Response) {
+  async serveImage(@FarmId() farmId: string, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const { filePath, mime } = await this.cameraService.getSnapshotFile(farmId, id);
     res.setHeader('Content-Type', mime);
     res.setHeader('X-Content-Type-Options', 'nosniff');

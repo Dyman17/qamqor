@@ -13,6 +13,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { DevicesService } from './devices.service';
+import { DeviceIdPipe } from './device-id.pipe';
 import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
 import { PermissionsGuard } from '../farms/permissions.guard';
@@ -37,7 +38,7 @@ export class DevicesController {
   @Get(':id')
   async getDevice(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') deviceId: string,
+    @Param('id', DeviceIdPipe) deviceId: string,
     @FarmId() farmId: string,
   ) {
     return this.devicesService.getDeviceById(user.id, farmId, deviceId);
@@ -55,7 +56,7 @@ export class DevicesController {
   @Patch(':id')
   async updateDevice(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') deviceId: string,
+    @Param('id', DeviceIdPipe) deviceId: string,
     @Body() dto: UpdateDeviceDto,
     @FarmId() farmId: string,
   ) {
@@ -65,7 +66,7 @@ export class DevicesController {
   @Post(':id/rotate-secret')
   async rotateSecret(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') deviceId: string,
+    @Param('id', DeviceIdPipe) deviceId: string,
     @FarmId() farmId: string,
   ) {
     return this.devicesService.rotateSecret(user.id, farmId, deviceId);
@@ -75,7 +76,7 @@ export class DevicesController {
   @HttpCode(HttpStatus.ACCEPTED)
   async testSignal(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') deviceId: string,
+    @Param('id', DeviceIdPipe) deviceId: string,
     @Body() dto: TestSignalDto,
     @FarmId() farmId: string,
   ) {
@@ -87,7 +88,7 @@ export class DevicesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteDevice(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') deviceId: string,
+    @Param('id', DeviceIdPipe) deviceId: string,
     @FarmId() farmId: string,
   ) {
     return this.devicesService.deleteDevice(user.id, farmId, deviceId);

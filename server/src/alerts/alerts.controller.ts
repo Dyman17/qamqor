@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AlertsService } from './alerts.service';
@@ -51,7 +52,7 @@ export class AlertsController {
   @Patch(':id/status')
   async updateStatus(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') alertId: string,
+    @Param('id', ParseUUIDPipe) alertId: string,
     @Body() dto: UpdateAlertStatusDto,
     @FarmId() farmId: string,
   ) {

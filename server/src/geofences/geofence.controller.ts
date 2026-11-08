@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { GeofenceService } from './geofence.service';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
@@ -35,7 +36,7 @@ export class GeofenceController {
   @Get(':id')
   async getGeofence(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') geofenceId: string,
+    @Param('id', ParseUUIDPipe) geofenceId: string,
     @FarmId() farmId: string,
   ) {
     return this.geofenceService.getGeofenceById(user.id, farmId, geofenceId);
@@ -55,7 +56,7 @@ export class GeofenceController {
   @RequireBoundaryEdit()
   async updateGeofence(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') geofenceId: string,
+    @Param('id', ParseUUIDPipe) geofenceId: string,
     @Body() dto: UpdateGeofenceInputDto,
     @FarmId() farmId: string,
   ) {
@@ -67,7 +68,7 @@ export class GeofenceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteGeofence(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') geofenceId: string,
+    @Param('id', ParseUUIDPipe) geofenceId: string,
     @FarmId() farmId: string,
   ) {
     await this.geofenceService.deleteGeofence(user.id, farmId, geofenceId);

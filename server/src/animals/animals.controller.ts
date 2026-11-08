@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AnimalsService } from './animals.service';
@@ -63,7 +64,7 @@ export class AnimalsController {
   @Get(':id')
   async getAnimal(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @FarmId() farmId: string,
   ) {
     return this.animalsService.getAnimalById(user.id, farmId, animalId);
@@ -71,7 +72,7 @@ export class AnimalsController {
 
   /** Signals delivered to the animal today (farm time zone) against the daily limits. */
   @Get(':id/signals')
-  async getAnimalSignals(@Param('id') animalId: string, @FarmId() farmId: string) {
+  async getAnimalSignals(@Param('id', ParseUUIDPipe) animalId: string, @FarmId() farmId: string) {
     await this.animalsService.ensureInFarm(farmId, animalId); // 404 for foreign animals
     return this.signalsService.daySummary(farmId, animalId);
   }
@@ -79,7 +80,7 @@ export class AnimalsController {
   /** Recent alerts of the animal plus today's signal counters. */
   @Get(':id/events')
   async getAnimalEvents(
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @FarmId() farmId: string,
     @Query() query: EventsQueryDto,
   ) {
@@ -91,7 +92,7 @@ export class AnimalsController {
   @Get(':id/track')
   async getAnimalTrack(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @FarmId() farmId: string,
     @Query() query: TrackQueryDto,
   ) {
@@ -116,7 +117,7 @@ export class AnimalsController {
   @HttpCode(HttpStatus.OK)
   async assignCollar(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @Body() dto: AssignCollarDto,
     @FarmId() farmId: string,
   ) {
@@ -127,7 +128,7 @@ export class AnimalsController {
   @HttpCode(HttpStatus.OK)
   async unassignCollar(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @FarmId() farmId: string,
   ) {
     return this.animalsService.unassignCollar(user.id, farmId, animalId);
@@ -136,7 +137,7 @@ export class AnimalsController {
   @Patch(':id')
   async updateAnimal(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @Body() dto: UpdateAnimalInputDto,
     @FarmId() farmId: string,
     @CanEditBoundaries() canEditBoundaries: boolean,
@@ -148,7 +149,7 @@ export class AnimalsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteAnimal(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') animalId: string,
+    @Param('id', ParseUUIDPipe) animalId: string,
     @FarmId() farmId: string,
   ) {
     await this.animalsService.deleteAnimal(user.id, farmId, animalId);
