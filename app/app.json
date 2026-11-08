@@ -3,6 +3,9 @@
     "name": "Qamqor",
     "slug": "qamqor-app",
     "version": "1.0.0",
+    "extra": {
+      "apiUrl": "https://qamqor-api.onrender.com/api/v1"
+    },
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,11 +17,18 @@
       "bundleIdentifier": "kz.qamqor.app"
     },
     "android": {
+      "package": "kz.qamqor.app",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET"
+      ],
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d1f14"
-      },
-      "package": "kz.qamqor.app"
-    }
+      }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
-

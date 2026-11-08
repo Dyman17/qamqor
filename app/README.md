@@ -1,41 +1,38 @@
-# 📱 Qamqor Mobile App (`app/`)
+# Qamqor Mobile App (`app/`)
 
-Кроссплатформенное мобильное приложение (iOS / Android / Web) для управления выпасом и мониторинга скота на React Native (Expo) и TypeScript.
+Status: implemented (client of the deployed server; see `docs/architecture/api-contract.md`).
 
----
+Expo (SDK 52) + React Native + TypeScript. Russian UI. Design: `docs/frontend/app-design-brief.md` (tokens in `src/theme/tokens.ts`, phone scaling in `src/theme/scale.tsx`).
 
-## 🎨 Дизайн и токены
+## Server
 
-Интерфейс построен строго по утверждённой дизайн-системе (A3 «Горизонт современный»):
-* Тёмно-зелёная степная палитра (`#0d1f14`, `#142a1c`, `#1b3624`)
-* Акцентная неоново-лаймовая подсветка пастбищ (`#bcf06f`)
-* 4-уровневые статусы животных:
-  * В зоне (`#38e078`)
-  * Предграничная зона (`#facc15`)
-  * Вне зоны / тревога (`#f87171`)
-  * Офлайн / потеря связи (`#94a3b8`)
+Base URL, in order of priority: `EXPO_PUBLIC_API_URL`, `app.json` `expo.extra.apiUrl`, default `https://qamqor-api.onrender.com/api/v1`.
+The free Render instance may need up to a minute to wake up on the first request.
 
----
+## Screens (all on real endpoints)
 
-## 📱 Экраны приложения
+- **Вход / регистрация**: `POST /auth/login`, `/auth/register`; response `{token,user,memberships}`. The session is stored in AsyncStorage and restored on start.
+- **Выбор фермы**: shown when the user has several farms; every data request carries `x-farm-id`.
+- **Карта**: pens (GeoJSON polygons) and animal markers drawn with `react-native-svg` on a plain canvas (no satellite tiles).
+- **Стадо**: list, search, status filter, "+ Животное" (`POST /animals`).
+- **Профиль животного**: details, bind/unbind a collar, test signals (sound / vibration) via `POST /devices/:id/test-signal` (queued; the collar executes it on its next ping).
+- **Оповещения**: list, acknowledge / resolve (`PATCH /alerts/:id/status`); tab badge = active alerts.
+- **Ошейники**: list; the owner adds a collar by its 8-digit code (`^[0-9]{8}$`, `docs/architecture/device-code-protocol.md`).
+- **Настройки**: account, farm, role, "worker can edit boundaries" (owner only), switch farm, sign out.
 
-1. **Карта (S2)** — спутниковый слой Sentinel-2, полигоны загонов, кластеры маркеров, нижняя шторка с 3 положениями (`peek`, `half`, `full`).
-2. **Стадо (S5)** — живой поиск, фильтры по статусам, групповой выбор и перегон стада.
-3. **Профиль животного (S6)** — детальная карточка, координаты, ошейник, **панель прямого тестирования датчиков ошейника** (звук, вибро, импульс 150 мс).
-4. **Оповещения (S7)** — оперативные инциденты выхода за периметр и потери сигнала.
-5. **Ошейники (S8)** — список аппаратных устройств, уровень батареи, RSSI, мастер привязки (`S8a`).
-6. **Настройки (S9)** — управление фермой, права работников, пороги срабатывания импульса, язык интерфейса.
-7. **Вход (S1)** — авторизация по email и паролю.
+Roles: OWNER and WORKER. There is no impulse control and no battery indicator.
 
----
+## Known assumptions
 
-## 🚀 Запуск для разработки
+- Collar registration calls `POST /devices {deviceId: <8-digit code>}` (`registerCollarByCode` in `src/services/api.ts`). Change only that function if the server adds a dedicated claim endpoint.
 
-```bash
-cd app
-npm install
-npm run start
+## Commands
+
 ```
-* Нажмите `a` для запуска в эмуляторе Android
-* Нажмите `i` для симулятора iOS
-* Нажмите `w` для запуска в браузере (React Native Web)
+npm install
+npx tsc --noEmit
+npx expo start              # dev
+npx expo export --platform android   # JS bundle check
+```
+
+APK build (not run from this repo yet): `npx expo prebuild --platform android` then Gradle, or EAS Build. Android package `kz.qamqor.app`, versionCode 1.

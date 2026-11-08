@@ -1,49 +1,52 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme, Theme } from '../theme/scale';
-
-const ANIMALS = [
-  { id: '0142', tag: 'DEMO-A42', pen: 'Загон «Северный»', status: 'danger', ago: 5 },
-  { id: '0087', tag: 'DEMO-A87', pen: 'Загон «Северный»', status: 'ok', ago: 1 },
-  { id: '0054', tag: 'DEMO-A54', pen: 'Загон «Северный»', status: 'ok', ago: 2 },
-  { id: '0099', tag: 'DEMO-A99', pen: 'Загон «Северный»', status: 'ok', ago: 3 },
-  { id: '0231', tag: 'DEMO-A31', pen: 'Загон «Северный»', status: 'offline', ago: 12 },
-  { id: '0301', tag: 'DEMO-A01', pen: 'Загон «Южный»', status: 'ok', ago: 1 },
-  { id: '0410', tag: 'DEMO-A11', pen: 'Без границы', status: 'warning', ago: 6 },
-];
+import { api, timeAgo } from '../services/api';
+import { useLoad } from '../state/useLoad';
+import { StateBox, STATUS_LABEL } from '../components';
+import { AnimalStatus } from '../types';
 
 export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
   const { colors, spacing, typography, sz, fs, hit } = t;
   const styles = useMemo(() => createStyles(t), [t]);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<'all' | AnimalStatus>('all');
   const [search, setSearch] = useState('');
+  const animals = useLoad(() => api.getAnimals(), navigation);
+  const pens = useLoad(() => api.getGeofences(), navigation);
 
-  const filtered = ANIMALS.filter((a) => {
-    const matchesFilter = filter === 'all' || a.status === filter;
-    const matchesSearch = a.id.includes(search) || a.tag.toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const penName = (id: string | null) => (id ? pens.data?.find((p) => p.id === id)?.name ?? 'Загон' : 'Без границы');
+  const all = animals.data ?? [];
+  const q = search.trim().toLowerCase();
+  const filtered = all.filter(
+    (a) =>
+      (filter === 'all' || a.status === filter) &&
+      (!q || a.name.toLowerCase().includes(q) || a.tag.toLowerCase().includes(q)),
+  );
 
   return (
     <View style={styles.container}>
-      <Text style={[typography.title1, styles.header]}>Стадо (142)</Text>
+      <View style={styles.headerRow}>
+        <Text style={typography.title1}>Стадо ({all.length})</Text>
+        <TouchableOpacity style={styles.btnAdd} hitSlop={hit(36)} onPress={() => navigation.navigate('AddAnimal')} accessibilityRole="button">
+          <Text style={styles.btnAddText}>+ Животное</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Search Input */}
       <View style={styles.searchBar}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Номер или бирка..."
+          placeholder="Кличка или бирка..."
           placeholderTextColor={colors.ink3}
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel="Поиск животного"
         />
       </View>
 
-      {/* Filter Tabs */}
       <View style={{ marginBottom: spacing.md }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {(['all', 'ok', 'danger', 'offline'] as const).map((st) => (
+          {(['all', 'ok', 'danger', 'warning', 'offline'] as const).map((st) => (
             <TouchableOpacity
               key={st}
               style={[styles.filterChip, filter === st && styles.filterChipActive]}
@@ -51,17 +54,25 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               onPress={() => setFilter(st)}
             >
               <Text style={[styles.chipText, filter === st && styles.chipTextActive]}>
-                {st === 'all' ? 'Все' : st === 'ok' ? 'В зоне' : st === 'danger' ? 'Вне зоны' : 'Без связи'}
+                {st === 'all' ? 'Все' : STATUS_LABEL[st]}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      {/* Animal List */}
+      <StateBox
+        loading={animals.loading && !animals.data}
+        error={animals.error}
+        empty={!animals.loading && !animals.error && filtered.length === 0 ? 'Животных нет' : null}
+        onRetry={animals.reload}
+      />
+
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
+        refreshing={animals.loading && !!animals.data}
+        onRefresh={animals.reload}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.row}
@@ -83,10 +94,10 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               ]}
             />
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle} numberOfLines={1}>Корова #{item.id}</Text>
-              <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">Бирка {item.tag} · {item.pen}</Text>
+              <Text style={styles.rowTitle} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">Бирка {item.tag} · {penName(item.penId)}</Text>
             </View>
-            <Text style={styles.rowTime} numberOfLines={1}>{item.ago} мин назад</Text>
+            <Text style={styles.rowTime} numberOfLines={1}>{timeAgo(item.lastSeenAt)}</Text>
           </TouchableOpacity>
         )}
       />
@@ -102,9 +113,9 @@ const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, 
     paddingTop: 54,
     paddingHorizontal: spacing.lg,
   },
-  header: {
-    marginBottom: spacing.md,
-  },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  btnAdd: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.md },
+  btnAddText: { ...typography.caption, color: colors.onPrimary, fontWeight: '700' },
   searchBar: {
     backgroundColor: colors.surface1,
     borderRadius: radius.md,

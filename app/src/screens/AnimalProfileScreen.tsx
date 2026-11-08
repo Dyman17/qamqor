@@ -1,31 +1,53 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme, Theme } from '../theme/scale';
-import { api } from '../services/api';
+import { api, errorText, timeAgo } from '../services/api';
+import { useLoad } from '../state/useLoad';
+import { StateBox, STATUS_LABEL, CONN_LABEL } from '../components';
 
 export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({ route, navigation }) => {
   const t = useTheme();
-  const { colors, spacing, typography, sz, fs, hit } = t;
+  const { colors, spacing, typography, hit } = t;
   const styles = useMemo(() => createStyles(t), [t]);
-  const animalId = route?.params?.animalId || '0142';
-  const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
+  const animalId: string = route?.params?.animalId;
+  const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleTrigger = async (type: 'sound' | 'vibro' | 'shock') => {
+  const animal = useLoad(() => api.getAnimal(animalId), navigation);
+  const collars = useLoad(() => api.getCollars(), navigation);
+  const pens = useLoad(() => api.getGeofences(), navigation);
+
+  const a = animal.data;
+  const collar = a?.collarId ? collars.data?.find((c) => c.deviceId === a.collarId) : undefined;
+  const penName = a?.penId ? pens.data?.find((p) => p.id === a.penId)?.name ?? 'Загон' : 'Без границы';
+  const freeCollars = (collars.data ?? []).filter((c) => c.status === 'UNASSIGNED');
+
+  const run = async (fn: () => Promise<string>) => {
+    setBusy(true);
+    setFeedback(null);
     try {
-      if (type === 'sound') {
-        setActiveFeedback('Сирена MAX98357 0.5W воспроизводится на ошейнике QAM-0001');
-        await api.triggerActuator('QAM-0001', { sound: true });
-      } else if (type === 'vibro') {
-        setActiveFeedback('Вибромотор активирован на 2 секунды');
-        await api.triggerActuator('QAM-0001', { vibrate: true });
-      } else if (type === 'shock') {
-        setActiveFeedback('Импульс 150мс (400 кВ) подан на контакты');
-        await api.triggerActuator('QAM-0001', { shock: true });
-      }
+      setFeedback({ text: await fn() });
     } catch (e) {
-      // Local demo fallback
+      setFeedback({ text: errorText(e), error: true });
+    } finally {
+      setBusy(false);
     }
   };
+
+  const sendTest = (signal: 'SOUND' | 'VIBRATION') =>
+    run(async () => {
+      await api.testSignal(a!.collarId!, signal);
+      return 'Команда поставлена в очередь. Ошейник выполнит её при следующем выходе на связь.';
+    });
+
+  const assign = (deviceId: string | null) =>
+    run(async () => {
+      if (deviceId) await api.assignCollar(deviceId, a!.id);
+      else await api.assignCollar(a!.collarId!, null);
+      animal.reload();
+      collars.reload();
+      return deviceId ? 'Ошейник привязан' : 'Ошейник отвязан';
+    });
 
   return (
     <ScrollView style={styles.container}>
@@ -33,101 +55,115 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
         <Text style={styles.backText}>← Назад к списку</Text>
       </TouchableOpacity>
 
-      {/* Main Animal Card */}
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={typography.title1}>Корова #{animalId}</Text>
-            <Text style={[typography.caption, { color: colors.ink2 }]}>Казахская белоголовая · Бирка DEMO-A42</Text>
+      <StateBox loading={animal.loading && !a} error={animal.error} onRetry={animal.reload} />
+
+      {a && (
+        <>
+          <View style={styles.card}>
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.title1}>{a.name}</Text>
+                <Text style={[typography.caption, { color: colors.ink2 }]}>
+                  {a.breed ? `${a.breed} · ` : ''}Бирка {a.tag}
+                </Text>
+              </View>
+              <View style={styles.badgeDanger}>
+                <Text style={[styles.badgeText, a.status === 'ok' && { color: colors.ok }]}>{STATUS_LABEL[a.status]}</Text>
+              </View>
+            </View>
+
+            <View style={styles.grid}>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Текущий загон</Text>
+                <Text style={styles.gridVal}>{penName}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Ошейник</Text>
+                <Text style={styles.gridVal}>
+                  {a.collarId ? `${a.collarId}${collar ? ` (${CONN_LABEL[collar.status]})` : ''}` : 'Не привязан'}
+                </Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Координаты</Text>
+                <Text style={styles.gridVal}>
+                  {a.lat != null && a.lng != null ? `${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}` : 'нет данных'}
+                </Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Связь</Text>
+                <Text style={styles.gridVal}>{timeAgo(a.lastSeenAt)}</Text>
+              </View>
+            </View>
+
+            {a.collarId && (
+              <TouchableOpacity style={styles.btnMap} hitSlop={hit(44)} disabled={busy} onPress={() => assign(null)}>
+                <Text style={styles.btnMapText}>Отвязать ошейник</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <View style={styles.badgeDanger}>
-            <Text style={styles.badgeText}>Вне зоны</Text>
+
+          {!a.collarId && (
+            <View style={styles.panel}>
+              <Text style={typography.title2}>Привязать ошейник</Text>
+              {freeCollars.length === 0 ? (
+                <Text style={[typography.caption, { color: colors.ink2, marginTop: spacing.xs }]}>
+                  Свободных ошейников нет. Владелец добавляет ошейник по коду на вкладке «Ошейники».
+                </Text>
+              ) : (
+                <View style={[styles.triggerList, { marginTop: spacing.sm }]}>
+                  {freeCollars.map((c) => (
+                    <View key={c.deviceId} style={styles.triggerItem}>
+                      <Text style={[styles.triggerTitle, { flex: 1 }]}>{c.deviceId}</Text>
+                      <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => assign(c.deviceId)}>
+                        <Text style={styles.triggerActionText}>Привязать</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={typography.title2}>Тест ошейника</Text>
+            </View>
+            <Text style={[typography.caption, { color: colors.ink2, marginBottom: spacing.md }]}>
+              Тестовый сигнал ставится в очередь на сервере. Ошейник получит его при следующем выходе на связь.
+            </Text>
+
+            {a.collarId ? (
+              <View style={styles.triggerList}>
+                <View style={styles.triggerItem}>
+                  <View style={styles.triggerInfo}>
+                    <Text style={styles.triggerTitle}>Звуковой сигнал</Text>
+                  </View>
+                  <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => sendTest('SOUND')}>
+                    <Text style={styles.triggerActionText}>Тест звука</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.triggerItem}>
+                  <View style={styles.triggerInfo}>
+                    <Text style={styles.triggerTitle}>Вибромотор</Text>
+                  </View>
+                  <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => sendTest('VIBRATION')}>
+                    <Text style={styles.triggerActionText}>Тест вибро</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <Text style={[typography.caption, { color: colors.ink2 }]}>Привяжите ошейник, чтобы отправить тестовый сигнал.</Text>
+            )}
           </View>
+        </>
+      )}
+
+      {feedback && (
+        <View style={[styles.feedbackBox, { marginBottom: spacing.x10 }, feedback.error && { borderLeftColor: colors.signal }]}>
+          <Text style={[styles.feedbackText, feedback.error && { color: colors.signal }]}>{feedback.text}</Text>
         </View>
-
-        <View style={styles.grid}>
-          <View style={styles.gridItem}>
-            <Text style={styles.gridLabel}>Текущий загон</Text>
-            <Text style={styles.gridVal}>Загон «Северный»</Text>
-          </View>
-          <View style={styles.gridItem}>
-            <Text style={styles.gridLabel}>Ошейник</Text>
-            <Text style={styles.gridVal}>QAM-0001 (Онлайн)</Text>
-          </View>
-          <View style={styles.gridItem}>
-            <Text style={styles.gridLabel}>Координаты</Text>
-            <Text style={styles.gridVal}>43.6501, 51.1572</Text>
-          </View>
-          <View style={styles.gridItem}>
-            <Text style={styles.gridLabel}>Связь</Text>
-            <Text style={styles.gridVal}>5 мин назад</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.btnMap} hitSlop={hit(44)} onPress={() => navigation.navigate('Map')}>
-          <Text style={styles.btnMapText}>Показать на карте</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Trigger Hardware Test Panel */}
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={typography.title2}>Тестирование датчиков ошейника</Text>
-          <View style={styles.badgeOk}>
-            <Text style={styles.badgeOkText}>Тест-режим</Text>
-          </View>
-        </View>
-        <Text style={[typography.caption, { color: colors.ink2, marginBottom: spacing.md }]}>
-          Прямая подача управляющих сигналов на ESP32-ошейник через протокол API Gateway.
-        </Text>
-
-        <View style={styles.triggerList}>
-          <View style={styles.triggerItem}>
-            <View style={styles.triggerIconBox}>
-              <Text style={styles.triggerIcon}>🔔</Text>
-            </View>
-            <View style={styles.triggerInfo}>
-              <Text style={styles.triggerTitle}>Звуковой сигнал</Text>
-              <Text style={styles.triggerSub}>0.5 Вт · 800–2400 Гц свип</Text>
-            </View>
-            <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} onPress={() => handleTrigger('sound')}>
-              <Text style={styles.triggerActionText}>Тест звука</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.triggerItem}>
-            <View style={styles.triggerIconBox}>
-              <Text style={styles.triggerIcon}>📳</Text>
-            </View>
-            <View style={styles.triggerInfo}>
-              <Text style={styles.triggerTitle}>Вибромотор</Text>
-              <Text style={styles.triggerSub}>ERM мотор · 2 секунды</Text>
-            </View>
-            <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} onPress={() => handleTrigger('vibro')}>
-              <Text style={styles.triggerActionText}>Тест вибро</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.triggerItem}>
-            <View style={[styles.triggerIconBox, styles.triggerIconBoxDanger]}>
-              <Text style={styles.triggerIcon}>⚡</Text>
-            </View>
-            <View style={styles.triggerInfo}>
-              <Text style={styles.triggerTitle}>Электро-импульс</Text>
-              <Text style={styles.triggerSub}>150 мс · 400 кВ при границе</Text>
-            </View>
-            <TouchableOpacity style={[styles.triggerActionBtn, styles.triggerActionBtnDanger]} hitSlop={hit(36)} onPress={() => handleTrigger('shock')}>
-              <Text style={[styles.triggerActionText, { color: colors.onPrimary }]}>Импульс</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {activeFeedback && (
-          <View style={styles.feedbackBox}>
-            <Text style={styles.feedbackText}>{activeFeedback}</Text>
-          </View>
-        )}
-      </View>
+      )}
+      <View style={{ height: spacing.x10 }} />
     </ScrollView>
   );
 };

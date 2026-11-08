@@ -1,0 +1,47 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['app/**', '.github/workflows/android-apk.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install --clean
+      - name: Build release APK (signed with debug key, for sideloading)
+        working-directory: app/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Publish to GitHub Release "android-latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk qamqor.apk
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "Qamqor Android (latest)" --notes "Автосборка из master. Установка: скачать qamqor.apk, разрешить установку из неизвестных источников."
+          gh release upload android-latest qamqor.apk --clobber
+          gh release edit android-latest --notes "Автосборка из master, коммит ${GITHUB_SHA::7}. Установка: скачать qamqor.apk, разрешить установку из неизвестных источников."

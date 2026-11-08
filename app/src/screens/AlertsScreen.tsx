@@ -1,90 +1,99 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useTheme, Theme } from '../theme/scale';
+import { api, errorText, timeAgo } from '../services/api';
+import { useLoad } from '../state/useLoad';
+import { StateBox } from '../components';
+import { AlertType } from '../types';
 
-const ALERTS = [
-  {
-    id: '1',
-    title: 'Вышло за забор',
-    sub: 'Корова #0142 · Загон «Северный»',
-    time: '5 мин назад',
-    type: 'danger',
-  },
-  {
-    id: '2',
-    title: 'Нет связи',
-    sub: 'Корова #0231 · Бирка DEMO-A31',
-    time: '12 мин назад',
-    type: 'offline',
-  },
-  {
-    id: '3',
-    title: 'Ошейники вне зоны Wi-Fi',
-    sub: 'Корова #0410, #0415 (2 животных)',
-    time: '25 мин назад',
-    type: 'warning',
-  },
-];
+const TITLES: Record<AlertType, string> = {
+  GEOFENCE_BREACH: 'Вышло за границу',
+  GEOFENCE_RETURN: 'Вернулось в границу',
+  DEVICE_OFFLINE: 'Нет связи с ошейником',
+  DEVICE_RESTORED: 'Связь восстановлена',
+  SIGNAL_LIMIT_REACHED: 'Достигнут лимит сигналов',
+  GPS_LOST: 'Потеряно GPS',
+};
 
 export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
-  const { colors, spacing, typography, sz, fs, hit } = t;
+  const { colors, spacing, typography, hit } = t;
   const styles = useMemo(() => createStyles(t), [t]);
+  const alerts = useLoad(() => api.getAlerts(), navigation);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const setStatus = async (id: string, status: 'ACKNOWLEDGED' | 'RESOLVED') => {
+    try {
+      setActionError(null);
+      await api.setAlertStatus(id, status);
+      alerts.reload();
+    } catch (e) {
+      setActionError(errorText(e));
+    }
+  };
+
+  const items = alerts.data ?? [];
+
   return (
     <View style={styles.container}>
       <Text style={[typography.title1, styles.header]}>Оповещения</Text>
+      {actionError && <Text style={[typography.caption, { color: colors.signal, marginBottom: spacing.sm }]}>{actionError}</Text>}
+
+      <StateBox
+        loading={alerts.loading && !alerts.data}
+        error={alerts.error}
+        empty={!alerts.loading && !alerts.error && items.length === 0 ? 'Оповещений нет' : null}
+        onRetry={alerts.reload}
+      />
 
       <FlatList
-        data={ALERTS}
+        data={items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.card,
-              item.type === 'danger' && styles.cardDanger,
-              item.type === 'warning' && styles.cardWarning,
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Text
-                style={[
-                  typography.bodyL,
-                  {
-                    flexShrink: 1,
-                    color:
-                      item.type === 'danger'
-                        ? colors.signal
-                        : item.type === 'warning'
-                        ? colors.warning
-                        : colors.ink,
-                  },
-                ]}
-              >
-                {item.title}
+        refreshing={alerts.loading && !!alerts.data}
+        onRefresh={alerts.reload}
+        renderItem={({ item }) => {
+          const critical = item.severity === 'CRITICAL';
+          const warning = item.severity === 'WARNING';
+          return (
+            <View style={[styles.card, critical && styles.cardDanger, warning && styles.cardWarning]}>
+              <View style={styles.cardHeader}>
+                <Text
+                  style={[
+                    typography.bodyL,
+                    { flexShrink: 1, color: critical ? colors.signal : warning ? colors.warning : colors.ink },
+                  ]}
+                >
+                  {TITLES[item.type] ?? item.type}
+                </Text>
+                <Text style={styles.cardTime}>{timeAgo(item.createdAt)}</Text>
+              </View>
+              <Text style={[typography.body, { color: colors.ink, marginVertical: spacing.xs }]}>
+                {[item.animalName, item.penName].filter(Boolean).join(' · ') || item.message}
               </Text>
-              <Text style={styles.cardTime}>{item.time}</Text>
+              <View style={styles.actions}>
+                {item.animalId && (
+                  <TouchableOpacity
+                    style={styles.btnSecondary}
+                    hitSlop={hit(36)}
+                    onPress={() => navigation.navigate('Profile', { animalId: item.animalId })}
+                  >
+                    <Text style={styles.btnText}>Профиль</Text>
+                  </TouchableOpacity>
+                )}
+                {item.status === 'ACTIVE' && (
+                  <TouchableOpacity style={styles.btnSecondary} hitSlop={hit(36)} onPress={() => setStatus(item.id, 'ACKNOWLEDGED')}>
+                    <Text style={styles.btnText}>Принято</Text>
+                  </TouchableOpacity>
+                )}
+                {item.status !== 'RESOLVED' && (
+                  <TouchableOpacity style={styles.btnPrimary} hitSlop={hit(36)} onPress={() => setStatus(item.id, 'RESOLVED')}>
+                    <Text style={styles.btnPrimaryText}>Закрыть</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-            <Text style={[typography.body, { color: colors.ink, marginVertical: spacing.xs }]}>
-              {item.sub}
-            </Text>
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.btnSecondary}
-                hitSlop={hit(36)}
-                onPress={() => navigation.navigate('Map')}
-              >
-                <Text style={styles.btnText}>На карте</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnPrimary}
-                hitSlop={hit(36)}
-                onPress={() => navigation.navigate('Profile', { animalId: '0142' })}
-              >
-                <Text style={styles.btnPrimaryText}>Профиль</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );
