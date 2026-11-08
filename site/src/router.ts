@@ -1,4 +1,4 @@
-export interface RouteCtx { path: string; query: URLSearchParams; params: Record<string, string>; }
+export interface RouteCtx { path: string; query: URLSearchParams; params: Record<string, string>; /** false once another navigation has started */ alive: () => boolean; }
 type Cleanup = void | (() => void);
 export interface View { mount(root: HTMLElement, ctx: RouteCtx): Cleanup | Promise<Cleanup>; }
 
@@ -57,7 +57,7 @@ async function render(moved: boolean): Promise<void> {
   if (my !== token) return;
   if (!view) view = await import('./notfound');
   if (my !== token) return;
-  const c = await view.mount(rootEl, { path, query: url.searchParams, params });
+  const c = await view.mount(rootEl, { path, query: url.searchParams, params, alive: () => my === token });
   if (my !== token) { if (typeof c === 'function') c(); return; }
   if (typeof c === 'function') cleanup = c;
   if (moved) {
