@@ -100,37 +100,6 @@ export class AlertsService {
     }
   }
 
-  async checkLowBattery(data: {
-    farmId: string;
-    animalId?: string;
-    deviceId: string;
-    battery: number;
-  }) {
-    if (data.battery <= 15) {
-      const existing = await this.prisma.alert.findFirst({
-        where: {
-          deviceId: data.deviceId,
-          type: AlertType.LOW_BATTERY,
-          status: AlertStatus.ACTIVE,
-        },
-      });
-
-      if (!existing) {
-        return this.prisma.alert.create({
-          data: {
-            farmId: data.farmId,
-            animalId: data.animalId,
-            deviceId: data.deviceId,
-            type: AlertType.LOW_BATTERY,
-            severity: AlertSeverity.WARNING,
-            status: AlertStatus.ACTIVE,
-            message: `Низкий заряд батареи ошейника ${data.deviceId} (${data.battery}%). Требуется подзарядка.`,
-          },
-        });
-      }
-    }
-  }
-
   // ==========================================
   // QUERY & RESOLUTION APIS
   // ==========================================
@@ -160,7 +129,7 @@ export class AlertsService {
           select: { id: true, name: true, tagNumber: true, species: true },
         },
         device: {
-          select: { id: true, deviceId: true, battery: true },
+          select: { id: true, deviceId: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -194,7 +163,7 @@ export class AlertsService {
 
   async getAlertStats(userId: string, farmId: string) {
 
-    const [activeTotal, activeBreaches, lowBatteries] = await Promise.all([
+    const [activeTotal, activeBreaches] = await Promise.all([
       this.prisma.alert.count({
         where: { farmId, status: AlertStatus.ACTIVE },
       }),
@@ -205,19 +174,11 @@ export class AlertsService {
           type: AlertType.GEOFENCE_BREACH,
         },
       }),
-      this.prisma.alert.count({
-        where: {
-          farmId,
-          status: AlertStatus.ACTIVE,
-          type: AlertType.LOW_BATTERY,
-        },
-      }),
     ]);
 
     return {
       activeTotal,
       activeBreaches,
-      lowBatteries,
     };
   }
 }

@@ -156,7 +156,6 @@ async function main() {
         farmId: farm.id,
         animalId: animal.id,
         status: DeviceStatus.ONLINE,
-        battery: 95,
         isSimulated: true,
       },
     });

@@ -24,11 +24,6 @@ export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
   @Min(0)
   accuracy!: number;
 
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  battery!: number;
-
   @IsOptional()
   @IsNumber()
   signal?: number;

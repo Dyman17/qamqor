@@ -18,12 +18,6 @@ export class InjectTelemetryDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  @Max(100)
-  battery?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
   accuracy?: number;
 
   @IsOptional()

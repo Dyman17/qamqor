@@ -24,7 +24,6 @@ export enum AnimalGender {
 export enum DeviceStatus {
   ONLINE = 'ONLINE',
   OFFLINE = 'OFFLINE',
-  LOW_BATTERY = 'LOW_BATTERY',
   NO_GPS = 'NO_GPS',
   INACTIVE = 'INACTIVE',
 }
@@ -38,7 +37,6 @@ export enum GeofenceStatus {
 export enum AlertType {
   GEOFENCE_BREACH = 'GEOFENCE_BREACH',
   GEOFENCE_RETURN = 'GEOFENCE_RETURN',
-  LOW_BATTERY = 'LOW_BATTERY',
   DEVICE_OFFLINE = 'DEVICE_OFFLINE',
   GPS_LOST = 'GPS_LOST',
   DEVICE_RESTORED = 'DEVICE_RESTORED',

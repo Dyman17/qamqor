@@ -16,7 +16,6 @@ export class AnalyticsService {
       outsideGeofence,
       totalDevices,
       onlineDevices,
-      lowBatteryDevices,
       activeAlertsCount,
       speciesRaw,
       recentAlerts,
@@ -31,7 +30,6 @@ export class AnalyticsService {
       // Devices
       this.prisma.device.count({ where: { farmId } }),
       this.prisma.device.count({ where: { farmId, status: DeviceStatus.ONLINE } }),
-      this.prisma.device.count({ where: { farmId, battery: { lte: 15 } } }),
 
       // Active alerts
       this.prisma.alert.count({ where: { farmId, status: AlertStatus.ACTIVE } }),
@@ -70,7 +68,6 @@ export class AnalyticsService {
           device: {
             select: {
               deviceId: true,
-              battery: true,
               signal: true,
               status: true,
             },
@@ -102,7 +99,6 @@ export class AnalyticsService {
         totalDevices,
         onlineDevices,
         offlineDevices: totalDevices - onlineDevices,
-        lowBatteryDevices,
         activeAlertsCount,
       },
       speciesBreakdown,

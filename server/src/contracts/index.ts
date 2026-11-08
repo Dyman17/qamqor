@@ -95,7 +95,6 @@ export interface DeviceStatusV2 {
   configVersion: number;
   firmwareVersion: string;
   speedKmh: number | null;
-  battery: number | null;
   signal: number | null;
 }
 
@@ -126,7 +125,6 @@ export interface DeviceTelemetryRequestDto {
   latitude: number;
   longitude: number;
   accuracy: number;
-  battery: number;
   signal?: number;
   speedKmh?: number;
   hdop?: number;
@@ -206,7 +204,6 @@ export interface AnimalResponseDto {
   lastLongitude?: number;
   lastSeenAt?: string;
   isOutsideGeofence: boolean;
-  battery?: number;
 }
 
 // ==========================================

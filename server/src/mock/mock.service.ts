@@ -23,7 +23,7 @@ export class MockService {
   ) {}
 
   /**
-   * 1. Manually inject GPS telemetry & battery from website interface
+   * 1. Manually inject GPS telemetry from website interface
    */
   async injectManualTelemetry(userId: string, farmId: string, dto: InjectTelemetryDto) {
 
@@ -67,7 +67,6 @@ export class MockService {
           animalId: animal.id,
           farmId,
           status: DeviceStatus.ONLINE,
-          battery: dto.battery ?? 90,
         },
       });
     }
@@ -91,7 +90,6 @@ export class MockService {
         latitude: dto.latitude,
         longitude: dto.longitude,
         accuracy: dto.accuracy ?? 3.5,
-        battery: dto.battery ?? device.battery,
         signal: dto.signal ?? -68,
       },
     );
@@ -113,7 +111,6 @@ export class MockService {
         isOutsideGeofence: updatedAnimal?.isOutsideGeofence,
         latitude: updatedAnimal?.lastLatitude,
         longitude: updatedAnimal?.lastLongitude,
-        battery: updatedAnimal?.device?.battery,
       },
       collarResponse: response,
       serverNextInterval: response.nextInterval,
@@ -157,7 +154,6 @@ export class MockService {
       animalId: animal.id,
       latitude: breachLat,
       longitude: breachLng,
-      battery: animal.device?.battery ?? 85,
     });
   }
 
@@ -194,7 +190,6 @@ export class MockService {
       animalId: animal.id,
       latitude: safeLat,
       longitude: safeLng,
-      battery: animal.device?.battery ?? 85,
     });
   }
 
@@ -274,7 +269,7 @@ export class MockService {
   <!-- Animal Card bottom HUD -->
   <rect x="20" y="520" width="760" height="60" rx="8" fill="#0f172a" opacity="0.85" />
   <text x="40" y="546" fill="#10b981" font-family="sans-serif" font-weight="bold" font-size="18">${animalTitle}</text>
-  <text x="40" y="567" fill="#cbd5e1" font-family="sans-serif" font-size="13">Статус: ${animal.isOutsideGeofence ? '🚨 ВНЕ ПАСТБИЩА' : '🌿 ВНУТРИ ПАСТБИЩА'} | Заряд батареи: ${animal.device?.battery || 95}%</text>
+  <text x="40" y="567" fill="#cbd5e1" font-family="sans-serif" font-size="13">Статус: ${animal.isOutsideGeofence ? '🚨 ВНЕ ПАСТБИЩА' : '🌿 ВНУТРИ ПАСТБИЩА'}</text>
 </svg>
     `.trim();
 

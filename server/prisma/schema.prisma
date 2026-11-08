@@ -35,7 +35,6 @@ enum AnimalGender {
 enum DeviceStatus {
   ONLINE
   OFFLINE
-  LOW_BATTERY
   NO_GPS
   INACTIVE
 }
@@ -43,7 +42,6 @@ enum DeviceStatus {
 enum AlertType {
   GEOFENCE_BREACH
   GEOFENCE_RETURN
-  LOW_BATTERY
   DEVICE_OFFLINE
   GPS_LOST
   DEVICE_RESTORED
@@ -125,7 +123,6 @@ model Device {
   secretHash        String           @unique // SHA-256 (hex) of the device secret; the secret itself is never stored
   isSimulated       Boolean          @default(false)
   status            DeviceStatus     @default(INACTIVE)
-  battery           Int              @default(100)
   signal            Int?             // dBm RSSI
   firmwareVersion   String?          @default("1.0.0")
   lastHeartbeatAt   DateTime?
@@ -209,7 +206,6 @@ model Telemetry {
   latitude          Float
   longitude         Float
   accuracy          Float
-  battery           Int
   signal            Int?
   isOutsideGeofence Boolean  @default(false)
   timestamp         DateTime

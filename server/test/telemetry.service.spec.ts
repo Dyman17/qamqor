@@ -17,7 +17,7 @@ function setup(pendingCommand: any = null) {
       updateMany: jest.fn(async () => ({ count: 1 })),
     },
   };
-  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn(), checkLowBattery: jest.fn() };
+  const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn() };
   const config: any = { get: (_k: string, d: string) => d };
   const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, config);
   const device: any = {
@@ -28,7 +28,7 @@ function setup(pendingCommand: any = null) {
 }
 
 const dto = (lat: number, lng: number): any => ({
-  deviceId: 'QAM-0001', timestamp: new Date().toISOString(), latitude: lat, longitude: lng, accuracy: 5, battery: 80,
+  deviceId: 'QAM-0001', timestamp: new Date().toISOString(), latitude: lat, longitude: lng, accuracy: 5,
 });
 
 describe('TelemetryService (device already authenticated)', () => {

@@ -158,22 +158,11 @@ export class TelemetryService {
     await this.prisma.device.update({
       where: { id: device.id },
       data: {
-        battery: dto.battery,
         signal: dto.signal ?? null,
-        status: dto.battery <= 15 ? DeviceStatus.LOW_BATTERY : DeviceStatus.ONLINE,
+        status: DeviceStatus.ONLINE,
         lastHeartbeatAt: now,
       },
     });
-
-    // 5. Battery check alert
-    if (device.farmId) {
-      await this.alertsService.checkLowBattery({
-        farmId: device.farmId,
-        animalId: device.animal?.id,
-        deviceId: device.deviceId,
-        battery: dto.battery,
-      });
-    }
 
     // 6. Record Telemetry Point
     await this.prisma.telemetry.create({
@@ -183,7 +172,6 @@ export class TelemetryService {
         latitude: dto.latitude,
         longitude: dto.longitude,
         accuracy: dto.accuracy,
-        battery: dto.battery,
         signal: dto.signal,
         isOutsideGeofence: isOutside,
         timestamp: pingTime,
