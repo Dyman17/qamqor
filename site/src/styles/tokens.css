@@ -77,6 +77,9 @@
   --focus-night-inner: #06140D;
   --focus-night-outer: #F6FAF4;
   --scene-gradient: radial-gradient(60% 55% at 55% 58%, #185A3A 0%, #0F2F1F 45%, #06140D 100%);
+  --photo-scrim: linear-gradient(rgba(6, 20, 13, .82), rgba(6, 20, 13, .5) 45%, rgba(6, 20, 13, .72));
+  --photo-scrim-stage: linear-gradient(rgba(6, 20, 13, .5) 0%, rgba(6, 20, 13, .62) 55%, rgba(6, 20, 13, .9) 100%);
+  --photo-scrim-light: linear-gradient(rgba(6, 20, 13, .8), rgba(6, 20, 13, .9));
   --fade-night-light: linear-gradient(#06140D, #F6FAF4);
   --fade-light-night: linear-gradient(#F6FAF4, #06140D);
 

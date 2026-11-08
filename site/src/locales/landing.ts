@@ -13,8 +13,8 @@ export const landing = def({
     'l.menu.title': 'Меню',
 
     'l.hero.chip': 'Прототип',
-    'l.hero.title': 'Пастбище у вас на ладони',
-    'l.hero.lead': 'Qamqor: ошейник с GPS и платформа для контроля выпаса. Границы рисуются в приложении (в разработке). Следите за стадом, получайте оповещения.',
+    'l.hero.title': 'Свобода выпаса. Контроль каждого движения.',
+    'l.hero.lead': 'Умная система мониторинга и контроля выпаса скота.',
     'l.hero.cta': 'Создать ферму',
     'l.hero.how': 'Как устроен ошейник',
     'l.hero.scroll': 'Листайте',
@@ -105,8 +105,8 @@ export const landing = def({
     'l.specs.r12.v': 'плата ESP32',
     'l.specs.note': 'Класс защиты от воды не заявляется: часть отверстий открыта.',
 
-    'l.road.title': 'Что мы ещё решаем',
-    'l.road.body': 'Это прототип. Мы честно говорим, что пока не определено.',
+    'l.road.title': 'Дорожная карта',
+    'l.road.body': 'Предлагаемые этапы, без сроков. Это прототип, и мы честно говорим, что пока не определено.',
     'l.road.i1': 'Связь ошейника в поле',
     'l.road.i2': 'Питание и аккумулятор',
     'l.road.i3': 'Состав датчиков',
@@ -132,8 +132,8 @@ export const landing = def({
     'l.menu.title': 'Menu',
 
     'l.hero.chip': 'Prototype',
-    'l.hero.title': 'The pasture in the palm of your hand',
-    'l.hero.lead': 'Qamqor: a GPS collar and a platform for grazing control. Boundaries are drawn in the app (in development). Follow the herd, get alerts.',
+    'l.hero.title': 'Freedom to graze. Control of every move.',
+    'l.hero.lead': 'A smart system for monitoring and controlling livestock grazing.',
     'l.hero.cta': 'Create a farm',
     'l.hero.how': 'How the collar is built',
     'l.hero.scroll': 'Scroll',
@@ -224,8 +224,8 @@ export const landing = def({
     'l.specs.r12.v': 'ESP32 board',
     'l.specs.note': 'No water protection rating is claimed: some of the openings are open.',
 
-    'l.road.title': 'What we are still deciding',
-    'l.road.body': 'This is a prototype. We say plainly what is not yet defined.',
+    'l.road.title': 'Roadmap',
+    'l.road.body': 'Proposed stages, no dates. This is a prototype, and we say plainly what is not yet defined.',
     'l.road.i1': 'Collar connectivity in the field',
     'l.road.i2': 'Power and battery',
     'l.road.i3': 'Sensor set',

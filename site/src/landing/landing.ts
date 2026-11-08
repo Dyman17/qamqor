@@ -1,4 +1,5 @@
 import '../styles/landing.css';
+import '../styles/landing-sections.css';
 import { $, $$, html, raw, setHtml } from '../dom';
 import { applyI18n, bindLangSwitch, langSwitcherHtml, onLang, t, tk } from '../i18n';
 import { getMotionPref, isMotionOn, lowMemory, onMotionChange, saveDataOn, setMotionPref, setWatchdogLight, watchdogIsLight, type MotionPref } from '../motion';
@@ -6,15 +7,18 @@ import type { View } from '../router';
 import { openModal } from '../ui/dialog';
 import { CALLOUTS, SCENES, clamp, dimProgress, sceneAt, textOpacity } from './storyboard';
 import type { StageApi } from './stage';
+import { stats } from './stats';
 
 const POSTER_W = 1280;
 const POSTER_H = 960;
 
 const NAV = [
+  { href: '#how', key: 'l.nav.how' },
   { href: '#panel', key: 'l.nav.device' },
   { href: '#platform', key: 'l.nav.platform' },
   { href: '#specs', key: 'l.nav.specs' },
   { href: '#roadmap', key: 'l.nav.roadmap' },
+  { href: '#faq', key: 'l.nav.faq' },
 ];
 const SIDES = ['center', 'left', 'right', 'left', 'bottom', 'left'];
 const PLATFORM = [
@@ -23,10 +27,18 @@ const PLATFORM = [
   { id: 'alerts', file: 'alerts' },
   { id: 'collars', file: 'collars' },
 ] as const;
+/** Responsive WebP photo: 800 w on phones, 1400 w otherwise. Alt text is a locale key. */
+function photo(name: string, altKey: string, cls: string, eager = false) {
+  return html`<picture class="${cls}">
+    <source media="(max-width: 767px)" srcset="/img/${name}-800.webp">
+    <img src="/img/${name}-1400.webp" width="1400" height="764" alt="" data-i18n-alt="${altKey}" decoding="async" ${raw(eager ? 'fetchpriority="high"' : 'loading="lazy"')}>
+  </picture>`;
+}
 const SPECS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-function icon(name: 'menu' | 'close' | 'arrow'): string {
+function icon(name: 'menu' | 'close' | 'arrow' | 'plus'): string {
   const p = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     arrow: '<path d="M12 5v14m0 0l-6-6m6 6l6-6"/>',
@@ -112,6 +124,7 @@ const template = () => html`
   <main id="main">
     <div class="stage" id="stage">
       <div class="stage-sticky" id="stage-sticky">
+        <div class="stage-bg" id="stage-bg">${photo('hero-steppe', 'l.alt.hero', 'photo', true)}</div>
         <div class="stage-fig-wrap">
           <figure class="stage-fig" id="stage-fig" role="img" aria-label="${t('l.fig.aria', { scene: t('l.hero.title') })}">
             <img class="stage-poster" data-poster="1" src="/posters/scene-1.webp" width="${POSTER_W}" height="${POSTER_H}" alt="" fetchpriority="high" decoding="async">
@@ -136,10 +149,83 @@ const template = () => html`
       </div>
     </div>
 
+    <section class="section night-0 on-night photo-section" id="problems" aria-labelledby="prob-h">
+      <div class="photo-bg" data-parallax>${photo('night-road-cow', 'l.alt.road', 'photo')}</div>
+      <div class="container">
+        <header class="section-head">
+          <h2 class="h2" id="prob-h" data-i18n="l.prob.title"></h2>
+          <p class="lead section-lead" data-i18n="l.prob.lead"></p>
+        </header>
+        <ul class="prob-list">
+          ${[1, 2, 3, 4].map((n) => html`<li class="prob"><h3 class="h3" data-i18n="l.prob.${n}.t"></h3><p class="body-text" data-i18n="l.prob.${n}.b"></p></li>`)}
+        </ul>
+        <div class="stats-block">
+          <h3 class="stats-title" data-i18n="l.stats.title"></h3>
+          <ul class="stats">
+            ${stats.map((st) => html`<li class="stat">
+              <p class="stat-n num" data-i18n="l.stats.${st.id}.n"></p>
+              <p class="stat-t" data-i18n="l.stats.${st.id}.t"></p>
+              <p class="stat-s caption"><span data-i18n="l.stats.src"></span>: <a href="${st.href}" target="_blank" rel="noopener noreferrer" data-i18n="l.stats.${st.id}.s"></a></p>
+            </li>`)}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section night-1 on-night photo-section" id="how" aria-labelledby="how-h">
+      <div class="photo-bg" data-parallax>${photo('aerial-pasture', 'l.alt.aerial', 'photo')}</div>
+      <div class="container">
+        <header class="section-head">
+          <h2 class="h2" id="how-h" data-i18n="l.how.title"></h2>
+          <p class="lead section-lead" data-i18n="l.how.lead"></p>
+        </header>
+        <ol class="how-list">
+          ${[1, 2, 3, 4, 5, 6].map((n) => html`<li class="how-step"><p class="body-text" data-i18n="l.how.${n}"></p></li>`)}
+        </ol>
+        <p class="how-note caption" data-i18n="l.how.note"></p>
+      </div>
+    </section>
+
+    <section class="section night-0 on-night" id="animals" aria-labelledby="an-h">
+      <div class="container">
+        <header class="section-head">
+          <h2 class="h2" id="an-h" data-i18n="l.an.title"></h2>
+          <p class="lead section-lead" data-i18n="l.an.lead"></p>
+        </header>
+        <div class="animals">
+          ${[['cow', 'cow-portrait', 'l.alt.cow', true], ['camel', 'camels', 'l.alt.camels', false], ['horse', 'horses', 'l.alt.horses', false]].map(([k, f, alt, primary]) => html`
+            <figure class="animal${primary ? ' animal-main' : ''}">
+              ${photo(f as string, alt as string, 'photo')}
+              <figcaption><h3 class="h3" data-i18n="l.an.${k}.t"></h3><p class="body-text" data-i18n="l.an.${k}.b"></p></figcaption>
+            </figure>`)}
+        </div>
+      </div>
+    </section>
+
+    <section class="section night-1 on-night" id="safety" aria-labelledby="safe-h">
+      <div class="container">
+        <header class="section-head">
+          <h2 class="h2" id="safe-h" data-i18n="l.safe.title"></h2>
+          <p class="lead section-lead" data-i18n="l.safe.lead"></p>
+        </header>
+        <div class="safe-grid">
+          <ul class="safe-list">${[1, 2, 3, 4, 5].map((n) => html`<li class="body-text" data-i18n="l.safe.${n}"></li>`)}</ul>
+          <div class="safe-side">
+            <p class="body-text safe-server" data-i18n="l.safe.server"></p>
+            <div class="adapt">
+              <h3 class="h3" data-i18n="l.safe.adapt.t"></h3>
+              <p class="body-text" data-i18n="l.safe.adapt.b"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="fade fade-n2l" aria-hidden="true"></div>
     <section class="section light" id="platform" aria-labelledby="platform-h">
       <div class="container">
-        <header class="section-head">
+        <header class="section-head plat-head on-night">
+          <div class="photo-bg">${photo('topo-map', 'l.alt.topo', 'photo')}</div>
           <h2 class="h2" id="platform-h" data-i18n="l.plat.title"></h2>
           <p class="lead section-lead" data-i18n="l.plat.lead"></p>
         </header>
@@ -165,6 +251,27 @@ const template = () => html`
         </div>
       </div>
     </section>
+    <section class="section light" id="compare" aria-labelledby="cmp-h">
+      <div class="container">
+        <header class="section-head">
+          <h2 class="h2" id="cmp-h" data-i18n="l.cmp.title"></h2>
+          <p class="lead section-lead" data-i18n="l.cmp.lead"></p>
+        </header>
+        <table class="cmp">
+          <thead><tr><th scope="col" data-i18n="l.cmp.h.sol"></th><th scope="col" data-i18n="l.cmp.h.pro"></th><th scope="col" data-i18n="l.cmp.h.con"></th></tr></thead>
+          <tbody>
+            ${[1, 2, 3, 4].map((n) => html`<tr class="${n === 4 ? 'cmp-us' : ''}">
+              <th scope="row" data-i18n="l.cmp.r${n}.s"></th>
+              <td><span class="cmp-label" data-i18n="l.cmp.h.pro"></span><span data-i18n="l.cmp.r${n}.p"></span></td>
+              <td><span class="cmp-label" data-i18n="l.cmp.h.con"></span><span data-i18n="l.cmp.r${n}.c"></span></td>
+            </tr>`)}
+          </tbody>
+        </table>
+        <h3 class="h3 cmp-limits-title" data-i18n="l.cmp.limits"></h3>
+        <ul class="cmp-limits">${[1, 2, 3, 4, 5, 6].map((n) => html`<li class="body-text" data-i18n="l.cmp.l${n}"></li>`)}</ul>
+      </div>
+    </section>
+
     <div class="fade fade-l2n" aria-hidden="true"></div>
 
     <section class="section night-1 on-night" id="specs" aria-labelledby="specs-h">
@@ -181,10 +288,29 @@ const template = () => html`
       <div class="container narrow">
         <h2 class="h2" id="road-h" data-i18n="l.road.title"></h2>
         <p class="lead section-lead" data-i18n="l.road.body"></p>
+        <ol class="stages" data-i18n-aria="l.road.stages" aria-label="${t('l.road.stages')}">${[1, 2, 3, 4, 5, 6].map((n) => html`<li data-i18n="l.road.s${n}"></li>`)}</ol>
+        <h3 class="h3 road-open" data-i18n="l.road.open"></h3>
         <ul class="road-list">${[1, 2, 3, 4].map((n) => html`<li data-i18n="l.road.i${n}"></li>`)}</ul>
+        <div class="biz">
+          <h3 class="h3" data-i18n="l.biz.title"></h3>
+          <p class="lead" data-i18n="l.biz.body"></p>
+        </div>
       </div>
     </section>
     <div class="fade fade-n2l" aria-hidden="true"></div>
+
+    <section class="section tone" id="faq" aria-labelledby="faq-h">
+      <div class="container narrow">
+        <h2 class="h2" id="faq-h" data-i18n="l.faq.title"></h2>
+        <div class="faq">
+          ${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => html`
+            <div class="faq-item">
+              <h3 class="faq-q"><button type="button" class="faq-btn" id="faq-b${n}" aria-expanded="false" aria-controls="faq-p${n}"><span data-i18n="l.faq.${n}.q"></span>${raw(icon('plus'))}</button></h3>
+              <div class="faq-a" id="faq-p${n}" role="region" aria-labelledby="faq-b${n}" hidden><p class="body-text" data-i18n="l.faq.${n}.a"></p></div>
+            </div>`)}
+        </div>
+      </div>
+    </section>
 
     <section class="section light cta" aria-labelledby="cta-h">
       <div class="container narrow">
@@ -251,6 +377,7 @@ const view: View = {
     const header = $('#site-header', root)!;
     const lightNotice = $('#light-notice', root)!;
     const heroPoster = posters[0];
+    const stageBg = $('#stage-bg', root)!;
 
     // ---- layout mode: scroll storyboard vs static blocks ----
     let live = false; // the canvas has drawn a frame
@@ -315,6 +442,7 @@ const view: View = {
       hint.classList.toggle('gone', window.scrollY > 24);
       updateFigLabel();
       stageApi?.setProgress(P);
+      stageBg.style.setProperty('--sp', P.toFixed(3));
     }
     function schedule(): void { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
     on('scroll', schedule, { passive: true });
@@ -336,6 +464,29 @@ const view: View = {
       closeMenu();
       scrollToScene(Number(a.dataset.sceneLink ?? 2));
     });
+
+    // ---- FAQ accordion (button + region) ----
+    $$('.faq-btn', root).forEach((b) => b.addEventListener('click', () => {
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      b.setAttribute('aria-expanded', String(open));
+      document.getElementById(b.getAttribute('aria-controls')!)!.hidden = !open;
+    }));
+
+    // ---- parallax-lite for photo backgrounds (only while motion is on) ----
+    const para = $$('[data-parallax]', root);
+    function parallax(): void {
+      const on = isMotionOn();
+      for (const el of para) {
+        if (!on) { el.style.removeProperty('--py'); continue; }
+        const r = el.parentElement!.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) continue;
+        const k = (r.top + r.height / 2 - window.innerHeight / 2) / window.innerHeight;
+        el.style.setProperty('--py', `${(k * -40).toFixed(1)}px`);
+      }
+    }
+    on('scroll', () => requestAnimationFrame(parallax), { passive: true });
+    cleanups.push(onMotionChange(parallax));
+    parallax();
 
     // ---- mobile menu dialog ----
     const menu = $('#menu', root)!;

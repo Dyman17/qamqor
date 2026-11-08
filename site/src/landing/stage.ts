@@ -5,6 +5,7 @@ import {
   Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator,
   Quaternion, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
+import { createStrap } from './strap';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -141,7 +142,10 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   const gpsY0 = (88 - 45) * 0.01;
   gps.position.set(0.3, gpsY0, 0);
   pivot.add(panel, gps);
+  const strap = await createStrap('/img/strap-texture.webp', renderer.capabilities.getMaxAnisotropy());
+  pivot.add(strap.group);
   scene.add(pivot);
+  let strapW = 1; // 1 = strap in place (counts in the fit), 0 = slid away
 
   const shadowTex = shadowTexture();
   const shadowMat = new MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.45, depthWrite: false });
@@ -209,6 +213,8 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     const zMax = MODEL_MM.z[1] + (LID_LIFT + PANEL_LIFT) * 100 * e;
     const out: V3[] = [];
     for (const xx of MODEL_MM.x) for (const yy of MODEL_MM.y) for (const zz of [MODEL_MM.z[0], zMax]) out.push(stlToScene([xx, yy, zz]));
+    // the strap loop hangs below the housing; only its upper part is fitted, the rest may leave the frame
+    if (strapW > 0) for (const sx of [-1, 1]) out.push([sx * (1.05 + 0.4 * strapW), -0.45 - 0.9 * strapW, 0]);
     return out;
   }
 
@@ -236,6 +242,9 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
 
   function updateScene(P: number, intro: number): void {
     const kf = keyframeAt(P);
+    const slide = smoother((P - 0.445) / 0.07);
+    strap.setSlide(slide);
+    strapW = 1 - slide;
     eul.set(kf.euler[0] * DEG, kf.euler[1] * DEG, kf.euler[2] * DEG, 'YXZ');
     quat.setFromEuler(eul);
     const scale = lerp(0.94, 1, intro);
@@ -456,6 +465,7 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
       canvas.removeEventListener('webglcontextrestored', onRestored);
       document.removeEventListener('visibilitychange', onVis);
       geoms.forEach((g) => g.dispose());
+      strap.dispose();
       [bodyMat, panelSide, panelTop, gpsMat, shadowMat].forEach((m) => m.dispose());
       [panelGeo, gpsGeo, shadowGeo].forEach((g) => g.dispose());
       [panelTex, shadowTex, envRT.texture].forEach((t) => t.dispose());
