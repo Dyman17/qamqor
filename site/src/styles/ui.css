@@ -1,4 +1,4 @@
-/* Shared UI: buttons, chips, language switch, glass, form controls. Tokens only. */
+/* Shared UI: buttons, chips, language switch, surfaces, form controls. Tokens only. */
 
 .page-center { min-height: 100svh; display: grid; place-items: center; padding: var(--page-gutter); background: var(--scene-gradient); color: var(--snow); }
 .on-night { color: var(--snow); }
@@ -14,7 +14,9 @@
   border: 1px solid transparent; background: transparent; font-weight: 600; font-size: var(--fs-label);
   letter-spacing: -.01em; text-decoration: none; text-align: center; line-height: 1.2; cursor: pointer;
 }
-html[data-motion="on"] .btn { transition: background-color var(--dur-color), transform var(--dur-press), color var(--dur-color); }
+html[data-motion="on"] .btn { transition: background-color var(--dur-color), transform var(--dur-1) var(--ease-out), color var(--dur-color); }
+html[data-motion="on"] .btn svg { transition: translate var(--dur-1) var(--ease-out); }
+html[data-motion="on"] .btn:hover:not(:disabled) svg { translate: 3px 0; }
 html[data-motion="on"] .btn:hover:not(:disabled):not([aria-disabled="true"]) { transform: translateY(-1px); }
 html[data-motion="on"] .btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.98); }
 .btn-sm { min-height: 44px; padding: 0 var(--space-4); font-size: 15px; border-radius: var(--r-field); }
@@ -57,29 +59,17 @@ html[data-motion="on"] .btn .spinner { animation: spin .8s linear infinite; }
 .lang-switch.on-light .lang-btn { color: var(--ink-2); }
 .lang-switch.on-light .lang-btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
 
-/* ---- Glass (site-brief 1.3) with the required fallbacks ---- */
-.glass-dark, .glass-light { position: relative; isolation: isolate; border-radius: var(--r-card); }
-.glass-dark { background: var(--glass-dark-fill); backdrop-filter: var(--blur-dark); -webkit-backdrop-filter: var(--blur-dark); box-shadow: var(--glass-dark-shadow); color: var(--snow); }
-.glass-dark::before, .glass-light::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 96px; border-radius: inherit; pointer-events: none; z-index: -1;
-}
-.glass-dark::before { background: var(--sheen-dark); }
-.glass-light { background: var(--glass-light-fill); backdrop-filter: var(--blur-light); -webkit-backdrop-filter: var(--blur-light); box-shadow: var(--glass-light-shadow); color: var(--ink); }
-.glass-light::before { background: var(--sheen-light); }
-@supports not (backdrop-filter: blur(1px)) {
-  .glass-dark { background: var(--glass-dark-solid); }
-  .glass-light { background: var(--glass-light-solid); }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .glass-dark { background: var(--glass-dark-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
-}
-html[data-light="1"] .glass-dark { background: var(--glass-dark-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* ---- Glass: light variant for the cabinet only. The landing has no glass (site-brief 11). ---- */
+.glass-light { position: relative; isolation: isolate; border-radius: var(--r-card); background: var(--glass-light-fill); backdrop-filter: var(--blur-light); -webkit-backdrop-filter: var(--blur-light); box-shadow: var(--glass-light-shadow); color: var(--ink); }
+.glass-light::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 96px; border-radius: inherit; pointer-events: none; z-index: -1; background: var(--sheen-light); }
+@supports not (backdrop-filter: blur(1px)) { .glass-light { background: var(--glass-light-solid); } }
+@media (prefers-reduced-transparency: reduce) { .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; } }
 html[data-light="1"] .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
-@media (forced-colors: active) {
-  .glass-dark, .glass-light { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; backdrop-filter: none; }
-  .glass-dark::before, .glass-light::before { display: none; }
-}
+@media (forced-colors: active) { .glass-light { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; backdrop-filter: none; } .glass-light::before { display: none; } }
+
+/* ---- Tonal night surface (site-brief 11.2): solid fill, hairline edge, soft shadow ---- */
+.card-night { background: var(--night-2); border: 1px solid var(--edge); box-shadow: var(--card-night-shadow); border-radius: var(--r-card); color: var(--snow); }
+@media (forced-colors: active) { .card-night { border-color: CanvasText; } }
 
 /* ---- Form controls ---- */
 .field { display: grid; gap: var(--space-2); }

@@ -1,32 +1,27 @@
 import '../styles/landing.css';
 import '../styles/landing-sections.css';
 import { $, $$, html, raw, setHtml } from '../dom';
-import { applyI18n, bindLangSwitch, langSwitcherHtml, onLang, t, tk } from '../i18n';
+import { LANGS, applyI18n, bindLangSwitch, getLang, langSwitcherHtml, onLang, t, tk } from '../i18n';
 import { getMotionPref, isMotionOn, lowMemory, onMotionChange, saveDataOn, setMotionPref, setWatchdogLight, watchdogIsLight, type MotionPref } from '../motion';
 import type { View } from '../router';
 import { openModal } from '../ui/dialog';
-import { CALLOUTS, SCENES, clamp, dimProgress, sceneAt, textOpacity } from './storyboard';
+import { CALLOUTS, SCENES, beamAt, clamp, dimProgress, sceneAt, textOpacity } from './storyboard';
 import type { StageApi } from './stage';
 import { stats } from './stats';
+import { APP_LINKS } from './app-links';
+import { initFx, countUp } from './fx';
 
 const POSTER_W = 1280;
 const POSTER_H = 960;
 
 const NAV = [
   { href: '#how', key: 'l.nav.how' },
-  { href: '#panel', key: 'l.nav.device' },
-  { href: '#platform', key: 'l.nav.platform' },
+  { href: '#app', key: 'l.nav.app' },
   { href: '#specs', key: 'l.nav.specs' },
   { href: '#roadmap', key: 'l.nav.roadmap' },
   { href: '#faq', key: 'l.nav.faq' },
 ];
 const SIDES = ['center', 'left', 'right', 'left', 'bottom', 'left'];
-const PLATFORM = [
-  { id: 'map', file: 'map' },
-  { id: 'herd', file: 'herd' },
-  { id: 'alerts', file: 'alerts' },
-  { id: 'collars', file: 'collars' },
-] as const;
 /** Responsive WebP photo: 800 w on phones, 1400 w otherwise. Alt text is a locale key. */
 function photo(name: string, altKey: string, cls: string, eager = false) {
   return html`<picture class="${cls}">
@@ -36,17 +31,15 @@ function photo(name: string, altKey: string, cls: string, eager = false) {
 }
 const SPECS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-function icon(name: 'menu' | 'close' | 'arrow' | 'plus'): string {
+function icon(name: 'chev' | 'arrow' | 'plus'): string {
   const p = {
+    chev: '<path d="M6 9l6 6 6-6"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
-    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
-    close: '<path d="M6 6l12 12M18 6L6 18"/>',
     arrow: '<path d="M12 5v14m0 0l-6-6m6 6l6-6"/>',
   }[name];
   return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 }
 
-const navLinks = (cls: string) => NAV.map((n) => html`<a class="${cls}" href="${n.href}" data-i18n="${n.key}"></a>`);
 const motionSwitch = html`
   <div class="motion-switch" role="group" data-i18n-aria="l.foot.anim">
     ${(['system', 'on', 'off'] as MotionPref[]).map((m) => html`<button type="button" class="motion-btn" data-motion-pref="${m}" aria-pressed="false" data-i18n="l.motion.${m}"></button>`)}
@@ -87,44 +80,46 @@ function sceneHtml(i: number) {
   }
   return html`
     <article class="scene scene-${n} side-${side}" data-scene="${n}" id="${n === 1 ? 'scene-1' : n === 2 ? 'panel' : `scene-${n}`}">
-      <div class="scene-card glass-dark on-night">${body}</div>
+      <div class="scene-card on-night">${body}</div>
       <div class="scene-static">${staticImg}</div>
     </article>`;
 }
 
 const template = () => html`
   <a class="skip-link" href="#main" data-i18n="a11y.skip"></a>
-  <header class="site-header glass-dark on-night" id="site-header">
-    <a class="brand" href="/" data-i18n="brand" aria-label="Qamqor"></a>
-    <nav class="hnav" data-i18n-aria="l.nav.aria" aria-label="${t('l.nav.aria')}">${navLinks('hnav-link')}</nav>
-    <div class="h-actions">
-      <span class="h-lang">${raw(langSwitcherHtml())}</span>
-      <a class="btn btn-sm btn-ghost-night h-login" href="/login" data-i18n="nav.login"></a>
-      <a class="btn btn-sm btn-light h-register" href="/register" data-i18n="nav.register"></a>
-      <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="menu" data-i18n-aria="l.menu.open">${raw(icon('menu'))}</button>
+  <div class="dotfield dotfield-page" aria-hidden="true"><canvas></canvas></div>
+  <header class="site-header on-night" id="site-header" data-scrolled="0">
+    <div class="container hdr-in">
+      <a class="brand hdr-i" style="--i:0" href="/" data-i18n="brand" aria-label="Qamqor"></a>
+      <nav class="hnav" data-i18n-aria="l.nav.aria" aria-label="${t('l.nav.aria')}">${NAV.map((n, i) => html`<a class="hnav-link hdr-i" style="--i:${i + 1}" href="${n.href}" data-nav="${n.href.slice(1)}" data-i18n="${n.key}"></a>`)}</nav>
+      <div class="h-actions hdr-i" style="--i:6">
+        <div class="lang-dd h-lang" id="lang-dd">
+          <button type="button" class="lang-dd-btn" id="lang-btn" aria-expanded="false" aria-controls="lang-panel" data-i18n-aria="lang.label"><span id="lang-cur"></span>${raw(icon('chev'))}</button>
+          <div class="lang-panel" id="lang-panel" role="group" data-i18n-aria="lang.label" hidden>
+            ${LANGS.map((l) => html`<button type="button" class="lang-opt" lang="${l}" data-set-lang="${l}" data-lang-current="${l}" data-i18n="lang.${l}"></button>`)}
+          </div>
+        </div>
+        <a class="h-login" href="/login" data-i18n="nav.login"></a>
+        <a class="btn btn-sm btn-light h-register" href="/register" data-i18n="nav.register"></a>
+        <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="menu" aria-label="${t('l.menu.open')}"><i></i><i></i></button>
+      </div>
+    </div>
+    <span class="hdr-progress" id="hdr-progress" aria-hidden="true"></span>
+    <div class="menu" id="menu" role="dialog" aria-modal="true" aria-label="${t('l.menu.title')}" data-i18n-aria="l.menu.title" hidden>
+      <nav class="menu-nav" data-i18n-aria="l.nav.aria" aria-label="${t('l.nav.aria')}">${NAV.map((n, i) => html`<a class="menu-link" style="--i:${i}" href="${n.href}" data-i18n="${n.key}"></a>`)}</nav>
+      <div class="menu-actions" style="--i:5">
+        <a class="btn btn-ghost-night btn-block menu-cta" href="/login" data-i18n="nav.login"></a>
+        <a class="btn btn-light btn-block menu-cta" href="/register" data-i18n="nav.register"></a>
+      </div>
+      <div style="--i:6">${raw(langSwitcherHtml('menu-lang'))}</div>
     </div>
   </header>
-
-  <div class="menu on-night" id="menu" role="dialog" aria-modal="true" aria-labelledby="menu-title" hidden>
-    <div class="menu-panel">
-      <div class="menu-head">
-        <h2 id="menu-title" class="menu-title" data-i18n="l.menu.title"></h2>
-        <button type="button" class="menu-btn" id="menu-close" data-i18n-aria="l.menu.close">${raw(icon('close'))}</button>
-      </div>
-      <nav data-i18n-aria="l.nav.aria" aria-label="${t('l.nav.aria')}" class="menu-nav">${navLinks('menu-link')}</nav>
-      ${raw(langSwitcherHtml())}
-      ${motionSwitch}
-      <div class="menu-actions">
-        <a class="btn btn-light btn-block" href="/register" data-i18n="nav.register"></a>
-        <a class="btn btn-ghost-night btn-block" href="/login" data-i18n="nav.login"></a>
-      </div>
-    </div>
-  </div>
 
   <main id="main">
     <div class="stage" id="stage">
       <div class="stage-sticky" id="stage-sticky">
-        <div class="stage-bg" id="stage-bg">${photo('hero-steppe', 'l.alt.hero', 'photo', true)}</div>
+        <div class="stage-bg" id="stage-bg">${photo('hero-steppe', 'l.alt.hero', 'photo', true)}<div class="dotfield" aria-hidden="true"><canvas></canvas></div></div>
+        <div class="stage-light" aria-hidden="true"></div>
         <div class="stage-fig-wrap">
           <figure class="stage-fig" id="stage-fig" role="img" aria-label="${t('l.fig.aria', { scene: t('l.hero.title') })}">
             <img class="stage-poster" data-poster="1" src="/posters/scene-1.webp" width="${POSTER_W}" height="${POSTER_H}" alt="" fetchpriority="high" decoding="async">
@@ -136,8 +131,8 @@ const template = () => html`
             ${['length', 'width', 'height'].map((d) => html`<path data-dim-line="${d}" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" d="M0 0L0 0"/><path data-dim-ticks="${d}" opacity="0" d="M0 0L0 0"/>`)}
           </svg>
           <div class="callouts" aria-hidden="true">
-            ${CALLOUTS.map((c) => html`<div class="callout glass-dark on-night" data-co="${c.id}" data-on="0"><span data-i18n="${c.key}"></span></div>`)}
-            ${[['length', '210'], ['width', '80'], ['height', '90']].map(([d, v]) => html`<div class="dim-label glass-dark on-night num" data-dim-label="${d}" data-on="0">${v} <span data-i18n="l.unit.mm"></span></div>`)}
+            ${CALLOUTS.map((c) => html`<div class="callout card-night on-night" data-co="${c.id}" data-on="0"><span data-i18n="${c.key}"></span></div>`)}
+            ${[['length', '210'], ['width', '80'], ['height', '90']].map(([d, v]) => html`<div class="dim-label card-night on-night num" data-dim-label="${d}" data-on="0">${v} <span data-i18n="l.unit.mm"></span></div>`)}
           </div>
         </div>
         <div class="scenes">${SCENES.map((_, i) => sceneHtml(i))}</div>
@@ -145,7 +140,7 @@ const template = () => html`
           ${SCENES.map((s) => html`<a href="#${s.id === 2 ? 'panel' : `scene-${s.id}`}" data-scene-link="${s.id}" data-i18n-aria="${s.titleKey}" aria-label="${t(s.titleKey as never)}"><span class="rail-dot"></span></a>`)}
         </nav>
         <div class="scroll-hint caption" id="scroll-hint" aria-hidden="true"><span data-i18n="l.hero.scroll"></span>${raw(icon('arrow'))}</div>
-        <p class="caption model-slow glass-dark on-night" id="model-slow" role="status" hidden data-i18n="l.model.slow"></p>
+        <p class="caption model-slow card-night on-night" id="model-slow" role="status" hidden data-i18n="l.model.slow"></p>
       </div>
     </div>
 
@@ -162,7 +157,7 @@ const template = () => html`
         <div class="stats-block">
           <h3 class="stats-title" data-i18n="l.stats.title"></h3>
           <ul class="stats">
-            ${stats.map((st) => html`<li class="stat">
+            ${stats.map((st) => html`<li class="stat lit card-night">
               <p class="stat-n num" data-i18n="l.stats.${st.id}.n"></p>
               <p class="stat-t" data-i18n="l.stats.${st.id}.t"></p>
               <p class="stat-s caption"><span data-i18n="l.stats.src"></span>: <a href="${st.href}" target="_blank" rel="noopener noreferrer" data-i18n="l.stats.${st.id}.s"></a></p>
@@ -221,24 +216,25 @@ const template = () => html`
       </div>
     </section>
 
-    <div class="fade fade-n2l" aria-hidden="true"></div>
-    <section class="section light" id="platform" aria-labelledby="platform-h">
+    <section class="section light sheet" id="app" aria-labelledby="app-h" data-sheet>
       <div class="container">
-        <header class="section-head plat-head on-night">
-          <div class="photo-bg">${photo('topo-map', 'l.alt.topo', 'photo')}</div>
-          <h2 class="h2" id="platform-h" data-i18n="l.plat.title"></h2>
-          <p class="lead section-lead" data-i18n="l.plat.lead"></p>
-        </header>
-        <div class="plat-rows">
-          ${PLATFORM.map((p) => html`
-            <article class="plat-row">
-              <div class="plat-text"><h3 class="h3" data-i18n="l.plat.${p.id}.t"></h3><p class="body-text" data-i18n="l.plat.${p.id}.b"></p></div>
-              <figure class="plat-shot">
-                <img src="/shots/${p.file}.webp" width="960" height="720" loading="lazy" decoding="async" alt="" data-i18n-alt="l.plat.shot.${p.id}">
-                <figcaption class="caption" data-i18n="l.plat.shot"></figcaption>
-              </figure>
-            </article>`)}
-        </div>
+        <h2 class="h2" id="app-h" data-i18n="l.app.title"></h2>
+        <ul class="app-list">
+          <li class="app-item">
+            <h3 class="h3" data-i18n="l.app.android"></h3>
+            ${APP_LINKS.android
+              ? html`<a class="btn btn-primary" href="${APP_LINKS.android}" rel="noopener" data-i18n="l.app.android.get"></a>`
+              : html`<p class="status-chip" data-i18n="l.app.android.status"></p>`}
+          </li>
+          <li class="app-item">
+            <h3 class="h3" data-i18n="l.app.ios"></h3>
+            <p class="status-chip" data-i18n="l.app.ios.status"></p>
+          </li>
+          <li class="app-item">
+            <h3 class="h3" data-i18n="l.app.web"></h3>
+            <a class="btn btn-primary" href="/login" data-i18n="l.app.web.open"></a>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -272,9 +268,8 @@ const template = () => html`
       </div>
     </section>
 
-    <div class="fade fade-l2n" aria-hidden="true"></div>
-
-    <section class="section night-1 on-night" id="specs" aria-labelledby="specs-h">
+    <section class="section night-1 on-night sheet" id="specs" data-sheet aria-labelledby="specs-h">
+      <div class="stage-light stage-light-static" aria-hidden="true"></div>
       <div class="container">
         <h2 class="h2" id="specs-h" data-i18n="l.specs.title"></h2>
         <dl class="specs">
@@ -297,9 +292,7 @@ const template = () => html`
         </div>
       </div>
     </section>
-    <div class="fade fade-n2l" aria-hidden="true"></div>
-
-    <section class="section tone" id="faq" aria-labelledby="faq-h">
+    <section class="section tone sheet" id="faq" data-sheet aria-labelledby="faq-h">
       <div class="container narrow">
         <h2 class="h2" id="faq-h" data-i18n="l.faq.title"></h2>
         <div class="faq">
@@ -323,9 +316,7 @@ const template = () => html`
       </div>
     </section>
   </main>
-  <div class="fade fade-l2n" aria-hidden="true"></div>
-
-  <footer class="site-footer on-night">
+  <footer class="site-footer on-night sheet" data-sheet>
     <div class="container foot">
       <a class="brand" href="/" aria-label="Qamqor" data-i18n="brand"></a>
       <p class="foot-line" data-i18n="l.foot.line"></p>
@@ -336,7 +327,7 @@ const template = () => html`
     </div>
   </footer>
 
-  <div class="light-notice glass-dark on-night" id="light-notice" role="status" hidden>
+  <div class="light-notice card-night on-night" id="light-notice" role="status" hidden>
     <span data-i18n="l.light.notice"></span>
     <button type="button" class="btn btn-sm btn-light" id="light-enable" data-i18n="l.light.enable"></button>
   </div>`;
@@ -362,7 +353,12 @@ const view: View = {
     setTitle();
     applyI18n(root);
     bindLangSwitch(root);
-    cleanups.push(onLang(() => { setTitle(); updateFigLabel(true); }));
+    const fx = initFx(root);
+    cleanups.push(() => fx.destroy());
+    const langCur = $('#lang-cur', root)!;
+    const setLangLabel = () => { langCur.textContent = getLang().toUpperCase(); };
+    setLangLabel();
+    cleanups.push(onLang(() => { setTitle(); updateFigLabel(true); setLangLabel(); }));
 
     // ---- elements ----
     const stage = $('#stage', root)!;
@@ -374,7 +370,6 @@ const view: View = {
     const railLinks = $$('#rail a', root);
     const hint = $('#scroll-hint', root)!;
     const slow = $('#model-slow', root)!;
-    const header = $('#site-header', root)!;
     const lightNotice = $('#light-notice', root)!;
     const heroPoster = posters[0];
     const stageBg = $('#stage-bg', root)!;
@@ -396,13 +391,11 @@ const view: View = {
     }
     cleanups.push(onMotionChange(applyLayout));
 
-    // ---- header height for scroll padding ----
-    const setHeaderH = () => document.documentElement.style.setProperty('--header-h', `${header.offsetHeight + 12}px`);
-    setHeaderH();
-    on('resize', setHeaderH);
+    // ---- scroll padding: the scrolled header (60) + 16 ----
+    document.documentElement.style.setProperty('--header-h', '76px');
 
     // ---- scroll driver ----
-    let ticking = false;
+    let needs = true;
     let top = 0, total = 1;
     const measure = () => {
       const r = stage.getBoundingClientRect();
@@ -422,7 +415,7 @@ const view: View = {
     }
 
     function update(): void {
-      ticking = false;
+      needs = false;
       if (layoutStatic()) { root.style.removeProperty('--d1'); return; }
       const P = progress();
       articles.forEach((a, k) => {
@@ -443,10 +436,23 @@ const view: View = {
       updateFigLabel();
       stageApi?.setProgress(P);
       stageBg.style.setProperty('--sp', P.toFixed(3));
+      sticky.style.setProperty('--beam-a', beamAt(P).toFixed(3));
+      const tl = $('.scene-title', articles[sceneAt(P)]);
+      if (tl && !tl.classList.contains('in') && P > 0.001) tl.classList.add('in');
+      if (d1 > 0) $$('.spec-num', root).forEach(countUp);
     }
-    function schedule(): void { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
-    on('scroll', schedule, { passive: true });
+    function schedule(): void { needs = true; fx.wake(); }
+    fx.tick(() => { if (needs || fx.scrolled) update(); return false; });
     on('resize', () => { measure(); schedule(); });
+    // beam tilt towards the cursor (fine pointers), smoothed
+    let rot = 0;
+    fx.tick(() => {
+      const want = fx.pointer.fine && fx.pointer.active && isMotionOn() ? fx.pointer.nx * 2.5 : 0;
+      rot += (want - rot) * 0.06;
+      if (Math.abs(want - rot) < 0.005) rot = want;
+      sticky.style.setProperty('--beam-rot', `${rot.toFixed(3)}deg`);
+      return rot !== want;
+    });
     measure();
 
     // rail, "how it works" button and nav anchors to scenes
@@ -461,7 +467,6 @@ const view: View = {
       const a = (e.target as Element).closest<HTMLElement>('[data-scene-link], a[href="#panel"]');
       if (!a) return;
       e.preventDefault();
-      closeMenu();
       scrollToScene(Number(a.dataset.sceneLink ?? 2));
     });
 
@@ -484,22 +489,43 @@ const view: View = {
         el.style.setProperty('--py', `${(k * -40).toFixed(1)}px`);
       }
     }
-    on('scroll', () => requestAnimationFrame(parallax), { passive: true });
+    fx.tick(() => { if (fx.scrolled) parallax(); return false; });
     cleanups.push(onMotionChange(parallax));
     parallax();
 
-    // ---- mobile menu dialog ----
+    // ---- mobile menu: full-screen dialog (focus trap, Esc, focus return come from openModal) ----
     const menu = $('#menu', root)!;
     const menuBtn = $('#menu-btn', root)!;
     let menuHandle: { close(): void } | null = null;
     function closeMenu(): void { menuHandle?.close(); }
+    const menuLabel = () => menuBtn.setAttribute('aria-label', t(menuBtn.getAttribute('aria-expanded') === 'true' ? 'l.menu.close' : 'l.menu.open'));
+    cleanups.push(onLang(menuLabel));
     menuBtn.addEventListener('click', () => {
-      menuBtn.setAttribute('aria-expanded', 'true');
-      menuHandle = openModal(menu, { opener: menuBtn, onClose: () => { menuBtn.setAttribute('aria-expanded', 'false'); menuHandle = null; } });
+      if (menuHandle) { closeMenu(); return; }
+      const r = menuBtn.getBoundingClientRect();
+      menu.style.setProperty('--ox', `${(r.left + r.width / 2).toFixed(0)}px`);
+      menu.style.setProperty('--oy', `${(r.top + r.height / 2).toFixed(0)}px`);
+      menuBtn.setAttribute('aria-expanded', 'true'); menuLabel();
+      document.documentElement.style.overflow = 'hidden';
+      menuHandle = openModal(menu, { opener: menuBtn, onClose: () => {
+        menuBtn.setAttribute('aria-expanded', 'false'); menuLabel(); menuHandle = null;
+        document.documentElement.style.overflow = '';
+      } });
     });
-    $('#menu-close', root)!.addEventListener('click', closeMenu);
-    $$('.menu-link, .menu-actions a', root).forEach((a) => a.addEventListener('click', () => { if (menuHandle) closeMenu(); }));
+    $$('.menu-link, .menu-cta', root).forEach((a) => a.addEventListener('click', () => { if (menuHandle) closeMenu(); }));
+    on('resize', () => { if (menuHandle && window.innerWidth >= 1024) closeMenu(); });
     cleanups.push(() => menuHandle?.close());
+
+    // ---- language dropdown (>= 1024): button + group of language buttons ----
+    const dd = $('#lang-dd', root)!;
+    const ddBtn = $('#lang-btn', root)!;
+    const ddPanel = $('#lang-panel', root)!;
+    const ddSet = (open: boolean, focusBack = false) => { ddPanel.hidden = !open; ddBtn.setAttribute('aria-expanded', String(open)); if (!open && focusBack) ddBtn.focus(); };
+    ddBtn.addEventListener('click', () => ddSet(ddPanel.hasAttribute('hidden')));
+    ddPanel.addEventListener('click', () => ddSet(false, true));
+    dd.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ddPanel.hasAttribute('hidden')) { e.stopPropagation(); ddSet(false, true); } });
+    dd.addEventListener('focusout', (e) => { if (!dd.contains(e.relatedTarget as Node | null)) ddSet(false); });
+    on('pointerdown', (e) => { if (!dd.contains(e.target as Node)) ddSet(false); });
 
     // ---- motion switch (menu + footer) ----
     $$('[data-motion-pref]', root).forEach((b) => b.addEventListener('click', () => { failed = failed && b.dataset.motionPref !== 'on'; setMotionPref(b.dataset.motionPref as MotionPref); applyLayout(); }));
@@ -537,7 +563,7 @@ const view: View = {
         const mod = await import('./stage');
         if (!root.isConnected) return;
         const api = await mod.createStage({
-          canvas, root: sticky, glb,
+          canvas, root: sticky, glb, pointer: fx.pointer,
           onFirstFrame: () => { live = true; window.clearTimeout(slowTimer); slow.hidden = true; fig.dataset.live = '1'; },
           onLost: () => { live = false; fig.dataset.live = '0'; },
           onRestored: () => { live = true; fig.dataset.live = '1'; },
@@ -547,6 +573,8 @@ const view: View = {
         stageApi = api;
         if (import.meta.env.DEV) (window as unknown as { __stage?: StageApi }).__stage = api; // used by scripts/bake-posters.mjs
         stageApi.setActive(!layoutStatic());
+        stageApi.setAmbient(isMotionOn());
+        cleanups.push(onMotionChange((m) => stageApi?.setAmbient(m)));
         schedule();
       } catch (err) {
         console.warn('[site] 3D stage unavailable, static posters are shown:', err);

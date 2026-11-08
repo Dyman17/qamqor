@@ -68,6 +68,13 @@
   --mint: #7FD6A0;
   --rim: #7FD6A0;
   --signal-night: #FF8A5C;
+  --edge: #2E5A44;
+  --edge-hot: #3F7F5C;
+  --edge-hover: #4E9A70;
+  --line-night: rgba(242, 248, 240, .12);
+  --night-lit: #1A402C;
+  --header-top: rgba(6, 20, 13, .86);
+  --card-night-shadow: inset 0 1px 0 rgba(242, 248, 240, .06), 0 20px 40px -24px rgba(0, 0, 0, .7);
   --btn-light: #E4F3E4;
   --btn-light-hover: #FFFFFF;
   --btn-light-pressed: #C9E4CE;
@@ -83,16 +90,11 @@
   --fade-night-light: linear-gradient(#06140D, #F6FAF4);
   --fade-light-night: linear-gradient(#F6FAF4, #06140D);
 
-  /* ---- Glass (site-brief 1.3, A3 2.4) ---- */
-  --glass-dark-fill: linear-gradient(rgba(255, 255, 255, .06), rgba(255, 255, 255, .06)), rgba(6, 20, 13, .58);
-  --glass-dark-solid: #0F2F1F;
+  /* ---- Glass: light variant is used by the cabinet only (landing is glass-free, site-brief 11) ---- */
   --glass-light-fill: rgba(246, 250, 244, .86);
   --glass-light-solid: #F6FAF4;
-  --glass-dark-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 48px rgba(0, 0, 0, .35);
   --glass-light-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 0 0 1px rgba(255, 255, 255, .45), 0 14px 40px rgba(8, 18, 12, .22);
-  --sheen-dark: radial-gradient(120% 100% at 50% 0, rgba(255, 255, 255, .18), transparent 70%);
   --sheen-light: radial-gradient(120% 100% at 50% 0, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 70%);
-  --blur-dark: blur(24px) saturate(1.4);
   --blur-light: blur(28px) saturate(1.5);
 
   /* ---- Space (step 4), radii (nested), sizes ---- */
@@ -122,8 +124,14 @@
   --ease-out: cubic-bezier(.2, .7, .1, 1);
   --dur-press: 120ms;
   --dur-color: 200ms;
+  --dur-1: 160ms;
+  --dur-2: 400ms;
+  --dur-3: 800ms;
+  --stagger: 40ms;
+  --hh: 56px;
+  --hh-s: 52px;
 }
 
-@media (min-width: 640px) { :root { --page-gutter: 32px; } }
-@media (min-width: 1024px) { :root { --page-gutter: 64px; } }
+@media (min-width: 640px) { :root { --page-gutter: 32px; --hh: 64px; --hh-s: 56px; } }
+@media (min-width: 1024px) { :root { --page-gutter: 64px; --hh: 72px; --hh-s: 60px; } }
 @media (min-width: 1024px) and (max-width: 1279px) { :root { --page-gutter: 48px; } }

@@ -13,7 +13,6 @@ export const landing2 = def({
     'l.alt.camels': 'Верблюды на закате в степи',
     'l.alt.horses': 'Табун лошадей в степи',
     'l.alt.cow': 'Портрет коровы',
-    'l.alt.topo': 'Топографическая карта местности',
 
     'l.prob.title': 'С чем сталкивается выпас',
     'l.prob.lead': 'Это типичные сценарии, а не документированные случаи конкретных хозяйств.',
@@ -133,7 +132,6 @@ export const landing2 = def({
     'l.alt.camels': 'Camels in the steppe at sunset',
     'l.alt.horses': 'A herd of horses in the steppe',
     'l.alt.cow': 'Portrait of a cow',
-    'l.alt.topo': 'A topographic map of the terrain',
 
     'l.prob.title': 'What grazing runs into',
     'l.prob.lead': 'These are typical scenarios, not documented cases of particular farms.',

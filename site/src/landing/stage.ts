@@ -1,15 +1,15 @@
 // The three.js stage: model, lights, scroll-driven pose, callouts, dimension lines (site-brief 2, 3, 4.3).
 // Loaded lazily (dynamic import) so three.js is not part of the first paint. All three.js types are `any` (no @types/three).
 import {
-  ACESFilmicToneMapping, BoxGeometry, BufferGeometry, CanvasTexture, DirectionalLight, Euler, Float32BufferAttribute,
-  Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator,
-  Quaternion, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
+  ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferGeometry, CanvasTexture, Color, DirectionalLight, Euler, Float32BufferAttribute,
+  Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator,
+  Quaternion, RepeatWrapping, Scene, SpotLight, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { createStrap } from './strap';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CALLOUTS, DIMS, BLEND, SCENES, keyframeAt, lerp, sceneAt, smoother, type V3 } from './storyboard';
+import { CALLOUTS, DIMS, BLEND, SCENES, beamAt, keyframeAt, lerp, sceneAt, smoother, type V3 } from './storyboard';
 
 const DEG = Math.PI / 180;
 const LID_LIFT = 0.55; // 55 mm in scene units
@@ -20,6 +20,8 @@ export interface StageOptions {
   canvas: HTMLCanvasElement;
   root: HTMLElement; // the sticky block: holds callouts, leaders and dimension svg
   glb: Promise<ArrayBuffer>;
+  /** Shared cursor state (fx.ts): the model tilts towards it on fine pointers. */
+  pointer: { nx: number; ny: number; active: boolean; fine: boolean };
   onFirstFrame(): void;
   onLost(): void;
   onRestored(): void;
@@ -29,6 +31,8 @@ export interface StageOptions {
 export interface StageApi {
   setProgress(P: number): void;
   setActive(on: boolean): void;
+  /** Idle drift and cursor tilt (site-brief 11.7 effect 12); off when motion is reduced. */
+  setAmbient(on: boolean): void;
   resize(): void;
   snapshotAt(P: number, w: number, h: number): Promise<Blob | null>;
   dispose(): void;
@@ -69,6 +73,77 @@ function shadowTexture(): any {
   return new CanvasTexture(c);
 }
 
+function poolTexture(): any {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(63,143,100,.5)');
+  gr.addColorStop(1, 'rgba(63,143,100,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 256, 256);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/** Seeded fBm value noise (4 octaves, tileable). Returns size*size values in 0..1; the seed keeps the look identical on every run. */
+function noiseValues(size: number): Float32Array {
+  let s = 0xc0ffee;
+  const rnd = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const oct = [8, 16, 32, 64].map((n) => ({ n, g: Float32Array.from({ length: n * n }, rnd) }));
+  const out = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let v = 0, a = 0.5, norm = 0;
+    for (const { n, g } of oct) {
+      const fx = (x * n) / size, fy = (y * n) / size, x0 = Math.floor(fx), y0 = Math.floor(fy);
+      const tx = fx - x0, ty = fy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+      const i0 = (y0 % n) * n, i1 = ((y0 + 1) % n) * n, xa = x0 % n, xb = (x0 + 1) % n;
+      const top = g[i0 + xa] + (g[i0 + xb] - g[i0 + xa]) * sx, bot = g[i1 + xa] + (g[i1 + xb] - g[i1 + xa]) * sx;
+      v += (top + (bot - top) * sy) * a; norm += a; a *= 0.5;
+    }
+    out[y * size + x] = v / norm;
+  }
+  return out;
+}
+
+/** Grey canvas texture from noise values mapped to [lo, hi] (0..255). */
+function noiseTexture(vals: Float32Array, size: number, lo: number, hi: number): any {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(size, size);
+  // fBm of 4 octaves clusters around 0.5: stretch to the full range first
+  let mn = 1, mx = 0;
+  for (const v of vals) { if (v < mn) mn = v; if (v > mx) mx = v; }
+  for (let i = 0; i < vals.length; i++) {
+    const n = Math.round(lo + ((vals[i] - mn) / (mx - mn || 1)) * (hi - lo));
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = n; img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+/** Box-projection UVs: each triangle takes the two axes orthogonal to its dominant normal axis; one tile = 40 mm. */
+function boxUV(g: any): void {
+  const p = g.attributes.position.array as Float32Array;
+  g.computeBoundingBox();
+  const unit = g.boundingBox.max.x - g.boundingBox.min.x > 50 ? 1 : 100; // mm per geometry unit (GLB may hold mm or 100 mm units)
+  const k = unit / 40;
+  const uv = new Float32Array((p.length / 3) * 2);
+  for (let i = 0; i < p.length; i += 9) {
+    const ux = p[i + 3] - p[i], uy = p[i + 4] - p[i + 1], uz = p[i + 5] - p[i + 2];
+    const vx = p[i + 6] - p[i], vy = p[i + 7] - p[i + 1], vz = p[i + 8] - p[i + 2];
+    const nx = Math.abs(uy * vz - uz * vy), ny = Math.abs(uz * vx - ux * vz), nz = Math.abs(ux * vy - uy * vx);
+    const ax = nx >= ny && nx >= nz ? [1, 2] : ny >= nz ? [0, 2] : [0, 1];
+    for (let v = 0; v < 3; v++) { uv[(i / 3 + v) * 2] = p[i + v * 3 + ax[0]] * k; uv[(i / 3 + v) * 2 + 1] = p[i + v * 3 + ax[1]] * k; }
+  }
+  g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+}
+
 interface CalloutRt {
   def: (typeof CALLOUTS)[number];
   el: HTMLElement;
@@ -93,12 +168,20 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
 
   // ---- lights (site-brief 2.2) ----
   const pmrem = new PMREMGenerator(renderer);
-  const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+  const roomEnv = new RoomEnvironment();
+  const envRT = pmrem.fromScene(roomEnv, 0.04);
+  roomEnv.dispose();
   scene.environment = envRT.texture;
-  scene.environmentIntensity = 0.55;
-  const key = new DirectionalLight(0xfff4e5, 2.2); key.position.set(-3, 4, 4);
+  scene.environmentIntensity = 0.6;
+  // top spotlight with a white-green core (site-brief 11.8); the matching CSS beam is .stage-light
+  const SPOT_I = 45;
+  const spot = new SpotLight(0xe8fff1, 0, 0, 0.38, 1, 2);
+  spot.position.set(0, 7, 1);
+  scene.add(spot, spot.target);
+  const key = new DirectionalLight(0xfff4e5, 1.4); key.position.set(-3, 4, 4);
   const rim = new DirectionalLight(0x7fd6a0, 3.0); rim.position.set(3.5, 2, -4);
   const fill = new HemisphereLight(0xbfd3c4, 0x06140d, 0.35);
+  const ambientSt = { on: false, tx: 0, ty: 0 };
   scene.add(key, rim, fill);
 
   // ---- model ----
@@ -107,7 +190,15 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   const pivot = new Group();
   const modelRoot: any = gltf.scene;
   pivot.add(modelRoot);
-  const bodyMat = new MeshStandardMaterial({ color: '#141816', roughness: 0.82, metalness: 0, envMapIntensity: 0.9 });
+  const noise = noiseValues(256);
+  const roughTex = noiseTexture(noise, 256, 158, 209); // 0.62..0.82
+  const bumpTex = noiseTexture(noise, 256, 0, 255);
+  let bodyMat: any = new MeshPhysicalMaterial({
+    color: '#222925', roughness: 1, roughnessMap: roughTex, metalness: 0, clearcoat: 0,
+    sheen: 0.35, sheenRoughness: 0.6, sheenColor: new Color('#9DB5A3'), specularIntensity: 0.6, ior: 1.45,
+    bumpMap: bumpTex, bumpScale: 0.25,
+  });
+  const bodyMeshes: any[] = [];
   const geoms: any[] = [];
   let lidNode: any = null;
   modelRoot.traverse((o: any) => {
@@ -121,9 +212,11 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     g.setAttribute('position', new Float32BufferAttribute(arr, 3));
     g.setIndex(o.geometry.index);
     g = toCreasedNormals(g, 0.52);
+    boxUV(g);
     o.geometry.dispose();
     o.geometry = g;
     o.material = bodyMat;
+    bodyMeshes.push(o);
     geoms.push(g);
   });
   const lidRestY = lidNode ? lidNode.position.y : 0;
@@ -152,7 +245,16 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   const shadowGeo = new PlaneGeometry(1, 1);
   const shadow = new Mesh(shadowGeo, shadowMat);
   shadow.rotation.x = -Math.PI / 2;
+  shadow.renderOrder = 2;
   scene.add(shadow);
+  // light pool on the floor under the spotlight, drawn before the contact shadow
+  const poolTex = poolTexture();
+  const poolMat = new MeshBasicMaterial({ map: poolTex, transparent: true, blending: AdditiveBlending, depthWrite: false, opacity: 0 });
+  const poolGeo = new PlaneGeometry(3.2, 3.2);
+  const pool = new Mesh(poolGeo, poolMat);
+  pool.rotation.x = -Math.PI / 2;
+  pool.renderOrder = 1;
+  scene.add(pool);
 
   // ---- DOM: callouts, leaders, dimension lines ----
   const leaderSvg = root.querySelector<SVGSVGElement>('svg.leaders')!;
@@ -191,6 +293,7 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   const camPos = new Vector3();
   const frameTimes: number[] = [];
   let lightStep = 0;
+  let ambientFrame = false;
   let bake = false; // poster baking: model centred, no scene offsets
 
   function mobile(): boolean { return W < 768; }
@@ -245,11 +348,16 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     const slide = smoother((P - 0.445) / 0.07);
     strap.setSlide(slide);
     strapW = 1 - slide;
-    eul.set(kf.euler[0] * DEG, kf.euler[1] * DEG, kf.euler[2] * DEG, 'YXZ');
+    const am = ambientSt.on && !bake;
+    const ptr = opts.pointer;
+    const wantX = am && ptr.fine && ptr.active ? -ptr.ny * 2.5 : 0, wantY = am && ptr.fine && ptr.active ? ptr.nx * 4 : 0;
+    ambientSt.tx += (wantX - ambientSt.tx) * 0.06; ambientSt.ty += (wantY - ambientSt.ty) * 0.06;
+    eul.set((kf.euler[0] + ambientSt.tx) * DEG, (kf.euler[1] + ambientSt.ty) * DEG, kf.euler[2] * DEG, 'YXZ');
     quat.setFromEuler(eul);
     const scale = lerp(0.94, 1, intro);
     const tablet = W >= 768 && W < 1100;
-    const pos: V3 = [mobile() || bake ? 0 : kf.pos[0] * (tablet ? 0.7 : 1), kf.pos[1], kf.pos[2]];
+    const drift = am ? Math.sin(performance.now() / 1000 * (Math.PI * 2 / 6)) * 0.02 : 0;
+    const pos: V3 = [mobile() || bake ? 0 : kf.pos[0] * (tablet ? 0.7 : 1), kf.pos[1] + drift, kf.pos[2]];
     // fit: never closer than the storyboard distance, never clipped (4% margin) inside the zone
     const [z0, z1] = zone(P);
     const zc = 1 - (z0 + z1); // ndc centre of the zone
@@ -283,9 +391,19 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     rim.intensity = 3 * intro;
     renderer.toneMappingExposure = lerp(0.2, 1, intro);
     shadow.visible = !mobile();
-    shadow.position.set(pos[0], pos[1] - 0.95 * scale, pos[2]);
+    shadow.position.set(pos[0], pos[1] - drift - 0.95 * scale, pos[2]);
     shadow.scale.set(2.6 * scale, 1.1 * scale, 1);
     shadow.rotation.z = 0;
+    // spotlight above the model, on in step with the CSS beam (intro 0 -> 1), dimmed by the storyboard (beamAt)
+    const bA = beamAt(P);
+    spot.intensity = SPOT_I * intro * bA;
+    spot.position.set(pos[0], 7, 1);
+    spot.target.position.set(pos[0], pos[1], pos[2]);
+    pool.visible = !mobile() && !bake;
+    pool.position.set(pos[0], pos[1] - drift - 0.955 * scale, pos[2]);
+    pool.scale.setScalar(scale);
+    poolMat.opacity = intro * bA * (0.15 + 0.85 * (1 - strapW)) * 0.9;
+    if (!bake) { project([0, 0, 0], pt); root.style.setProperty('--beam-x', `${pt.x.toFixed(0)}px`); }
 
     updateOverlays(P, kf, intro);
   }
@@ -360,7 +478,7 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     const now = performance.now();
     let intro = 1;
     if (introStart >= 0) {
-      const t = Math.min(1, (now - introStart) / 1200);
+      const t = Math.min(1, (now - introStart) / 1400);
       intro = 1 - Math.pow(1 - t, 4);
       if (t >= 1) introStart = -1;
     }
@@ -372,8 +490,9 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   function frame(now: number): void {
     raf = 0;
     if (disposed || lost || !active || document.hidden) { last = 0; return; }
+    if (ambientFrame && now - last < 30) { raf = requestAnimationFrame(frame); return; } // idle drift runs at ~30 fps
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
-    if (last) trackFrame(now - last);
+    if (last && !ambientFrame) trackFrame(now - last);
     last = now;
     // critically damped spring toward target, k = 9 1/s
     const k = 9;
@@ -385,7 +504,9 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     const settled = Math.abs(target - x) < 0.0005 && Math.abs(v) < 0.0005;
     if (settled) { x = target; v = 0; }
     render();
-    if (!settled || introStart >= 0) raf = requestAnimationFrame(frame); else { last = 0; frameTimes.length = 0; }
+    ambientFrame = settled && introStart < 0 && ambientSt.on;
+    if (ambientFrame) frameTimes.length = 0;
+    if (!settled || introStart >= 0 || ambientSt.on) raf = requestAnimationFrame(frame); else { last = 0; frameTimes.length = 0; }
   }
 
   function kick(): void {
@@ -405,6 +526,10 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
     else if (lightStep === 2) {
       dpr = 1; applySize();
       if (envOn) { envOn = false; scene.environment = null; fill.intensity = 0.9; key.intensity = 3; }
+      // simpler material: no sheen, no bump (site-brief 11.8)
+      const std = new MeshStandardMaterial({ color: '#222925', roughness: 1, roughnessMap: roughTex, metalness: 0 });
+      bodyMeshes.forEach((m) => { m.material = std; });
+      bodyMat.dispose(); bodyMat = std; bumpTex.dispose();
     }
     opts.onLightStep(lightStep as 1 | 2 | 3);
   }
@@ -440,6 +565,7 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
   return {
     setProgress(P: number) { target = Math.min(1, Math.max(0, P)); kick(); },
     setActive(on: boolean) { active = on; if (on) { last = 0; kick(); } },
+    setAmbient(on: boolean) { ambientSt.on = on; if (!on) { ambientSt.tx = ambientSt.ty = 0; } kick(); },
     resize() { applySize(); render(); },
     async snapshotAt(P: number, w: number, h: number) {
       const prevPR = dpr;
@@ -466,9 +592,9 @@ export async function createStage(opts: StageOptions): Promise<StageApi> {
       document.removeEventListener('visibilitychange', onVis);
       geoms.forEach((g) => g.dispose());
       strap.dispose();
-      [bodyMat, panelSide, panelTop, gpsMat, shadowMat].forEach((m) => m.dispose());
-      [panelGeo, gpsGeo, shadowGeo].forEach((g) => g.dispose());
-      [panelTex, shadowTex, envRT.texture].forEach((t) => t.dispose());
+      [bodyMat, panelSide, panelTop, gpsMat, shadowMat, poolMat].forEach((m) => m.dispose());
+      [panelGeo, gpsGeo, shadowGeo, poolGeo].forEach((g) => g.dispose());
+      [panelTex, shadowTex, poolTex, roughTex, bumpTex, envRT.texture].forEach((t) => t.dispose());
       envRT.dispose?.();
       pmrem.dispose();
       renderer.dispose();

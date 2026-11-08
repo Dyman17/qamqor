@@ -137,3 +137,15 @@ export const DIMS: { id: 'length' | 'width' | 'height'; a: V3; b: V3; label: V3 
   { id: 'width', a: [112, -40, -10], b: [112, 40, -10], label: [112, 0, -10] },
   { id: 'height', a: [-114, -48, 0], b: [-114, -48, 90], label: [-114, -48, 45] },
 ];
+
+/** Spotlight / CSS beam strength along the scroll (site-brief 11.4): smootherstep ramps between holds. */
+export function beamAt(P: number): number {
+  const m = (a: number, b: number, t: number) => lerp(a, b, smoother(t));
+  if (P < 0.3) return 1;
+  if (P < 0.46) return m(1, 0.55, (P - 0.3) / 0.16);
+  if (P < 0.59) return 0.55;
+  if (P < 0.65) return m(0.55, 0.85, (P - 0.59) / 0.06);
+  if (P < 0.79) return 0.85;
+  if (P < 0.85) return m(0.85, 0.6, (P - 0.79) / 0.06);
+  return 0.6;
+}
