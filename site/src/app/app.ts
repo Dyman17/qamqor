@@ -5,6 +5,7 @@ import { navigate, type RouteCtx, type View } from '../router';
 import { openModal } from '../ui/dialog';
 import { icon } from '../ui/icons';
 import { absTime, errText, skeleton } from './common';
+import { getSim, isDemoMode, modeName, onSim, refreshSim, setSim } from './demo';
 import { ApiError, get, getFarmId, getToken, net, onNet, onUnauthenticated, post, setFarmId, setSession, type CollarDto, type FarmDto, type UserDto } from './api';
 
 export interface AppCtx {
@@ -141,7 +142,7 @@ const view: View = {
 
     setHtml(root, html`
       <a class="skip-link" href="#main">${t('a.skip')}</a>
-      <div class="banners" id="banners" role="status"></div>
+      <div class="banners"><div id="banners" role="status"></div><div class="demo-strip" id="demo-strip" role="status" hidden></div></div>
       <div class="shell">
         <aside class="side" aria-label="${t('a.nav.main')}">
           <a class="side-brand" href="/app/map">Qamqor</a>
@@ -204,6 +205,23 @@ const view: View = {
     drawBanners();
     cleanups.push(onNet(drawBanners));
 
+    // ---- persistent "Демо" strip + demo-mode state (pilot-modes P2) ----
+    const strip = $('#demo-strip', root)!;
+    const drawStrip = () => {
+      const s = getSim();
+      if (!s || s.dataMode === 'REAL') { strip.hidden = true; strip.innerHTML = ''; document.body.classList.remove('is-demo'); return; }
+      strip.hidden = false;
+      document.body.classList.add('is-demo');
+      strip.innerHTML = html`${raw(icon('stack', 20))}<span class="demo-strip-tag">${t('a.demo.tag')}</span><span>${s.dataMode === 'MANUAL' ? t('a.demo.strip.MANUAL') : t('a.demo.strip.AUTO')}</span>`.s;
+      strip.setAttribute('aria-label', modeName(s.dataMode));
+    };
+    setSim(farm.dataMode ? { dataMode: farm.dataMode, running: false, speed: 1, herd: 8, until: null, demo: { animals: 0, alerts: 0 }, enabled: true } : null, farm.id);
+    drawStrip();
+    cleanups.push(onSim(drawStrip));
+    void refreshSim(farm.id);
+    const simTimer = window.setInterval(() => { if (!document.hidden) void refreshSim(farm.id); }, 15000);
+    cleanups.push(() => { window.clearInterval(simTimer); document.body.classList.remove('is-demo'); });
+
     // ---- chrome: connection badge + alert counter ----
     const refreshChrome = async () => {
       try {
@@ -219,7 +237,7 @@ const view: View = {
       } catch { /* chrome extras are optional */ }
     };
     void refreshChrome();
-    const chromeTimer = window.setInterval(() => void refreshChrome(), 60000);
+    const chromeTimer = window.setInterval(() => void refreshChrome(), isDemoMode() ? 15000 : 60000);
     cleanups.push(() => window.clearInterval(chromeTimer));
 
     const main = $('#main', root)!;

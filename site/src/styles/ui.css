@@ -59,13 +59,9 @@ html[data-motion="on"] .btn .spinner { animation: spin .8s linear infinite; }
 .lang-switch.on-light .lang-btn { color: var(--ink-2); }
 .lang-switch.on-light .lang-btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
 
-/* ---- Glass: light variant for the cabinet only. The landing has no glass (site-brief 11). ---- */
-.glass-light { position: relative; isolation: isolate; border-radius: var(--r-card); background: var(--glass-light-fill); backdrop-filter: var(--blur-light); -webkit-backdrop-filter: var(--blur-light); box-shadow: var(--glass-light-shadow); color: var(--ink); }
-.glass-light::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 96px; border-radius: inherit; pointer-events: none; z-index: -1; background: var(--sheen-light); }
-@supports not (backdrop-filter: blur(1px)) { .glass-light { background: var(--glass-light-solid); } }
-@media (prefers-reduced-transparency: reduce) { .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; } }
-html[data-light="1"] .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
-@media (forced-colors: active) { .glass-light { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; backdrop-filter: none; } .glass-light::before { display: none; } }
+/* ---- Light surface for the cabinet chrome (was glass; no blur anywhere now). Class name kept to avoid churn. ---- */
+.glass-light { position: relative; border-radius: var(--r-card); background: var(--glass-light-solid); box-shadow: var(--glass-light-shadow); color: var(--ink); }
+@media (forced-colors: active) { .glass-light { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; } }
 
 /* ---- Tonal night surface (site-brief 11.2): solid fill, hairline edge, soft shadow ---- */
 .card-night { background: var(--night-2); border: 1px solid var(--edge); box-shadow: var(--card-night-shadow); border-radius: var(--r-card); color: var(--snow); }

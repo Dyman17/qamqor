@@ -3,6 +3,7 @@ import { getLang, t } from '../i18n';
 import { openModal } from '../ui/dialog';
 import { icon } from '../ui/icons';
 import { ApiError, type AnimalDto, type CollarDto } from './api';
+import { demoTag } from './demo';
 
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return t('a.rel.never');
@@ -51,6 +52,9 @@ export function statusBadge(kind: 'online' | 'offline' | 'danger' | 'warning' | 
 }
 
 export function animalBadge(a: AnimalDto): Safe {
+  return html`${animalBadgeBase(a)}${demoTag(a.isDemo)}`;
+}
+function animalBadgeBase(a: AnimalDto): Safe {
   if (a.status === 'danger') return statusBadge('danger', t('a.st.danger'));
   if (a.status === 'offline') return statusBadge('offline', a.lastSeenAt ? t('a.st.offlineAt', { time: timeAgo(a.lastSeenAt) }) : t('a.st.offline'));
   if (a.status === 'warning') return statusBadge('warning', t('a.st.warning'));
@@ -58,6 +62,9 @@ export function animalBadge(a: AnimalDto): Safe {
 }
 
 export function collarBadge(c: CollarDto): Safe {
+  return html`${collarBadgeBase(c)}${demoTag(c.isDemo)}`;
+}
+function collarBadgeBase(c: CollarDto): Safe {
   if (c.status === 'ONLINE') return statusBadge('online', t('a.st.online'));
   if (c.status === 'UNASSIGNED') return statusBadge('none', t('a.st.unassigned'));
   if (!c.lastSeenAt) return statusBadge('offline', t('a.st.never'));

@@ -3,6 +3,7 @@ import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { patch, post, request, type AlertDto, type AlertType } from '../api';
+import { demoTag, getSim, isDemoMode } from '../demo';
 import { emptyState, errorState, offlineGuard, skeleton, timeEl, toast } from '../common';
 
 const TYPES: AlertType[] = ['GEOFENCE_BREACH', 'GEOFENCE_RETURN', 'DEVICE_OFFLINE', 'DEVICE_RESTORED', 'SIGNAL_LIMIT_REACHED', 'GPS_LOST'];
@@ -25,7 +26,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
   const card = (a: AlertDto): Safe => html`
     <li class="alert-card sev-${a.severity.toLowerCase()} ${a.isRead ? '' : 'unread'}" data-id="${a.id}">
-      <div class="alert-head">${raw(icon(TYPE_ICON[a.type], 22))}<h2 class="alert-title">${t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST')}</h2>${a.isRead ? '' : html`<span class="sr-only">${t('a.al.unread')}</span>`}</div>
+      <div class="alert-head">${raw(icon(TYPE_ICON[a.type], 22))}<h2 class="alert-title">${t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST')}${demoTag(a.isDemo)}</h2>${a.isRead ? '' : html`<span class="sr-only">${t('a.al.unread')}</span>`}</div>
       <p>${a.message}</p>
       <p class="caption muted">${a.animalName ?? ''}${a.penName ? ` · ${a.penName}` : ''} ${timeEl(a.createdAt)}</p>
       <div class="alert-actions">
@@ -81,5 +82,21 @@ export const mount: AppView['mount'] = (el, ctx) => {
     try { await post('/alerts/read-all'); void load(true); ctx.refreshChrome(); } catch (e) { toast((e as Error).message); }
   });
   void load(true);
-  return () => { seq++; stop(); };
+
+  // demo: new alerts appear on their own (10 s in AUTO, 20 s in MANUAL); the first page only, so "load more" is not reset needlessly
+  let timer = 0;
+  const poll = async () => {
+    if (!document.hidden && isDemoMode() && !st.next && st.loaded && el.isConnected) {
+      const my = ++seq;
+      const p = new URLSearchParams({ status: st.status, limit: '50' });
+      if (st.type) p.set('type', st.type);
+      try {
+        const r = await request<AlertDto[]>('GET', `/alerts?${p}`);
+        if (my === seq && el.isConnected) { st.items = r.data; st.next = r.next; draw(); ctx.refreshChrome(); }
+      } catch { /* the shell banner reports the network state */ }
+    }
+    if (el.isConnected) timer = window.setTimeout(() => void poll(), getSim()?.dataMode === 'AUTO' ? 10000 : 20000);
+  };
+  timer = window.setTimeout(() => void poll(), 10000);
+  return () => { seq++; window.clearTimeout(timer); stop(); };
 };

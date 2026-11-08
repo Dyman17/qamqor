@@ -59,8 +59,10 @@ export const landing = def({
     'l.app.android': 'Android',
     'l.app.android.status': 'APK скоро',
     'l.app.android.get': 'Скачать APK',
+    'l.app.android.size': '≈63 МБ',
+    'l.app.android.note': 'Разрешите установку из неизвестных источников',
     'l.app.ios': 'iOS',
-    'l.app.ios.status': 'Позже',
+    'l.app.ios.status': 'Скоро',
     'l.app.web': 'Веб-кабинет',
     'l.app.web.open': 'Открыть веб-кабинет',
 
@@ -171,8 +173,10 @@ export const landing = def({
     'l.app.android': 'Android',
     'l.app.android.status': 'APK coming soon',
     'l.app.android.get': 'Download APK',
+    'l.app.android.size': '≈63 MB',
+    'l.app.android.note': 'Allow installation from unknown sources',
     'l.app.ios': 'iOS',
-    'l.app.ios.status': 'Later',
+    'l.app.ios.status': 'Soon',
     'l.app.web': 'Web dashboard',
     'l.app.web.open': 'Open the web dashboard',
 

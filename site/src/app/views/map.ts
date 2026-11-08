@@ -3,8 +3,11 @@ import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { get, request, type AnimalDto, type PenDto } from '../api';
+import { demoTag } from '../demo';
 import { absTime, animalBadge, emptyState, errorState, offlineGuard, skeleton, speciesName, timeAgo, toast } from '../common';
 import { openAnimalForm } from './animal';
+import { getSim, isDemoMode, onSim } from '../demo';
+import { mountDemoPanel } from './demo-panel';
 
 // MapLibre is loaded lazily, only on this route (site-brief 8). Base map: OpenFreeMap (no key), OSM attribution from the style.
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
@@ -63,6 +66,10 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   let me: import('maplibre-gl').Marker | null = null;
   let disposed = false;
   const timers: number[] = [];
+  let pickHandler: ((lng: number, lat: number) => void) | null = null;
+  let dragId: string | null = null;
+  let dragDrop: (lng: number, lat: number) => void = () => undefined;
+  let dragging = false;
 
   setHtml(el, html`
     <div class="map-wrap">
@@ -78,7 +85,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       </div>
       <aside class="map-panel glass-light" id="panel" data-sheet="peek" aria-label="${t('a.map.sheet')}">
         <button type="button" class="sheet-handle" id="sheet-toggle" aria-label="${t('a.map.expand')}"><span aria-hidden="true"></span></button>
-        <div class="panel-scroll" id="panel-body"></div>
+        <div class="panel-scroll"><div id="demo-box" class="demo-box" hidden></div><div class="panel-inner" id="panel-body"></div></div>
       </aside>
     </div>`);
 
@@ -112,7 +119,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       ${tiles}
       <p class="caption muted" title="${absTime(new Date(updatedAt).toISOString())}">${t('a.state.updated', { time: timeAgo(new Date(updatedAt).toISOString()) })}</p>
       ${animals.length ? html`<div class="search"><label class="sr-only" for="mq">${t('a.map.search')}</label>${raw(icon('magnifying-glass', 20, 'search-ico'))}<input class="input" id="mq" type="search" placeholder="${t('a.map.search')}" value="${query}" autocomplete="off"></div>
-        <ul class="plist" aria-label="${t('a.map.list')}">${list.map((a) => html`<li><button type="button" class="prow ${a.id === selected ? 'sel' : ''}" data-id="${a.id}"><span class="mk ${statusClass(a)}" aria-hidden="true"></span><span class="prow-main"><strong>${a.name}</strong><span class="caption muted">${a.tag}${a.lat == null ? ` · ${t('a.map.noPos')}` : ''}</span></span><span class="prow-side">${animalBadge(a)}</span></button></li>`)}</ul>`
+        <ul class="plist" aria-label="${t('a.map.list')}">${list.map((a) => html`<li><button type="button" class="prow ${a.id === selected ? 'sel' : ''}" data-id="${a.id}"><span class="mk ${statusClass(a)}${a.isDemo ? ' demo' : ''}" aria-hidden="true"></span><span class="prow-main"><strong>${a.name}${demoTag(a.isDemo)}</strong><span class="caption muted">${a.tag}${a.lat == null ? ` · ${t('a.map.noPos')}` : ''}</span></span><span class="prow-side">${animalBadge(a)}</span></button></li>`)}</ul>`
         : emptyState(t('a.map.empty'), undefined, html`<button type="button" class="btn btn-primary btn-sm" id="p-add" data-write>${t('a.herd.add')}</button>`)}
       ${pens.length ? html`<h3 class="title-3">${t('a.map.pens')}</h3><ul class="pen-list">${pens.map((p) => html`<li>${p.name} <span class="caption muted">· ${p.animalsCount}</span></li>`)}</ul>` : html`<p class="muted">${t('a.map.noPens')}</p>`}`.s;
     $<HTMLInputElement>('#mq', panelBody)?.addEventListener('input', (e) => {
@@ -137,20 +144,28 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   function markerEl(a: AnimalDto): HTMLElement {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `amark ${statusClass(a)}${a.id === selected ? ' sel' : ''}`;
-    b.setAttribute('aria-label', `${a.name}, ${a.status === 'danger' ? t('a.st.danger') : a.status === 'offline' ? t('a.st.offline') : t('a.st.ok')}`);
+    b.className = `amark ${statusClass(a)}${a.isDemo ? ' demo' : ''}${a.id === selected ? ' sel' : ''}`;
+    b.setAttribute('aria-label', `${a.name}${a.isDemo ? ` (${t('a.demo.tag')})` : ''}, ${a.status === 'danger' ? t('a.st.danger') : a.status === 'offline' ? t('a.st.offline') : t('a.st.ok')}`);
     b.addEventListener('click', (e) => { e.stopPropagation(); select(a.id, false); });
     return b;
   }
 
   function renderMarkers(): void {
-    if (!map || !ML || !mapReady) return;
+    if (!map || !ML || !mapReady || dragging) return;
     markers.forEach((m) => m.remove());
     markers = [];
     const pos = animals.filter((a) => a.lat != null && a.lng != null);
     const cluster = pos.length > CLUSTER_MIN && map.getZoom() < 16;
-    const add = (lng: number, lat: number, node: HTMLElement) => { markers.push(new ML!.Marker({ element: node }).setLngLat([lng, lat]).addTo(map!)); };
-    if (!cluster) { pos.forEach((a) => add(a.lng!, a.lat!, markerEl(a))); return; }
+    const add = (lng: number, lat: number, node: HTMLElement, id?: string) => {
+      const canDrag = !!id && id === dragId;
+      const mk = new ML!.Marker({ element: node, draggable: canDrag }).setLngLat([lng, lat]).addTo(map!);
+      if (canDrag) {
+        mk.on('dragstart', () => { dragging = true; });
+        mk.on('dragend', () => { dragging = false; const p = mk.getLngLat(); dragDrop(p.lng, p.lat); });
+      }
+      markers.push(mk);
+    };
+    if (!cluster) { pos.forEach((a) => add(a.lng!, a.lat!, markerEl(a), a.id)); return; }
     const cells = new Map<string, AnimalDto[]>();
     for (const a of pos) {
       const p = map.project([a.lng!, a.lat!]);
@@ -158,7 +173,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       (cells.get(k) ?? cells.set(k, []).get(k)!).push(a);
     }
     cells.forEach((g) => {
-      if (g.length === 1 || g.some((a) => a.id === selected)) { g.forEach((a) => add(a.lng!, a.lat!, markerEl(a))); return; }
+      if (g.length === 1 || g.some((a) => a.id === selected)) { g.forEach((a) => add(a.lng!, a.lat!, markerEl(a), a.id)); return; }
       const c = document.createElement('button');
       c.type = 'button'; c.className = 'cluster num';
       c.textContent = String(g.length);
@@ -225,6 +240,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         else fitAll();
       });
       map.on('zoomend', renderMarkers);
+      map.on('click', (e) => { if (pickHandler) pickHandler(e.lngLat.lng, e.lngLat.lat); });
       map.on('moveend', () => { if (animals.length > CLUSTER_MIN) renderMarkers(); });
     } catch (e) {
       console.warn('[site] map unavailable:', e);
@@ -257,19 +273,54 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     toggle.setAttribute('aria-label', next === 'full' ? t('a.map.collapse') : t('a.map.expand'));
   });
 
-  // live positions
-  timers.push(window.setInterval(async () => {
-    if (document.hidden || disposed) return;
-    try {
-      animals = await fetchAll();
-      updatedAt = Date.now();
-      if (!panelBody.querySelector('#mq:focus')) drawPanel();
-      renderMarkers();
-    } catch { /* the shell banner reports the network state */ }
-  }, 30000));
+  // ---- demo panel (owner, MANUAL / AUTO) ----
+  async function reload(): Promise<void> {
+    const [a, p] = await Promise.all([fetchAll(), get<PenDto[]>('/geofences')]);
+    if (disposed) return;
+    animals = a; pens = p; updatedAt = Date.now();
+    if (selected && !animals.some((x) => x.id === selected)) selected = null;
+    if (!panelBody.querySelector('#mq:focus')) drawPanel();
+    drawPens(); renderMarkers();
+    demo.update();
+  }
+  const demoBox = $('#demo-box', el)!;
+  const demo = mountDemoPanel(demoBox, {
+    ctx,
+    animals: () => animals,
+    pens: () => pens,
+    refresh: reload,
+    setPick: (h) => { pickHandler = h; if (map) map.getCanvas().style.cursor = h ? 'crosshair' : ''; },
+    setDrag: (id, onDrop) => { const changed = id !== dragId; dragId = id; dragDrop = onDrop; if (changed) renderMarkers(); },
+    select: (id) => select(id, true),
+  });
+  // a mode change made elsewhere (settings in another tab, auto-stop) is picked up by the shell's /simulation poll
+  let lastMode = getSim()?.dataMode ?? 'REAL';
+  const stopSim = onSim((s) => {
+    const m = s?.dataMode ?? 'REAL';
+    if (m === lastMode) return;
+    lastMode = m;
+    void reload().catch(() => undefined);
+  });
+
+  // live positions: 30 s normally, 10 s while the demo is on (AUTO moves the herd every tick)
+  const tick = async () => {
+    if (!document.hidden && !disposed) {
+      try {
+        animals = await fetchAll();
+        updatedAt = Date.now();
+        if (!panelBody.querySelector('#mq:focus')) drawPanel();
+        renderMarkers();
+        demo.update();
+      } catch { /* the shell banner reports the network state */ }
+    }
+    if (!disposed) timers.push(window.setTimeout(() => void tick(), getSim()?.dataMode === 'AUTO' ? 10000 : isDemoMode() ? 15000 : 30000));
+  };
+  timers.push(window.setTimeout(() => void tick(), getSim()?.dataMode === 'AUTO' ? 10000 : 30000));
 
   return () => {
     disposed = true;
+    demo.dispose();
+    stopSim();
     timers.forEach((x) => { window.clearTimeout(x); window.clearInterval(x); });
     markers.forEach((m) => m.remove());
     penMarkers.forEach((m) => m.remove());

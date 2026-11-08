@@ -2,16 +2,17 @@ import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { getLang, langSwitcherHtml, bindLangSwitch, applyI18n, t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
-import { ApiError, del, get, patch, post, put, setSession, type FarmDto, type InvitationDto, type MembersResponse, type SignalLimitDto } from '../api';
+import { ApiError, del, get, patch, post, put, setSession, simApi, type DataMode, type FarmDto, type InvitationDto, type MembersResponse, type SignalLimitDto, type SimulationDto } from '../api';
+import { modeName, setSim } from '../demo';
 import { confirmDialog, copyText, errText, loadInto, offlineGuard, timeEl, toast } from '../common';
 
-type Tab = 'farm' | 'people' | 'signals' | 'account';
+type Tab = 'farm' | 'data' | 'people' | 'signals' | 'account';
 
 export const mount: AppView['mount'] = (el, ctx) => {
   ctx.setTitle(t('a.set.title'));
   ctx.setActions('');
   const stop = offlineGuard(document.body);
-  const tabs: Tab[] = ctx.isOwner ? ['farm', 'people', 'signals', 'account'] : ['account'];
+  const tabs: Tab[] = ctx.isOwner ? ['farm', 'data', 'people', 'signals', 'account'] : ['data', 'account'];
   let tab: Tab = (ctx.query.get('tab') as Tab) && tabs.includes(ctx.query.get('tab') as Tab) ? (ctx.query.get('tab') as Tab) : tabs[0];
   setHtml(el, html`<div class="settings">
     ${tabs.length > 1 ? html`<nav class="tabs" aria-label="${t('a.set.title')}">${tabs.map((x) => html`<button type="button" class="tab" data-tab="${x}" aria-current="${x === tab}">${t(`a.set.${x}` as 'a.set.farm')}</button>`)}</nav>` : ''}
@@ -20,7 +21,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
   const go = (x: Tab) => {
     tab = x;
     $$('.tab', el).forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === x)));
-    if (x === 'farm') farmTab(body, ctx); else if (x === 'people') peopleTab(body, ctx); else if (x === 'signals') signalsTab(body, ctx); else accountTab(body, ctx);
+    if (x === 'farm') farmTab(body, ctx); else if (x === 'data') dataTab(body, ctx); else if (x === 'people') peopleTab(body, ctx); else if (x === 'signals') signalsTab(body, ctx); else accountTab(body, ctx);
   };
   $$('.tab', el).forEach((b) => b.addEventListener('click', () => go(b.dataset.tab as Tab)));
   go(tab);
@@ -47,6 +48,43 @@ function farmTab(el: HTMLElement, ctx: AppCtx): void {
       Object.assign(ctx.farm, nf);
       ok.textContent = t('a.set.saved'); ok.hidden = false;
     } catch (er) { err.textContent = errText(er); err.hidden = false; }
+  });
+}
+
+const MODES: DataMode[] = ['REAL', 'MANUAL', 'AUTO'];
+
+/** Data mode of the farm: owners switch, workers see the current mode. Leaving a demo mode deletes the demo data, so it asks first. */
+function dataTab(el: HTMLElement, ctx: AppCtx): void {
+  const fid = ctx.farm.id;
+  void loadInto(el, () => simApi.get(fid), (s0) => {
+    let s: SimulationDto = s0;
+    setSim(s, fid);
+    const draw = (err = '') => {
+      const locked = !ctx.isOwner || !s.enabled;
+      setHtml(el, html`<form class="form narrow-form" id="dm" novalidate>
+        <h2 class="title-2">${t('a.set.data.title')}</h2>
+        <p class="muted">${t('a.set.data.intro')}</p>
+        <fieldset class="mode-set" aria-describedby="dm-note"><legend class="sr-only">${t('a.set.data.title')}</legend>
+          ${MODES.map((m) => html`<label class="mode-opt ${m === s.dataMode ? 'on' : ''}"><input type="radio" name="mode" value="${m}" ${m === s.dataMode ? raw('checked') : ''} ${locked ? raw('disabled') : ''}><span><strong>${t(`a.set.data.${m}` as 'a.set.data.REAL')}</strong><span class="caption muted">${t(`a.set.data.${m}.d` as 'a.set.data.REAL.d')}</span></span></label>`)}
+        </fieldset>
+        <p class="hint" id="dm-note">${!s.enabled ? t('a.set.data.off') : !ctx.isOwner ? t('a.set.data.worker') : t('a.set.data.current', { mode: modeName(s.dataMode) })}</p>
+        <p class="field-error" role="alert" ${err ? '' : raw('hidden')}>${err}</p>
+      </form>`);
+      $$<HTMLInputElement>('input[name="mode"]', el).forEach((r) => r.addEventListener('change', async () => {
+        const mode = r.value as DataMode;
+        if (mode === s.dataMode) return;
+        if (mode === 'REAL' && !await confirmDialog({ title: t('a.set.data.confirmTitle'), text: t('a.set.data.confirmText'), confirmLabel: t('a.set.data.confirm'), danger: true })) { draw(); return; }
+        $$<HTMLInputElement>('input[name="mode"]', el).forEach((x) => { x.disabled = true; });
+        try {
+          s = await simApi.setMode(fid, mode);
+          setSim(s, fid);
+          ctx.farm.dataMode = s.dataMode;
+          draw();
+          toast(t('a.set.data.done', { mode: modeName(s.dataMode) }));
+        } catch (e) { draw(errText(e)); }
+      }));
+    };
+    draw();
   });
 }
 

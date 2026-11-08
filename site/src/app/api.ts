@@ -1,24 +1,25 @@
 import { ssDel, ssGet, ssSet } from '../storage';
 
 // ---- DTOs (docs/architecture/api-contract.md section 2) ----
+export type DataMode = 'REAL' | 'MANUAL' | 'AUTO';
 export type Role = 'OWNER' | 'WORKER';
 export type AnimalStatus = 'ok' | 'danger' | 'warning' | 'offline';
 export type ConnState = 'ONLINE' | 'OFFLINE' | 'UNASSIGNED';
 export interface UserDto { id: string; email: string; fullName: string; phone?: string }
 export interface MembershipDto { farmId: string; farmName: string; role: Role }
 export interface AuthResponse { token: string; user: UserDto; memberships: MembershipDto[] }
-export interface FarmDto { id: string; name: string; description?: string; timezone: string; workerCanEditBoundaries: boolean; myRole: Role }
+export interface FarmDto { id: string; name: string; description?: string; timezone: string; workerCanEditBoundaries: boolean; myRole: Role; dataMode?: DataMode }
 export interface SignalLimitDto { level: 'SOUND' | 'VIBRATION' | 'IMPULSE'; dailyLimit: number | null; unlimited: boolean }
 export interface AnimalDto {
   id: string; farmId: string; name: string; tag: string; species: 'CATTLE' | 'HORSE' | 'CAMEL' | 'SHEEP' | 'GOAT'; gender?: string; breed?: string;
-  penId: string | null; collarId: string | null; lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null; status: AnimalStatus;
+  penId: string | null; collarId: string | null; lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null; status: AnimalStatus; isDemo?: boolean;
 }
-export interface CollarDto { deviceId: string; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null }
-export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number }
+export interface CollarDto { deviceId: string; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
+export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number; isDemo?: boolean }
 export type AlertType = 'GEOFENCE_BREACH' | 'GEOFENCE_RETURN' | 'DEVICE_OFFLINE' | 'DEVICE_RESTORED' | 'SIGNAL_LIMIT_REACHED' | 'GPS_LOST';
 export interface AlertDto {
   id: string; type: AlertType; severity: 'INFO' | 'WARNING' | 'CRITICAL'; status: 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED';
-  animalId: string | null; animalName: string | null; penName: string | null; message: string; lat: number | null; lng: number | null; createdAt: string; isRead: boolean;
+  animalId: string | null; animalName: string | null; penName: string | null; message: string; lat: number | null; lng: number | null; createdAt: string; isRead: boolean; isDemo?: boolean;
 }
 export interface InvitationDto { id: string; email: string; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED'; expiresAt: string }
 export interface MembersResponse { members: { userId: string; email: string; fullName: string; role: Role }[]; invitations: InvitationDto[] }
@@ -96,3 +97,26 @@ export const post = <T>(p: string, b?: unknown, o?: { farm?: boolean; auth?: boo
 export const patch = <T>(p: string, b: unknown) => request<T>('PATCH', p, b).then((r) => r.data);
 export const put = <T>(p: string, b: unknown) => request<T>('PUT', p, b).then((r) => r.data);
 export const del = (p: string) => request<void>('DELETE', p).then(() => undefined);
+
+// ---- collar registration by the 8-digit device code (docs/architecture/device-code-protocol.md) ----
+export const DEVICE_CODE_RE = /^[0-9]{8}$/;
+/** The only place that registers a collar: POST /devices { code, animalId? }. The code is the device identity; no secret is returned. */
+export const registerCollarByCode = (code: string, animalId?: string) =>
+  post<{ collar: CollarDto }>('/devices', animalId ? { code, animalId } : { code });
+
+// ---- demo modes (docs/architecture/api-contract.md, server/src/simulation) ----
+export type SimSpeed = 1 | 2 | 5 | 10;
+export type SimEvent = 'BREACH' | 'ESCAPE' | 'RETURN' | 'GPS_LOST' | 'COLLAR_OFFLINE' | 'COLLAR_ONLINE';
+export interface SimulationDto { dataMode: DataMode; running: boolean; speed: number; herd: number; until: string | null; demo: { animals: number; alerts: number }; enabled: boolean }
+export interface CollarResponseDto { zone: string; inFence: boolean | null; distanceToBorderMeters: number | null; sound: boolean; vibrate: boolean; toneFrequencyHz: number; suppressedBy: 'SIGNAL_LIMIT' | null }
+export const simApi = {
+  get: (farm: string) => get<SimulationDto>(`/farms/${farm}/simulation`),
+  setMode: (farm: string, mode: DataMode) => put<SimulationDto>(`/farms/${farm}/data-mode`, { mode }),
+  start: (farm: string, p: { speed?: SimSpeed; herd?: number; hours?: number }) => post<SimulationDto>(`/farms/${farm}/simulation/start`, p),
+  stop: (farm: string) => post<SimulationDto>(`/farms/${farm}/simulation/stop`),
+  reset: (farm: string) => post<SimulationDto>(`/farms/${farm}/simulation/reset`),
+  setSpeed: (farm: string, speed: SimSpeed) => patch<SimulationDto>(`/farms/${farm}/simulation`, { speed }),
+  addAnimal: (farm: string, p: { name?: string; species?: AnimalDto['species'] }) => post<AnimalDto>(`/farms/${farm}/simulate/animals`, p),
+  telemetry: (farm: string, p: { animalId: string; lat: number; lng: number; accuracyM?: number; speedKmh?: number }) => post<CollarResponseDto>(`/farms/${farm}/simulate/telemetry`, p),
+  event: (farm: string, p: { animalId: string; event: SimEvent }) => post<CollarResponseDto | { ok: true }>(`/farms/${farm}/simulate/events`, p),
+};

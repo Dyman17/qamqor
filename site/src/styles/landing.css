@@ -356,5 +356,7 @@ html[data-motion="on"] .stat.lit:hover { transform: translateY(-2px); }
 /* app section */
 .app-list { margin-top: clamp(32px, 4vw, 56px); display: grid; gap: var(--space-4); }
 .app-item { display: grid; gap: var(--space-4); align-content: space-between; justify-items: start; padding: clamp(20px, 3vw, 32px); background: var(--surface-2); border: 1px solid #C5D8C9; border-radius: var(--r-block); box-shadow: 0 12px 32px -20px rgba(11, 26, 18, .35); }
+.app-size { font-weight: 500; opacity: .85; }
+.app-note { margin: 0; color: var(--ink-2); font-size: 15px; }
 .status-chip { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: var(--r-pill); border: 1px dashed var(--line); color: var(--ink-2); font-size: 15px; font-weight: 600; cursor: default; }
 @media (min-width: 768px) { .app-list { grid-template-columns: repeat(3, 1fr); } }

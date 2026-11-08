@@ -90,12 +90,9 @@
   --fade-night-light: linear-gradient(#06140D, #F6FAF4);
   --fade-light-night: linear-gradient(#F6FAF4, #06140D);
 
-  /* ---- Glass: light variant is used by the cabinet only (landing is glass-free, site-brief 11) ---- */
-  --glass-light-fill: rgba(246, 250, 244, .86);
+  /* ---- Light cabinet surface (solid, no blur) ---- */
   --glass-light-solid: #F6FAF4;
-  --glass-light-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 0 0 1px rgba(255, 255, 255, .45), 0 14px 40px rgba(8, 18, 12, .22);
-  --sheen-light: radial-gradient(120% 100% at 50% 0, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 70%);
-  --blur-light: blur(28px) saturate(1.5);
+  --glass-light-shadow: 0 0 0 1px rgba(11, 26, 18, .12), 0 10px 28px -14px rgba(8, 18, 12, .35);
 
   /* ---- Space (step 4), radii (nested), sizes ---- */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px;

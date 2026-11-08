@@ -3,10 +3,9 @@ import { t } from '../../i18n';
 import { setLeaveGuard } from '../../router';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
-import { ApiError, get, net, onNet, post, type AnimalDto, type CollarDto } from '../api';
+import { ApiError, DEVICE_CODE_RE, get, net, onNet, registerCollarByCode, type AnimalDto, type CollarDto } from '../api';
 import { confirmDialog, copyText, errText, forbiddenState, offlineGuard } from '../common';
 
-const ID_RE = /^[A-Za-z0-9_-]{3,40}$/;
 const POLL_MS = 10_000;
 const GIVE_UP_MS = 15 * 60_000; // the contract treats a collar as offline after 3 x 300 s of silence
 
@@ -16,8 +15,9 @@ export function handOffSecret(deviceId: string, secret: string): void { pending 
 
 const groups4 = (s: string): string[] => s.match(/.{1,4}/g) ?? [s];
 
-function stepper(n: number): Safe {
-  return html`<p class="step-label" aria-label="${t('a.cn.step', { n })}"><span class="step-text">${t('a.cn.step', { n })}</span><span class="step-bar" aria-hidden="true">${[1, 2, 3].map((i) => html`<i class="${i <= n ? 'on' : ''}"></i>`)}</span></p>`;
+function stepper(n: number, total: number): Safe {
+  const label = t('a.cn.step', { n, total });
+  return html`<p class="step-label" aria-label="${label}"><span class="step-text">${label}</span><span class="step-bar" aria-hidden="true">${Array.from({ length: total }, (_x, k) => k + 1).map((i) => html`<i class="${i <= n ? 'on' : ''}"></i>`)}</span></p>`;
 }
 
 export const mount: AppView['mount'] = (el, ctx) => {
@@ -29,6 +29,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
   // The secret exists only in this closure. Never stored, never in the URL, never logged.
   let secret: string | null = null;
   let deviceId = '';
+  let total = 2; // code flow: enter the code, wait for the first signal. The key hand-off flow (rotate) has 3 steps.
   let saved = false;
   let pollTimer = 0;
   let copyTimer = 0;
@@ -46,11 +47,12 @@ export const mount: AppView['mount'] = (el, ctx) => {
   // ---------- step 1 ----------
   async function step1(): Promise<void> {
     wipe();
+    total = 2;
     let animals: AnimalDto[] = [];
-    try { animals = (await get<AnimalDto[]>('/animals?limit=100')).filter((a) => !a.collarId); } catch { /* optional */ }
-    setHtml(el, html`<div class="narrow-page">${stepper(1)}<h2 class="title-1 step-title">${t('a.cn.s1')}</h2><p>${t('a.cn.intro')}</p>
+    try { animals = (await get<AnimalDto[]>('/animals?limit=100')).filter((a) => !a.collarId && !a.isDemo); } catch { /* optional */ }
+    setHtml(el, html`<div class="narrow-page">${stepper(1, total)}<h2 class="title-1 step-title">${t('a.cn.s1')}</h2><p>${t('a.cn.intro')}</p>
       <form id="f1" class="form" novalidate>
-        <div class="field"><label for="did">${t('a.cn.idLabel')}</label><input class="input" id="did" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40" aria-describedby="did-hint did-err"><p class="hint" id="did-hint">${t('a.cn.idHint')}</p><p class="field-error" id="did-err" hidden></p></div>
+        <div class="field"><label for="did">${t('a.cn.idLabel')}</label><input class="input num" id="did" inputmode="numeric" pattern="[0-9]{8}" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="8" aria-describedby="did-hint did-err"><p class="hint" id="did-hint">${t('a.cn.idHint')}</p><p class="field-error" id="did-err" hidden></p></div>
         <div class="field"><label for="dan">${t('a.cn.animal')} <span class="opt">(${t('a.reg.optional')})</span></label><select class="select" id="dan"><option value="">${t('a.animal.f.none')}</option>${animals.map((a) => html`<option value="${a.id}">${a.name} · ${a.tag}</option>`)}</select><p class="hint">${t('a.cn.animalHint')}</p></div>
         <p class="field-error" id="f1-err" role="alert" hidden></p>
         <button class="btn btn-primary btn-block" type="submit" id="create" data-write>${t('a.cn.create')}</button>
@@ -59,13 +61,13 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const err = $('#did-err', el)!;
     const formErr = $('#f1-err', el)!;
     const check = (): boolean => {
-      const ok = ID_RE.test(input.value);
+      const ok = DEVICE_CODE_RE.test(input.value);
       input.toggleAttribute('aria-invalid', !ok && input.value.length > 0);
       err.hidden = ok || input.value.length === 0;
       err.textContent = t('a.cn.idBad');
       return ok;
     };
-    input.addEventListener('input', check);
+    input.addEventListener('input', () => { const d = input.value.replace(/\D/g, '').slice(0, 8); if (d !== input.value) input.value = d; check(); });
     let busy = false;
     $<HTMLFormElement>('#f1', el)!.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -76,11 +78,10 @@ export const mount: AppView['mount'] = (el, ctx) => {
       btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = t('a.cn.creating');
       try {
         const animalId = $<HTMLSelectElement>('#dan', el)!.value;
-        const r = await post<{ collar: CollarDto; deviceSecret: string }>('/devices', animalId ? { deviceId: input.value, animalId } : { deviceId: input.value });
+        const r = await registerCollarByCode(input.value, animalId || undefined);
         deviceId = r.collar.deviceId;
-        secret = r.deviceSecret;
-        saved = false;
-        step2();
+        wipe();
+        step3();
       } catch (er) {
         busy = false;
         btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = t('a.cn.create');
@@ -100,7 +101,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     setGuard();
     const url = `${location.origin}/api/v1/device/telemetry`;
     const allText = `${t('a.cn.fwId')}: ${deviceId}\n${t('a.cn.fwSecret')}: ${sec}\n${t('a.cn.fwUrl')}: ${url} (POST, Authorization: Bearer ${sec})`;
-    setHtml(el, html`<div class="narrow-page">${stepper(2)}<h2 class="title-1 step-title">${t('a.cn.s2')}</h2>
+    setHtml(el, html`<div class="narrow-page">${stepper(2, total)}<h2 class="title-1 step-title">${t('a.cn.s2')}</h2>
       <div class="secret-card">
         <div class="warn-box" role="note">${raw(icon('warning', 24))}<p><strong>${t('a.cn.warn')}</strong></p></div>
         <div class="secret-block"><p class="label">${t('a.cn.identifier')}</p><div class="secret-row"><code class="id-val" id="v-id">${deviceId}</code><button type="button" class="btn btn-secondary btn-sm" data-copy="id">${t('a.cn.copy')}</button></div></div>
@@ -167,7 +168,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
   function step3(): void {
     stopNet?.(); stopNet = null;
     const started = Date.now();
-    setHtml(el, html`<div class="narrow-page">${stepper(3)}<h2 class="title-1 step-title">${t('a.cn.s3')}</h2><p>${t('a.cn.s3text')}</p>
+    setHtml(el, html`<div class="narrow-page">${stepper(total, total)}<h2 class="title-1 step-title">${t('a.cn.s3')}</h2><p>${t('a.cn.s3text')}</p>
       <div class="live-status" id="live" role="status" aria-live="polite"></div><p class="caption muted" id="paused" hidden>${t('a.cn.paused')}</p>
       <div class="row-actions" id="s3-actions"></div></div>`);
     const live = $('#live', el)!;
@@ -202,7 +203,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     pollTimer = window.setTimeout(poll, 2000);
   }
 
-  if (pending) { deviceId = pending.deviceId; secret = pending.secret; pending = null; saved = false; step2(); } else void step1();
+  if (pending) { total = 3; deviceId = pending.deviceId; secret = pending.secret; pending = null; saved = false; step2(); } else void step1();
 
   return () => {
     window.removeEventListener('beforeunload', beforeUnload);

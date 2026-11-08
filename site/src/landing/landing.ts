@@ -228,7 +228,8 @@ const template = () => html`
           <li class="app-item">
             <h3 class="h3" data-i18n="l.app.android"></h3>
             ${APP_LINKS.android
-              ? html`<a class="btn btn-primary" href="${APP_LINKS.android}" rel="noopener" data-i18n="l.app.android.get"></a>`
+              ? html`<a class="btn btn-primary" href="${APP_LINKS.android}" rel="noopener" download="qamqor.apk"><span data-i18n="l.app.android.get"></span>&nbsp;<span class="app-size" data-i18n="l.app.android.size"></span></a>
+                <p class="app-note" data-i18n="l.app.android.note"></p>`
               : html`<p class="status-chip" data-i18n="l.app.android.status"></p>`}
           </li>
           <li class="app-item">

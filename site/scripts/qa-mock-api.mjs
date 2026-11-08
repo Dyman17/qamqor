@@ -2,11 +2,11 @@
 // Behaviour switches live on window.__mock: { role, loginError, network, empty, fail, secret }.
 export function mockSource() {
   return `(() => {
-  const M = window.__mock = { role: 'OWNER', loginError: null, network: false, empty: false, fail: null, online: false, calls: [] };
+  const M = window.__mock = { role: 'OWNER', loginError: null, network: false, empty: false, fail: null, online: false, calls: [], mode: 'REAL', speed: 1, herd: 8, demo: [] };
   const now = Date.now();
   const iso = (minAgo) => new Date(now - minAgo * 60000).toISOString();
-  const farm = () => ({ id: 'farm1', name: 'Ферма Демо', timezone: 'Asia/Aqtau', workerCanEditBoundaries: false, myRole: M.role });
-  const animals = () => M.empty ? [] : [
+  const farm = () => ({ id: 'farm1', name: 'Ферма Демо', timezone: 'Asia/Aqtau', workerCanEditBoundaries: false, myRole: M.role, dataMode: M.mode });
+  const animals = () => M.empty ? [] : [...M.demo,
     { id: 'a1', farmId: 'farm1', name: 'Корова #0142', tag: '0142', species: 'CATTLE', penId: 'p1', collarId: 'COLLAR-01', lat: 43.6502, lng: 51.1498, accuracyM: 6, lastSeenAt: iso(3), status: 'danger' },
     { id: 'a2', farmId: 'farm1', name: 'Корова #0087', tag: '0087', species: 'CATTLE', penId: 'p1', collarId: 'COLLAR-02', lat: 43.6510, lng: 51.1520, accuracyM: 5, lastSeenAt: iso(2), status: 'ok' },
     { id: 'a3', farmId: 'farm1', name: 'Лошадь Гнедко', tag: '0231', species: 'HORSE', penId: null, collarId: null, lat: null, lng: null, accuracyM: null, lastSeenAt: null, status: 'offline' },
@@ -23,6 +23,10 @@ export function mockSource() {
     { id: 'al1', type: 'GEOFENCE_BREACH', severity: 'CRITICAL', status: 'ACTIVE', animalId: 'a1', animalName: 'Корова #0142', penName: 'Загон «Северный»', message: 'Вышла за границу загона', lat: 43.6502, lng: 51.1498, createdAt: iso(5), isRead: false },
     { id: 'al2', type: 'DEVICE_OFFLINE', severity: 'WARNING', status: 'ACTIVE', animalId: 'a4', animalName: 'Овца #0310', penName: null, message: 'Нет сигнала дольше 15 минут', lat: null, lng: null, createdAt: iso(25), isRead: true },
   ];
+  const simDto = () => ({ dataMode: M.mode, running: M.mode === 'AUTO', speed: M.speed, herd: M.herd, until: M.mode === 'AUTO' ? new Date(Date.now() + 7200000).toISOString() : null, demo: { animals: M.demo.length, alerts: M.demo.length }, enabled: true });
+  const zoneOf = (lat, lng) => (lng >= 51.147 && lng <= 51.156 && lat >= 43.648 && lat <= 43.653) ? 'GREEN' : 'RED';
+  const addDemo = (name) => { const n = M.demo.length + 1; const a = { id: 'd' + n, farmId: 'farm1', name: name || ('Демо ' + n), tag: 'D-00' + n, species: 'CATTLE', penId: 'p1', collarId: 'QAM-DEMO-000' + n, lat: 43.6505, lng: 51.1515, accuracyM: 5, lastSeenAt: new Date().toISOString(), status: 'ok', isDemo: true }; M.demo.push(a); return a; };
+  M.addDemo = addDemo;
   const me = () => ({ user: { id: 'u1', email: 'qa@example.test', fullName: 'QA Тест' }, memberships: [{ farmId: 'farm1', farmName: 'Ферма Демо', role: M.role }] });
   let polls = 0;
   const json = (status, body, headers = {}) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -49,10 +53,25 @@ export function mockSource() {
     if (path === '/animals' && method === 'GET') return json(200, animals());
     if (/^\\/animals\\/a\\d$/.test(path)) return json(200, animals().find((a) => a.id === path.split('/')[2]));
     if (/^\\/animals\\/a\\d\\/events$/.test(path)) return json(200, { alerts: alerts(), signals: { day: '2026-11-09', sound: { used: 2, limit: 5 }, vibration: { used: 1, limit: null }, impulse: { used: 0, limit: null, available: false } } });
+    if (path === '/farms/farm1/simulation' && method === 'GET') return json(200, simDto());
+    if (/^\\/farms\\/farm1\\/(data-mode|simulation|simulate)/.test(path) && method !== 'GET') {
+      if (M.role !== 'OWNER') return json(403, { statusCode: 403, code: 'FORBIDDEN_ROLE', message: 'Только владелец' });
+      const b = init.body ? JSON.parse(init.body) : {};
+      if (path.endsWith('/data-mode')) { M.mode = b.mode; if (b.mode === 'REAL') M.demo = []; else if (!M.demo.length) { addDemo(); } return json(200, simDto()); }
+      if (path.endsWith('/simulation/start')) { M.mode = 'AUTO'; M.speed = b.speed || M.speed; M.herd = b.herd || M.herd; if (!M.demo.length) addDemo(); return json(200, simDto()); }
+      if (path.endsWith('/simulation/stop')) { M.mode = 'MANUAL'; return json(200, simDto()); }
+      if (path.endsWith('/simulation/reset')) return json(200, simDto());
+      if (path.endsWith('/farms/farm1/simulation') && method === 'PATCH') { M.speed = b.speed; return json(200, simDto()); }
+      if (M.mode !== 'MANUAL') return json(409, { statusCode: 409, code: 'CONFLICT', message: 'Ручные вызовы доступны в режиме MANUAL' });
+      if (path.endsWith('/simulate/animals')) return json(201, addDemo(b.name));
+      if (path.endsWith('/simulate/telemetry')) { const a = M.demo.find((x) => x.id === b.animalId); a.lat = b.lat; a.lng = b.lng; const z = zoneOf(b.lat, b.lng); a.status = z === 'GREEN' ? 'ok' : 'danger'; return json(200, { zone: z === 'GREEN' ? 'GREEN' : 'RED', inFence: z === 'GREEN', distanceToBorderMeters: 3.2, sound: z !== 'GREEN', vibrate: z !== 'GREEN', toneFrequencyHz: 2000, suppressedBy: null }); }
+      if (path.endsWith('/simulate/events')) { const a = M.demo.find((x) => x.id === b.animalId); if (b.event === 'BREACH') { a.lat = 43.6535; a.status = 'danger'; return json(200, { zone: 'RED', inFence: false, distanceToBorderMeters: 30, sound: true, vibrate: true, toneFrequencyHz: 2000, suppressedBy: null }); } return json(200, { ok: true }); }
+    }
     if (path === '/geofences') return json(200, pens());
     if (path === '/devices' && method === 'GET') return json(200, devices());
     if (path === '/devices' && method === 'POST') {
       const b = JSON.parse(init.body);
+      if (b.code) { if (!/^[0-9]{8}$/.test(b.code)) return json(400, { statusCode: 400, code: 'VALIDATION', message: 'code' }); if (b.code === '11111111') return json(409, { statusCode: 409, code: 'CONFLICT', message: 'exists' }); return json(201, { collar: { deviceId: 'QAM-' + b.code, status: 'OFFLINE', animalId: null, animalName: null, signalRssi: null, firmwareVersion: null, lastSeenAt: null } }); }
       if (b.deviceId === 'TAKEN') return json(409, { statusCode: 409, code: 'CONFLICT', message: 'exists' });
       M.secret = 'k3Xq9TfA7mZb2LwR8vNc5HdY1sPe4UgJ';
       return json(201, { collar: { deviceId: b.deviceId, status: 'OFFLINE', animalId: null, animalName: null, signalRssi: null, firmwareVersion: null, lastSeenAt: null }, deviceSecret: M.secret });
