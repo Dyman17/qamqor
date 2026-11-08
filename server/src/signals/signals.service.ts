@@ -42,6 +42,8 @@ export class SignalsService {
     sound: boolean;
     vibrate: boolean;
     now: Date;
+    /** false for a retried ping: limits are enforced but nothing is recorded. */
+    record?: boolean;
   }): Promise<LimitedSignals> {
     const { farmId, animal, deviceId, now } = args;
     if (!args.sound && !args.vibrate) return { sound: false, vibrate: false, suppressed: false };
@@ -79,7 +81,7 @@ export class SignalsService {
       toRecord.push(level);
     }
 
-    if (toRecord.length) {
+    if (toRecord.length && args.record !== false) {
       await this.prisma.signalEvent.createMany({
         data: toRecord.map((level) => ({ farmId, animalId: animal.id, deviceId, level, at: now })),
       });

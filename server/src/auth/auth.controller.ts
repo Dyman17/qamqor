@@ -38,7 +38,13 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RateLimitGuard)
-  @RateLimit('login', { limit: 10, windowMs: MIN, keyField: 'email' }, { limit: 30, windowMs: MIN })
+  @RateLimit(
+    'login',
+    { limit: 10, windowMs: MIN, keyField: 'email' },
+    { limit: 30, windowMs: MIN },
+    // per account across all IPs (single-instance memory limiter)
+    { limit: 20, windowMs: 10 * MIN, keyField: 'email', perIp: false },
+  )
   async login(@Body() dto: LoginUserDto) {
     return this.authService.login(dto);
   }
@@ -54,6 +60,7 @@ export class AuthController {
   @UseGuards(RateLimitGuard)
   @RateLimit('reset-request', { limit: 5, windowMs: MIN, keyField: 'email' }, { limit: 20, windowMs: MIN })
   requestReset(@Body() dto: PasswordResetRequestDto): void {
+    this.authService.assertMailConfigured();
     // Deliberately not awaited: identical response and timing whether or not the email exists.
     this.authService.requestPasswordReset(dto).catch((e) => this.logger.error(`password reset request failed: ${e?.message}`));
   }

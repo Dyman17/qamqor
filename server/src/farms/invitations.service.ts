@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FarmsService } from './farms.service';
 import { generateToken, hashToken, normalizeEmail } from '../common/tokens';
 import { MAILER, Mailer } from '../mail/mailer';
-import { invitationMail, pickLang } from '../mail/templates';
+import { invitationMail, inviteLink, pickLang } from '../mail/templates';
 
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -42,7 +42,12 @@ export class InvitationsService {
     return rows.map((r) => toInvitationDto(r));
   }
 
-  async create(userId: string, farmId: string, emailRaw: string, lang?: string): Promise<InvitationDto> {
+  async create(
+    userId: string,
+    farmId: string,
+    emailRaw: string,
+    lang?: string,
+  ): Promise<InvitationDto & { delivered: boolean; inviteUrl?: string }> {
     const { farm } = await this.farms.requireOwner(userId, farmId);
     const email = normalizeEmail(emailRaw);
 
@@ -75,6 +80,14 @@ export class InvitationsService {
       });
     });
 
+    const baseUrl = this.config.get<string>('APP_BASE_URL');
+    // Without a real mail transport nothing is sent: the owner gets the link and passes it on by hand.
+    if (this.mailer.status() === 'none') {
+      this.logger.warn(`Invitation ${invitation.id} created but NOT emailed (no mail transport)`);
+      return { ...toInvitationDto(invitation, now), delivered: false, inviteUrl: inviteLink(baseUrl, token) };
+    }
+
+    let delivered = true;
     try {
       await this.mailer.send(
         invitationMail(pickLang(lang), {
@@ -82,14 +95,17 @@ export class InvitationsService {
           farmName: farm.name,
           inviterName: inviter?.fullName ?? '',
           token,
-          baseUrl: this.config.get<string>('APP_BASE_URL'),
+          baseUrl,
         }),
       );
     } catch (e: any) {
       // The invitation exists and can be revoked/re-sent; do not fail the request on a mail outage.
       this.logger.error(`invitation mail failed: ${e?.message}`);
+      delivered = false;
     }
-    return toInvitationDto(invitation, now);
+    return delivered
+      ? { ...toInvitationDto(invitation, now), delivered: true }
+      : { ...toInvitationDto(invitation, now), delivered: false, inviteUrl: inviteLink(baseUrl, token) };
   }
 
   async revoke(userId: string, farmId: string, invitationId: string): Promise<void> {

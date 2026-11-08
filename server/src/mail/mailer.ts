@@ -8,6 +8,8 @@ export interface MailMessage {
 
 /** Transport-agnostic mailer. A real provider is the owner's decision; none is bundled. */
 export interface Mailer {
+  /** 'none' = nothing is really delivered (callers must not pretend otherwise). */
+  status(): 'none' | 'configured';
   send(message: MailMessage): Promise<void>;
 }
 
@@ -22,6 +24,11 @@ export const MAILER = 'QAMQOR_MAILER';
 @Injectable()
 export class ConsoleMailer implements Mailer {
   private readonly logger = new Logger('Mailer');
+
+  /** Logging to the console counts as delivery only outside production (a developer reads the log). */
+  status(): 'none' | 'configured' {
+    return process.env.NODE_ENV === 'production' ? 'none' : 'configured';
+  }
 
   async send(message: MailMessage): Promise<void> {
     if (process.env.NODE_ENV === 'production') {

@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppConfig } from './config/config';
 import { ApiExceptionFilter } from './common/api-exception.filter';
@@ -11,8 +11,9 @@ import { securityHeaders } from './config/security-headers';
  */
 export function configureApp(app: NestExpressApplication, cfg: AppConfig): void {
   app.disable('x-powered-by');
-  // Behind Render's proxy: real client IP for the rate limiter.
-  if (cfg.isProduction) app.set('trust proxy', 1);
+  // Real client IP for the rate limiter: trust exactly this many reverse-proxy hops (Render = 1).
+  if (cfg.trustProxyHops > 0) app.set('trust proxy', cfg.trustProxyHops);
+  new Logger('Bootstrap').log(`trust proxy hops: ${cfg.trustProxyHops}`);
 
   app.use(securityHeaders(cfg.isProduction));
   app.useBodyParser('json', { limit: '1mb' });

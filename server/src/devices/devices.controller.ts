@@ -45,6 +45,7 @@ export class DevicesController {
   }
 
   @Post()
+  @FarmRoles('OWNER')
   async registerDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDeviceDto,
@@ -64,6 +65,7 @@ export class DevicesController {
   }
 
   @Post(':id/rotate-secret')
+  @FarmRoles('OWNER')
   async rotateSecret(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', DeviceIdPipe) deviceId: string,

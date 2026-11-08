@@ -95,7 +95,7 @@ describe('TelemetryService', () => {
     const prisma: any = {
       animal: { update: jest.fn() },
       device: { update: jest.fn() },
-      telemetry: { create: jest.fn() },
+      telemetry: { create: jest.fn(), findFirst: jest.fn(async () => null) },
       deviceCommand: { findFirst: jest.fn(async () => null), updateMany: jest.fn() },
     };
     const alerts: any = {

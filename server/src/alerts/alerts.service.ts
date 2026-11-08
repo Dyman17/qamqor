@@ -9,6 +9,20 @@ import { AlertType, AlertSeverity, AlertStatus } from '@qamqor/shared';
 import { ALERT_INCLUDE, AlertDto, toAlertDto } from './mappers';
 import { Page, PAGE_DEFAULT_LIMIT } from '../common/pagination';
 
+const OPEN_STATUSES = [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED];
+
+/** Closes an animal's open DEVICE_OFFLINE and GPS_LOST alerts (collar removed, animal deleted). */
+export async function resolveCollarAlerts(db: any, animalId: string): Promise<void> {
+  await db.alert.updateMany({
+    where: {
+      animalId,
+      type: { in: [AlertType.DEVICE_OFFLINE, AlertType.GPS_LOST] },
+      status: { in: OPEN_STATUSES },
+    },
+    data: { status: AlertStatus.RESOLVED, resolvedAt: new Date() },
+  });
+}
+
 @Injectable()
 export class AlertsService {
   private readonly logger = new Logger(AlertsService.name);
@@ -34,11 +48,15 @@ export class AlertsService {
     latitude?: number | null;
     longitude?: number | null;
     dedupeKey: string;
-  }) {
+  }, db: any = this.prisma) {
+    // An ACKNOWLEDGED alert is still "open": the condition has not cleared, so it is not re-raised.
+    const open = await db.alert.findFirst({ where: { dedupeKey: data.dedupeKey, status: { in: OPEN_STATUSES } } });
+    if (open) return open;
     try {
-      return await this.prisma.alert.create({ data: { ...data, status: AlertStatus.ACTIVE } });
+      return await db.alert.create({ data: { ...data, status: AlertStatus.ACTIVE } });
     } catch (e: any) {
-      if (e?.code === 'P2002') {
+      // Inside a transaction a failed statement aborts it, so only the shared client can recover here.
+      if (e?.code === 'P2002' && db === this.prisma) {
         return this.prisma.alert.findFirst({ where: { dedupeKey: data.dedupeKey, status: AlertStatus.ACTIVE } });
       }
       throw e;
@@ -55,11 +73,11 @@ export class AlertsService {
   }) {
     const dedupeKey = `${AlertType.GEOFENCE_BREACH}:${data.animalId}`;
     const existing = await this.prisma.alert.findFirst({
-      where: { dedupeKey, status: AlertStatus.ACTIVE },
+      where: { dedupeKey, status: { in: OPEN_STATUSES } },
     });
 
     if (existing) {
-      this.logger.debug(`Active breach alert already exists for animal ${data.animalId}`);
+      this.logger.debug(`Open breach alert already exists for animal ${data.animalId}`);
       return existing;
     }
 
@@ -81,7 +99,7 @@ export class AlertsService {
   /** The fix is too inaccurate to judge the position (zone UNKNOWN). One ACTIVE alert per animal. */
   async triggerGpsLost(data: { farmId: string; animalId: string; animalName: string; deviceId: string }) {
     const dedupeKey = `${AlertType.GPS_LOST}:${data.animalId}`;
-    const existing = await this.prisma.alert.findFirst({ where: { dedupeKey, status: AlertStatus.ACTIVE } });
+    const existing = await this.prisma.alert.findFirst({ where: { dedupeKey, status: { in: OPEN_STATUSES } } });
     if (existing) return existing;
     return this.createActiveOnce({
       farmId: data.farmId,
@@ -97,7 +115,7 @@ export class AlertsService {
   /** A reliable fix is back: close the animal's ACTIVE GPS_LOST alert. */
   async resolveGpsLost(animalId: string) {
     await this.prisma.alert.updateMany({
-      where: { animalId, type: AlertType.GPS_LOST, status: AlertStatus.ACTIVE },
+      where: { animalId, type: AlertType.GPS_LOST, status: { in: OPEN_STATUSES } },
       data: { status: AlertStatus.RESOLVED, resolvedAt: new Date() },
     });
   }
@@ -109,7 +127,7 @@ export class AlertsService {
     animalName: string;
     deviceId: string;
     lastSeenAt: Date;
-  }) {
+  }, db: any = this.prisma) {
     return this.createActiveOnce({
       farmId: data.farmId,
       animalId: data.animalId,
@@ -118,13 +136,13 @@ export class AlertsService {
       severity: AlertSeverity.WARNING,
       message: `Нет связи с ошейником ${data.deviceId} (животное "${data.animalName}"). Последний сигнал: ${data.lastSeenAt.toISOString()}.`,
       dedupeKey: `${AlertType.DEVICE_OFFLINE}:${data.animalId}`,
-    });
+    }, db);
   }
 
   /** The collar pinged again: close ACTIVE DEVICE_OFFLINE alerts and leave a DEVICE_RESTORED note. */
   async restoreDevice(data: { farmId: string; animalId: string; animalName: string; deviceId: string }) {
     const closed = await this.prisma.alert.updateMany({
-      where: { animalId: data.animalId, type: AlertType.DEVICE_OFFLINE, status: AlertStatus.ACTIVE },
+      where: { animalId: data.animalId, type: AlertType.DEVICE_OFFLINE, status: { in: OPEN_STATUSES } },
       data: { status: AlertStatus.RESOLVED, resolvedAt: new Date() },
     });
     if (closed.count === 0) return null;
@@ -181,7 +199,7 @@ export class AlertsService {
       where: {
         animalId: data.animalId,
         type: AlertType.GEOFENCE_BREACH,
-        status: AlertStatus.ACTIVE,
+        status: { in: OPEN_STATUSES },
       },
     });
 

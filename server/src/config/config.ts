@@ -8,6 +8,8 @@ export interface AppConfig {
   telemetryMaxAgeSec: number;
   /** Telemetry stamped later than now + this is rejected (seconds). */
   telemetryMaxFutureSec: number;
+  /** Number of reverse-proxy hops to trust for the client IP (0 = none). Default 1 in production. */
+  trustProxyHops: number;
   /** A collar is OFFLINE after this many missed normal pings. */
   offlineAfterMissedPings: number;
   /** offlineAfterMissedPings x normalPingIntervalSec. */
@@ -21,6 +23,12 @@ export interface AppConfig {
 function intOr(v: string | undefined, def: number): number {
   const n = parseInt(v ?? '', 10);
   return Number.isInteger(n) && n > 0 ? n : def;
+}
+
+function nonNegIntOr(v: string | undefined, def: number): number {
+  if (v === undefined || v === '') return def;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : def;
 }
 
 export function loadAppConfig(env: Record<string, string | undefined> = process.env): AppConfig {
@@ -37,6 +45,7 @@ export function loadAppConfig(env: Record<string, string | undefined> = process.
     emergencyPingIntervalSec: intOr(env.EMERGENCY_PING_INTERVAL_SEC, 60),
     telemetryMaxAgeSec: intOr(env.TELEMETRY_MAX_AGE_SEC, 600),
     telemetryMaxFutureSec: intOr(env.TELEMETRY_MAX_FUTURE_SEC, 120),
+    trustProxyHops: nonNegIntOr(env.TRUST_PROXY_HOPS, env.NODE_ENV === 'production' ? 1 : 0),
     offlineAfterMissedPings,
     offlineThresholdSec: offlineAfterMissedPings * normalPingIntervalSec,
     offlineCheckIntervalSec: intOr(env.OFFLINE_CHECK_INTERVAL_SEC, 60),

@@ -62,6 +62,8 @@ export interface RateRule {
   windowMs: number;
   /** Body field mixed into the key (lower-cased), e.g. "email". Omit for a per-IP rule. */
   keyField?: string;
+  /** false = the key does not include the client IP (limits one account across all IPs). Default true. */
+  perIp?: boolean;
 }
 
 export const RATE_LIMIT_KEY = 'qamqor:rateLimit';
@@ -90,7 +92,7 @@ export class RateLimitGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const ip = String(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
     for (const [i, rule] of meta.rules.entries()) {
-      let key = `${meta.name}:${i}:${ip}`;
+      let key = `${meta.name}:${i}:${rule.perIp === false ? '*' : ip}`;
       if (rule.keyField) {
         const v = req.body?.[rule.keyField];
         key += `:${typeof v === 'string' ? v.toLowerCase().trim().slice(0, 256) : ''}`;

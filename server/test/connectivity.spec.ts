@@ -69,28 +69,45 @@ describe('OfflineWatcherService', () => {
       // silent for 20 min, has an animal
       { id: 'd1', deviceId: 'QAM-1', farmId: 'F', animalId: 'a1', lastHeartbeatAt: new Date(Date.now() - 20 * 60_000), animal: { id: 'a1', name: 'A' } },
     ];
-    const prisma: any = {
-      alert: {
-        findFirst: jest.fn(async ({ where }: any) => alerts.find((a) => a.dedupeKey === where.dedupeKey && a.status === 'ACTIVE') ?? null),
-        create: jest.fn(async ({ data }: any) => {
-          if (alerts.some((a) => a.dedupeKey === data.dedupeKey && a.status === 'ACTIVE')) {
-            throw Object.assign(new Error('unique'), { code: 'P2002' });
-          }
-          const row = { id: 'al' + alerts.length, ...data };
-          alerts.push(row);
-          return row;
-        }),
-        updateMany: jest.fn(async ({ where, data }: any) => {
-          const rows = alerts.filter((a) => a.animalId === where.animalId && a.type === where.type && a.status === where.status);
-          rows.forEach((r) => Object.assign(r, data));
-          return { count: rows.length };
-        }),
+    const inStatus = (w: any, st: string) => (w && typeof w === 'object' && w.in ? w.in.includes(st) : w === st);
+    const impl = {
+      findFirst: async ({ where }: any) =>
+        alerts.find((a) => a.dedupeKey === where.dedupeKey && (where.status === undefined || inStatus(where.status, a.status))) ?? null,
+      findMany: async ({ where }: any) =>
+        alerts.filter((a) => where.dedupeKey.in.includes(a.dedupeKey) && inStatus(where.status, a.status)).map((a) => ({ dedupeKey: a.dedupeKey })),
+      create: async ({ data }: any) => {
+        if (alerts.some((a) => a.dedupeKey === data.dedupeKey && a.status === 'ACTIVE')) {
+          throw Object.assign(new Error('unique'), { code: 'P2002' });
+        }
+        const row = { id: 'al' + alerts.length, ...data };
+        alerts.push(row);
+        return row;
       },
+      updateMany: async ({ where, data }: any) => {
+        const rows = alerts.filter((a) => a.animalId === where.animalId && a.type === where.type && inStatus(where.status, a.status));
+        rows.forEach((r) => Object.assign(r, data));
+        return { count: rows.length };
+      },
+    };
+    const delegates = () => ({
+      findFirst: jest.fn(impl.findFirst),
+      findMany: jest.fn(impl.findMany),
+      create: jest.fn(impl.create),
+      updateMany: jest.fn(impl.updateMany),
+    });
+    const prisma: any = {
+      alert: delegates(),
       device: { findMany: jest.fn(async () => devices) },
       $queryRaw: jest.fn(async () => [{ locked: true }]),
-      $transaction: jest.fn(async (fn: any) => fn(prisma)),
     };
-    return { prisma, alerts, devices, watcher: new OfflineWatcherService(prisma, new AlertsService(prisma)) };
+    // The lock transaction gets its own client object so tests can see where writes go.
+    const tx: any = {
+      alert: delegates(),
+      device: prisma.device,
+      $queryRaw: (...a: any[]) => prisma.$queryRaw(...a),
+    };
+    prisma.$transaction = jest.fn(async (fn: any) => fn(tx));
+    return { prisma, tx, alerts, devices, watcher: new OfflineWatcherService(prisma, new AlertsService(prisma)) };
   }
 
   it('a silent collar gets exactly one ACTIVE DEVICE_OFFLINE; repeated runs do not duplicate', async () => {
@@ -123,11 +140,12 @@ describe('OfflineWatcherService', () => {
     expect(OFFLINE_WATCHER_LOCK_KEY).toBeGreaterThan(0);
   });
 
-  it('even if both instances somehow run, the unique index keeps one alert', async () => {
+  it('even if both instances somehow run, only one ACTIVE alert exists (the loser fails and retries next tick)', async () => {
     const w = world();
     const other = new OfflineWatcherService(w.prisma, new AlertsService(w.prisma));
-    await Promise.all([w.watcher.tick(), other.tick()]);
+    const res = await Promise.allSettled([w.watcher.tick(), other.tick()]);
     expect(w.alerts.filter((a) => a.status === 'ACTIVE')).toHaveLength(1);
+    expect(res.filter((r) => r.status === 'rejected').length).toBeLessThanOrEqual(1);
   });
 
   it('is not started under test (no timer)', () => {
@@ -227,7 +245,7 @@ describe('signal limits', () => {
   it('TelemetryService reports suppressedBy and silences the tone', async () => {
     const poly = { type: 'Polygon', coordinates: [[[51.15, 43.645], [51.165, 43.645], [51.165, 43.655], [51.15, 43.655], [51.15, 43.645]]] };
     const prisma: any = {
-      animal: { update: jest.fn() }, device: { update: jest.fn() }, telemetry: { create: jest.fn() },
+      animal: { update: jest.fn() }, device: { update: jest.fn() }, telemetry: { create: jest.fn(), findFirst: jest.fn(async () => null) },
       deviceCommand: { findFirst: jest.fn(async () => null), updateMany: jest.fn() },
     };
     const alerts: any = { triggerGeofenceBreach: jest.fn(), resolveGeofenceBreach: jest.fn(), resolveGpsLost: jest.fn(), restoreDevice: jest.fn() };

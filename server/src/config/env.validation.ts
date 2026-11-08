@@ -41,6 +41,11 @@ export function validateEnv(env: Record<string, string | undefined>): Record<str
     }
   }
 
+  const hops = env.TRUST_PROXY_HOPS;
+  if (hops !== undefined && hops !== '' && !(Number.isInteger(Number(hops)) && Number(hops) >= 0)) {
+    errors.push('TRUST_PROXY_HOPS must be a non-negative integer');
+  }
+
   if (errors.length) {
     throw new Error(`Invalid environment configuration:\n - ${errors.join('\n - ')}`);
   }

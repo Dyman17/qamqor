@@ -198,6 +198,7 @@ describe('AnimalsService: collar binding and steering', () => {
         updateMany: jest.fn(async ({ where }: any) => ({ count: animals.filter((a) => where.id.in.includes(a.id)).length })),
       },
       geofence: { count: jest.fn(async ({ where }: any) => (where.id === 'pen1' && where.farmId === 'F' ? 1 : 0)) },
+      alert: { updateMany: jest.fn(async () => ({ count: 0 })) },
       device: {
         count: jest.fn(async ({ where }: any) => devices.filter((d) => d.deviceId === where.deviceId && d.farmId === where.farmId).length),
         findFirst: jest.fn(async ({ where }: any) => devices.find((d) => d.deviceId === where.deviceId && d.farmId === where.farmId) ?? null),

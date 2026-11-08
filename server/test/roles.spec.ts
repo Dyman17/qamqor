@@ -36,6 +36,8 @@ describe('PermissionsGuard x route matrix', () => {
   const ownerOnly: Array<[any, string]> = [
     [GeofenceController, 'deleteGeofence'],
     [DevicesController, 'deleteDevice'],
+    [DevicesController, 'registerDevice'],
+    [DevicesController, 'rotateSecret'],
   ];
   const boundary: Array<[any, string]> = [
     [GeofenceController, 'createGeofence'],
@@ -46,7 +48,6 @@ describe('PermissionsGuard x route matrix', () => {
     [AnimalsController, 'updateAnimal'],
     [AnimalsController, 'createAnimal'],
     [AnimalsController, 'deleteAnimal'],
-    [DevicesController, 'registerDevice'],
     [DevicesController, 'updateDevice'],
     [DevicesController, 'testSignal'],
     [GeofenceController, 'listGeofences'],

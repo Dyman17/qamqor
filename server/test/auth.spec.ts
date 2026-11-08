@@ -20,7 +20,10 @@ import { passwordResetMail, invitationMail } from '../src/mail/templates';
 
 const jwt: any = { sign: jest.fn(() => 'jwt-token') };
 const config: any = { get: () => undefined };
-const mailer = () => ({ send: jest.fn(async (_m?: any) => undefined) });
+const mailer = (status: 'none' | 'configured' = 'configured') => ({
+  status: () => status,
+  send: jest.fn(async (_m?: any) => undefined),
+});
 
 function authSvc(prisma: any, m = mailer()) {
   return { svc: new AuthService(prisma, jwt, m as any, config), mailer: m };
@@ -204,6 +207,7 @@ describe('password reset', () => {
     const strat = new JwtStrategy({ getOrThrow: () => 'x'.repeat(40) } as any, prisma);
     const sec = Math.floor(changed.getTime() / 1000);
     await expect(strat.validate({ sub: 'u1', email: 'a@b.kz', iat: sec - 60 })).rejects.toThrow(UnauthorizedException);
+    await expect(strat.validate({ sub: 'u1', email: 'a@b.kz', iat: sec })).rejects.toThrow(UnauthorizedException); // same second = rejected
     await expect(strat.validate({ sub: 'u1', email: 'a@b.kz', iat: sec + 1 })).resolves.toMatchObject({ id: 'u1' });
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'a@b.kz', fullName: 'A', passwordChangedAt: null });
     await expect(strat.validate({ sub: 'u1', email: 'a@b.kz', iat: 1 })).resolves.toMatchObject({ id: 'u1' });

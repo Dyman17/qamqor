@@ -58,15 +58,30 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
             },
             include: { animal: { select: { id: true, name: true } } },
           });
+          // Collars that already have an open (ACTIVE or ACKNOWLEDGED) offline alert are skipped.
+          // All writes go through `tx`: the lock transaction owns the connection, so using the
+          // shared client here would deadlock with connection_limit=1.
+          const keys = stale.filter((d) => d.animal).map((d) => `DEVICE_OFFLINE:${d.animal!.id}`);
+          const open = keys.length
+            ? await tx.alert.findMany({
+                where: { dedupeKey: { in: keys }, status: { in: ['ACTIVE', 'ACKNOWLEDGED'] } },
+                select: { dedupeKey: true },
+              })
+            : [];
+          const openKeys = new Set(open.map((o) => o.dedupeKey));
           for (const d of stale) {
             if (!d.animal || !d.farmId || !d.lastHeartbeatAt) continue;
-            await this.alerts.triggerDeviceOffline({
-              farmId: d.farmId,
-              animalId: d.animal.id,
-              animalName: d.animal.name,
-              deviceId: d.deviceId,
-              lastSeenAt: d.lastHeartbeatAt,
-            });
+            if (openKeys.has(`DEVICE_OFFLINE:${d.animal.id}`)) continue;
+            await this.alerts.triggerDeviceOffline(
+              {
+                farmId: d.farmId,
+                animalId: d.animal.id,
+                animalName: d.animal.name,
+                deviceId: d.deviceId,
+                lastSeenAt: d.lastHeartbeatAt,
+              },
+              tx,
+            );
           }
           return { locked: true, stale: stale.length };
         },

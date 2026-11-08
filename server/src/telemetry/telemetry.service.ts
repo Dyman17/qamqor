@@ -58,6 +58,14 @@ export class TelemetryService {
       throw new BadRequestException('Telemetry timestamp is invalid or outside the acceptable time window.');
     }
 
+    // A retried ping (same device + timestamp) is answered but not counted again.
+    const duplicate = !!(await this.prisma.telemetry.findFirst({
+      where: { deviceId: device.deviceId, timestamp: pingTime },
+      select: { id: true },
+    }));
+    // An older or equal timestamp must not move the animal backwards.
+    const stale = !!(device.animal?.lastSeenAt && pingTime.getTime() <= new Date(device.animal.lastSeenAt).getTime());
+
     let isOutside: boolean = device.animal?.isOutsideGeofence ?? false;
     let zone: ZoneName = 'UNKNOWN';
     let inFence: boolean | null = null;
@@ -109,6 +117,7 @@ export class TelemetryService {
             sound,
             vibrate,
             now,
+            record: !duplicate,
           });
           if (limited.suppressed) {
             suppressedBy = 'SIGNAL_LIMIT';
@@ -118,7 +127,9 @@ export class TelemetryService {
           vibrate = limited.vibrate;
         }
 
-        if (isOutside) {
+        if (stale) {
+          // out-of-order ping: no alert changes
+        } else if (isOutside) {
           // Скот сбежал — сокращаем интервал пинга для частого трекинга
           nextInterval = emergencyInterval;
           if (device.farmId) {
@@ -142,7 +153,7 @@ export class TelemetryService {
             longitude: dto.longitude,
           });
         }
-      } else if (evaluation.reason === 'LOW_ACCURACY' && device.farmId) {
+      } else if (evaluation.reason === 'LOW_ACCURACY' && device.farmId && !stale) {
         await this.alertsService.triggerGpsLost({
           farmId: device.farmId,
           animalId: animal.id,
@@ -152,7 +163,7 @@ export class TelemetryService {
       }
 
       // The last known position is stored on every valid ping, whatever the zone.
-      await this.prisma.animal.update({
+      if (!stale) await this.prisma.animal.update({
         where: { id: animal.id },
         data: {
           lastLatitude: dto.latitude,
@@ -185,7 +196,7 @@ export class TelemetryService {
     }
 
     // Record Telemetry Point
-    await this.prisma.telemetry.create({
+    if (!duplicate) await this.prisma.telemetry.create({
       data: {
         deviceId: device.deviceId,
         animalId: animal?.id,

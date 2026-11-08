@@ -15,7 +15,7 @@ function setup(pendingCommand: any = null) {
   const prisma: any = {
     animal: { update: jest.fn() },
     device: { update: jest.fn(), create: jest.fn() },
-    telemetry: { create: jest.fn() },
+    telemetry: { create: jest.fn(), findFirst: jest.fn(async () => null) },
     deviceCommand: {
       findFirst: jest.fn(async () => pendingCommand),
       updateMany: jest.fn(async () => ({ count: 1 })),

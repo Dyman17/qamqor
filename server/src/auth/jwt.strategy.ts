@@ -26,10 +26,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Пользователь не найден или сессия истекла');
     }
 
-    // Tokens issued before the last password change are no longer valid.
+    // Tokens issued at or before the last password change (whole seconds) are no longer valid.
     if (user.passwordChangedAt) {
       const changedSec = Math.floor(user.passwordChangedAt.getTime() / 1000);
-      if (typeof payload.iat !== 'number' || payload.iat < changedSec) {
+      if (typeof payload.iat !== 'number' || payload.iat <= changedSec) {
         throw new UnauthorizedException('Сессия устарела, войдите заново');
       }
     }

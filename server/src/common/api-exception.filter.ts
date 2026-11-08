@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'PAYLOAD_TOO_LARGE'
+  | 'MAIL_NOT_CONFIGURED'
   | 'INTERNAL';
 
 const BY_STATUS: Record<number, ApiErrorCode> = {

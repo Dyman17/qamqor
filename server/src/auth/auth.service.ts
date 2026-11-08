@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -121,6 +122,16 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------- password reset
+
+  /** 503 MAIL_NOT_CONFIGURED when no real mail transport exists (decided before any lookup). */
+  assertMailConfigured(): void {
+    if (this.mailer.status() === 'none') {
+      throw new HttpException(
+        { statusCode: 503, code: 'MAIL_NOT_CONFIGURED', message: 'Отправка писем не настроена: сброс пароля недоступен' },
+        503,
+      );
+    }
+  }
 
   /**
    * Always resolves the same way. The controller does not await it, so the response time

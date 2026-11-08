@@ -12,6 +12,7 @@ import { ANIMAL_INCLUDE, AnimalDto, toAnimalDto } from './mappers';
 import { ALERT_INCLUDE, AlertDto, toAlertDto } from '../alerts/mappers';
 import { Page, pageOf } from '../common/pagination';
 import { computeConnState } from '../devices/connectivity';
+import { resolveCollarAlerts } from '../alerts/alerts.service';
 
 const NO_BOUNDARY_RIGHTS = 'Назначать загон может владелец или работник при включённом праве';
 
@@ -221,6 +222,7 @@ export class AnimalsService {
   async deleteAnimal(userId: string, farmId: string, animalId: string): Promise<void> {
     await this.ensureInFarm(farmId, animalId);
     await this.prisma.$transaction(async (tx) => {
+      await resolveCollarAlerts(tx, animalId);
       await tx.device.updateMany({ where: { animalId }, data: { animalId: null } });
       await tx.animal.delete({ where: { id: animalId } });
     });
@@ -251,7 +253,10 @@ export class AnimalsService {
 
   async unassignCollar(userId: string, farmId: string, animalId: string): Promise<AnimalDto> {
     await this.ensureInFarm(farmId, animalId);
-    await this.prisma.device.updateMany({ where: { animalId, farmId }, data: { animalId: null } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.device.updateMany({ where: { animalId, farmId }, data: { animalId: null } });
+      await resolveCollarAlerts(tx, animalId);
+    });
     return this.getAnimalById(userId, farmId, animalId);
   }
 

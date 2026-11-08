@@ -9,6 +9,7 @@ import { DeviceAuthGuard } from '../src/devices/device-auth.guard';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { configureApp } from '../src/bootstrap';
 import { loadAppConfig } from '../src/config/config';
+import { MAILER } from '../src/mail/mailer';
 import { hashDeviceSecret } from '../src/devices/device-secret';
 
 const SECRET = 'a'.repeat(64);
@@ -26,6 +27,7 @@ const telemetry = { processDeviceTelemetry: jest.fn(async () => ({ success: true
   providers: [
     { provide: PrismaService, useValue: fakePrisma },
     { provide: TelemetryService, useValue: telemetry },
+    { provide: MAILER, useValue: { status: () => 'none', send: jest.fn() } },
     DeviceAuthGuard,
   ],
 })
@@ -68,6 +70,10 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
     expect(r.headers.get('referrer-policy')).toBe('no-referrer');
     expect(r.headers.get('strict-transport-security')).toContain('max-age');
     expect(r.headers.get('x-powered-by')).toBeNull();
+  });
+
+  it('GET /health reports the mail transport state', async () => {
+    expect(((await (await fetch(`${base}/health`)).json()) as any).mail).toBe('none');
   });
 
   it('unknown routes also carry the headers', async () => {

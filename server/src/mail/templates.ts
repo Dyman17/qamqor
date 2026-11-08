@@ -7,6 +7,11 @@ export function pickLang(lang?: string): Lang {
   return LANGS.includes(lang as Lang) ? (lang as Lang) : 'ru';
 }
 
+/** Link the invitee opens (relative when APP_BASE_URL is not set). */
+export function inviteLink(base: string | undefined, token: string): string {
+  return `${(base ?? '').replace(/\/+$/, '')}/invite?token=${encodeURIComponent(token)}`;
+}
+
 function link(base: string | undefined, path: string, token: string): string {
   return base ? `${base.replace(/\/+$/, '')}/${path}?token=${encodeURIComponent(token)}` : '';
 }

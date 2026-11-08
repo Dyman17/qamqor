@@ -93,7 +93,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | `POST /auth/register` | — | `{email, password(8–72 символа и не более 72 байт), fullName, phone?, farmName?}` | `AuthResponse` | создаёт пользователя, ферму, членство OWNER в одной транзакции; лимит запросов |
 | `POST /auth/login` | — | `{email, password}` | `AuthResponse` | одинаковый ответ на «нет пользователя» и «неверный пароль»; лимит запросов |
 | `GET /auth/me` | любой | — | `{user, memberships}` | |
-| `POST /auth/password-reset/request` | — | `{email, lang?: 'kk'\|'ru'\|'en'}` | `204` всегда | письмо со ссылкой, токен хранится хешем, срок жизни 1 ч (допущение) |
+| `POST /auth/password-reset/request` | — | `{email, lang?: 'kk'\|'ru'\|'en'}` | `204` всегда; `503 {code: 'MAIL_NOT_CONFIGURED'}`, если нет настоящего почтового транспорта (проверяется до поиска пользователя) | письмо со ссылкой, токен хранится хешем, срок жизни 1 ч (допущение) |
 | `POST /auth/password-reset/confirm` | — | `{token, newPassword}` | `204` | токен одноразовый; ранее выданные JWT становятся недействительны |
 | `POST /auth/invitations/accept` | — или любой | `{token, password?, fullName?}` | `AuthResponse` | новому пользователю нужны `password`, `fullName`; существующему — только токен в авторизованном запросе |
 
@@ -106,7 +106,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | `GET /farms/:id` | W | — | `FarmDto` |
 | `PATCH /farms/:id` | O | `{name?, description?, timezone?, workerCanEditBoundaries?}` | `FarmDto` |
 | `GET /farms/:id/members` | O | — | `{members: [{userId,email,fullName,role}], invitations: InvitationDto[]}` |
-| `POST /farms/:id/invitations` | O | `{email, lang?}` | `InvitationDto` (письмо через Mailer; срок 7 суток; повторное приглашение отзывает прежнее; уже участник -> 409) |
+| `POST /farms/:id/invitations` | O | `{email, lang?}` | `InvitationDto & {delivered: boolean, inviteUrl?: string}`; без настоящего почтового транспорта (или при сбое отправки) письмо не уходит, `delivered: false`, и владелец получает `inviteUrl` для передачи вручную (письмо через Mailer; срок 7 суток; повторное приглашение отзывает прежнее; уже участник -> 409) |
 | `DELETE /farms/:id/invitations/:invId` | O | — | `204` (отзыв) |
 | `DELETE /farms/:id/members/:userId` | O | — | `204` («Убрать доступ»; владельца убрать нельзя) |
 | `GET /farms/:id/signal-limits` | O | — | `SignalLimitDto[]` |
@@ -131,6 +131,8 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 
 `POST /animals/:id/steer` из README не создаётся: перегон групповой (спека S4), поэтому единый `POST /animals/steer`. Приложение вызова пока не делает, добавит.
 
+Оповещения `GEOFENCE_BREACH`, `GPS_LOST`, `DEVICE_OFFLINE` не создаются повторно, пока оповещение с тем же ключом `ACTIVE` или `ACKNOWLEDGED`; заново они взводятся только после того, как условие исчезло (`RESOLVED`). Снятие ошейника и удаление животного закрывают его открытые `DEVICE_OFFLINE` и `GPS_LOST`. Пинг с `timestamp` не новее `lastSeenAt` животного не двигает его, повтор `(deviceId, timestamp)` не пишется и не считается в лимитах. JWT, выданные не позже смены пароля (с точностью до секунды), недействительны.
+
 Суточные лимиты: при достижении лимита уровня (`SOUND`/`VIBRATION`) сервер не подаёт этот сигнал (`suppressedBy: 'SIGNAL_LIMIT'` в ответе пинга) и создаёт одно оповещение `SIGNAL_LIMIT_REACHED` на животное, уровень и сутки. `dailyLimit = null` — не задан (без подавления), целое ≥ 1 — лимит, `0` отклоняется; `unlimited = true` — без подавления. Границы суток — по `Farm.timezone` (по умолчанию Asia/Aqtau, UTC+5). Тестовые сигналы из приложения в счётчик не входят.
 
 Счётчики сигналов за сутки (блок «Сигналы за сутки», A7): `GET /animals/:id/signals` -> `{day, sound:{used,limit|null}, vibration:{…}, impulse:{used:0,limit|null,available:false}}`. Энергия импульса не отдаётся.
@@ -153,8 +155,8 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 |---|---|---|---|
 | `GET /devices` | W | — | `CollarDto[]` |
 | `GET /devices/:deviceId` | W | — | `CollarDto` |
-| `POST /devices` | W | `{deviceId(3–40: A-Za-z0-9_-), animalId?}` | `{collar: CollarDto, deviceSecret: string}` — секрет **показывается один раз**, на сервере хранится только хеш |
-| `POST /devices/:deviceId/rotate-secret` | W | — | `{deviceSecret}` |
+| `POST /devices` | **O** | `{deviceId(3–40: A-Za-z0-9_-), animalId?}` | `{collar: CollarDto, deviceSecret: string}` — секрет **показывается один раз**, на сервере хранится только хеш |
+| `POST /devices/:deviceId/rotate-secret` | **O** | — | `{deviceSecret}` |
 | `PATCH /devices/:deviceId` | W | `{animalId?: string\|null}` | `CollarDto` |
 | `DELETE /devices/:deviceId` | O | — | `204` |
 | `POST /devices/:deviceId/test-signal` | W | `{signal: 'SOUND' \| 'VIBRATION'}` | `202 {commandId}`; ставит команду в очередь, ошейник получит её в ответе на следующий пинг. Значение `IMPULSE` отклоняется (`400`) |
@@ -179,7 +181,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 | Метод и путь | Права | Ответ |
 |---|---|---|
 | `GET /analytics/overview` | W | счётчики без `lowBatteryDevices` |
-| `GET /health` (вне префикса) | — | `{status, timestamp}` |
+| `GET /health` (вне префикса) | — | `{status, timestamp, mail: 'none' \| 'configured'}` (`none` — письма не доставляются) |
 | `GET /` | — | `{status, service, version, telemetryEndpoint}`; ссылка `dashboard` удалена (URL не проверен) |
 
 ### Камера (модуль отключён)
