@@ -5,13 +5,15 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    # builds the site SPA (if site/package.json exists) first; the server then serves site/dist
-    buildCommand: if [ -f ../site/package.json ]; then (cd ../site && npm ci --include=dev && npm run build); fi && npm ci --include=dev && npx prisma generate && npm run build
+    # builds the site SPA first and copies it INSIDE rootDir (server/site-dist): Render ships only rootDir to runtime
+    buildCommand: rm -rf site-dist && if [ -f ../site/package.json ]; then (cd ../site && npm ci --include=dev && npm run build) && cp -r ../site/dist site-dist; fi && npm ci --include=dev && npx prisma generate && npm run build
     # free plan has no preDeployCommand, so migrations run at start
     startCommand: npx prisma migrate deploy && npm run start:prod
     healthCheckPath: /health
-    autoDeploy: false
+    autoDeploy: true
     envVars:
+      - key: SITE_DIST_DIR
+        value: site-dist
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV
