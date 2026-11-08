@@ -2,7 +2,15 @@
   Qamqor mockups: design tokens, brief v3 (direction A3 "Горизонт современный", approved).
   Names and values come from docs/frontend/app-design-brief.md sections 2-4 and 8 (and directions/assets/a3.css).
   This is the ONLY file in the mockups that may contain raw colour values.
+
+  Phone scaling (brief 5.5): --u is one design px after scaling (1px at frame width >= 375, down to .9px at 320). It is set on
+  .app in assets/mockups.css. Every phone-scalable size is written calc(N * var(--u)) and lives in the second block
+  (:root, .app) so it is re-evaluated where --u is defined (declaring it on :root only would freeze it at 1px).
+  NOT scaled: hairlines, focus rings, map tiles, safe areas, breakpoints, durations, tablet-only sizes (--rail-w, --r-rail).
+  Text never goes below 11px (max(11px, ...)).
 */
+
+@property --u { syntax: "<length>"; inherits: true; initial-value: 1px; }
 
 :root {
   /* ---- Palette (2.1) ---- */
@@ -42,7 +50,6 @@
   --glass-sheet: rgba(246, 250, 244, .93);
   --glass-chrome: rgba(246, 250, 244, .86);
   --glass-solid: #F6FAF4;        /* reduced transparency */
-  --glass-blur: blur(30px) saturate(1.6);
   --hl: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(255, 255, 255, .3);
   --hl-dark: inset 0 1px 0 rgba(255, 255, 255, .38), inset 0 0 0 1px rgba(255, 255, 255, .10);
   --hl-soft: inset 0 1px 0 rgba(255, 255, 255, .8);
@@ -62,63 +69,69 @@
   --dot-off: rgba(14, 26, 20, .55);
   --map-filter: saturate(1) contrast(1.1) brightness(1.1);
 
-  /* ---- Space (4 px step) ---- */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-
-  /* ---- Radius (nested, 4) ---- */
-  --r-xs: 6px;
-  --r-sm: 14px;
-  --r-md: 18px;
-  --r-btn: 20px;
-  --r-lg: 22px;
-  --r-xl: 24px;
-  --r-sheet: 32px;
-  --r-nav: 34px;
+  /* ---- Tablet-only sizes: never scaled (brief 5.5.2) ---- */
   --r-rail: 42px;
-  --r-cluster: 9px;
-
-  /* ---- Elevation ---- */
-  --e1: 0 6px 20px rgba(8, 18, 12, .22);
-  --e2: 0 -12px 48px rgba(8, 18, 12, .26);
-  --e-panel: 0 14px 56px rgba(8, 18, 12, .30);
-  --e-nav: 0 10px 30px rgba(8, 18, 12, .34);
-  --e-pill: 0 2px 8px rgba(0, 0, 0, .25);
-
-  /* ---- Fixed sizes ---- */
-  --touch: 48px;
-  --btn-h: 56px;
-  --btn-h-sm: 52px;
-  --fab: 48px;
-  --nav-h: 68px;
   --rail-w: 96px;
-  --peek-h: 204px;
 
-  /* ---- Motion (8) ---- */
+  /* ---- Motion (8): durations and curves are not scaled ---- */
   --spring: cubic-bezier(.3, 1.35, .5, 1);
   --spring-press: cubic-bezier(.3, 1.4, .5, 1);
   --dur-sheet: 500ms;
   --dur-press: 160ms;
   --dur-color: 200ms;
 
-  /* ---- Type: Inter only, phone scale (3.2). Tablet overrides live in mockups.css ---- */
   --font: "Inter", system-ui, sans-serif;
-  --fs-display: 40px;  --lh-display: 44px;  --ls-display: -.045em;
-  --fs-title-1: 26px;  --lh-title-1: 32px;  --ls-title-1: -.03em;
-  --fs-title-2: 20px;  --lh-title-2: 26px;  --ls-title-2: -.025em;
-  --fs-body-l: 17px;   --lh-body-l: 24px;   --ls-body-l: -.015em;
-  --fs-body: 16px;     --lh-body: 22px;
-  --fs-body-sm: 15px;  /* connection badge at 320, brief 3.2: body 15 to 16 */
-  --fs-label: 17px;    --lh-label: 22px;    --ls-label: -.01em;
-  --fs-caption: 13px;  --lh-caption: 18px;
-  --fs-nav: 12px;      --lh-nav: 16px;
-
   --scrim: rgba(11, 26, 18, .45);
+}
+
+/* ---- Phone-scalable sizes (brief 5.5). Declared on :root (showcase pages, --u = 1px) and on .app (--u from the frame width) ---- */
+:root, .app {
+  /* Space (4 px step) */
+  --space-1: calc(4 * var(--u));
+  --space-2: calc(8 * var(--u));
+  --space-3: calc(12 * var(--u));
+  --space-4: calc(16 * var(--u));
+  --space-5: calc(20 * var(--u));
+  --space-6: calc(24 * var(--u));
+  --space-8: calc(32 * var(--u));
+  --space-10: calc(40 * var(--u));
+  --space-12: calc(48 * var(--u));
+
+  /* Radius (nested, 4) */
+  --r-xs: calc(6 * var(--u));
+  --r-sm: calc(14 * var(--u));
+  --r-md: calc(18 * var(--u));
+  --r-btn: calc(20 * var(--u));
+  --r-lg: calc(22 * var(--u));
+  --r-xl: calc(24 * var(--u));
+  --r-sheet: calc(32 * var(--u));
+  --r-nav: calc(34 * var(--u));
+  --r-cluster: calc(9 * var(--u));
+
+  /* Elevation: offsets and blur scale, colours do not */
+  --e1: 0 calc(6 * var(--u)) calc(20 * var(--u)) rgba(8, 18, 12, .22);
+  --e2: 0 calc(-12 * var(--u)) calc(48 * var(--u)) rgba(8, 18, 12, .26);
+  --e-panel: 0 calc(14 * var(--u)) calc(56 * var(--u)) rgba(8, 18, 12, .30);
+  --e-nav: 0 calc(10 * var(--u)) calc(30 * var(--u)) rgba(8, 18, 12, .34);
+  --e-pill: 0 calc(2 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, .25);
+  --glass-blur: blur(calc(30 * var(--u))) saturate(1.6);
+
+  /* Fixed sizes (visible size; the 44 px touch zone is added by a pseudo-element, see mockups.css) */
+  --touch: calc(48 * var(--u));
+  --btn-h: calc(56 * var(--u));
+  --btn-h-sm: calc(52 * var(--u));
+  --fab: calc(48 * var(--u));
+  --nav-h: calc(68 * var(--u));
+  --peek-h: calc(204 * var(--u));
+
+  /* Type: Inter only, phone scale (3.2) with the 11 px floor. Tablet overrides live in mockups.css */
+  --fs-display: max(11px, calc(40 * var(--u)));  --lh-display: calc(44 * var(--u));  --ls-display: -.045em;
+  --fs-title-1: max(11px, calc(26 * var(--u)));  --lh-title-1: calc(32 * var(--u));  --ls-title-1: -.03em;
+  --fs-title-2: max(11px, calc(20 * var(--u)));  --lh-title-2: calc(26 * var(--u));  --ls-title-2: -.025em;
+  --fs-body-l: max(11px, calc(17 * var(--u)));   --lh-body-l: calc(24 * var(--u));   --ls-body-l: -.015em;
+  --fs-body: max(11px, calc(16 * var(--u)));     --lh-body: calc(22 * var(--u));
+  --fs-body-sm: max(11px, calc(15 * var(--u)));  /* connection badge, brief 3.2: body 15 to 16 */
+  --fs-label: max(11px, calc(17 * var(--u)));    --lh-label: calc(22 * var(--u));    --ls-label: -.01em;
+  --fs-caption: max(11px, calc(13 * var(--u)));  --lh-caption: calc(18 * var(--u));
+  --fs-nav: max(11px, calc(12 * var(--u)));      --lh-nav: calc(16 * var(--u));
 }

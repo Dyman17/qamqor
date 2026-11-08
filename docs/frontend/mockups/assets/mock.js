@@ -30,7 +30,7 @@
     size = size || 24;
     var stroke = key.indexOf("tabler/") === 0;
     return '<svg class="ic' + (stroke ? " ic-stroke" : "") + (cls ? " " + cls : "") + '" width="' + size + '" height="' + size +
-      '" viewBox="' + def.vb + '" aria-hidden="true" focusable="false">' + def.d + "</svg>";
+      '" style="--n:' + size + '" viewBox="' + def.vb + '" aria-hidden="true" focusable="false">' + def.d + "</svg>";
   }
   function hydrateIcons(root) {
     (root || document).querySelectorAll("i[data-icon]").forEach(function (el) {
@@ -146,12 +146,12 @@
     var plate = o.nofence && fence
       ? '<rect class="mk-plate" x="28" y="4" width="14" height="14" rx="4"/><svg x="30" y="6" width="10" height="10" viewBox="' + fence.vb + '" class="mk-plate-ic">' + fence.d + "</svg>"
       : "";
-    return '<svg class="mk-svg' + (o.selected ? " is-selected" : "") + '" width="' + size + '" height="' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
+    return '<svg class="mk-svg' + (o.selected ? " is-selected" : "") + '" width="' + size + '" height="' + size + '" style="--n:' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
       '<circle class="mk-sel" cx="22" cy="22" r="15"/>' + dot + plate + "</svg>";
   }
   function clusterSVG(n, size) {
     size = size || 44;
-    return '<svg class="mk-svg" width="' + size + '" height="' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
+    return '<svg class="mk-svg" width="' + size + '" height="' + size + '" style="--n:' + size + '" viewBox="0 0 44 44" aria-hidden="true" focusable="false">' +
       '<rect class="mk-cluster-box" x="4" y="8" width="36" height="28" rx="9"/><text class="mk-cluster-text" x="22" y="22.5">' + n + "</text></svg>";
   }
 

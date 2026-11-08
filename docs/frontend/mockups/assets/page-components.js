@@ -8,6 +8,11 @@
     return '<div class="mk-cell' + (cls ? " " + cls : "") + '"><span class="cap">' + cap + "</span>" + inner + "</div>";
   }
   function fill(id, html) { $(id).innerHTML = html; }
+  /* A showcase cell at phone width 320 must scale like the product (brief 5.5.5 item 3): it sits in a real 320 .device with an .app,
+     so --u comes from the frame width and the limit mode (frame < 337.5) applies. Outside an .app --u is 1px and the cell proves nothing. */
+  function phone320(inner) {
+    return '<div class="mk-scroll"><div class="device is-fit" style="--w:320px"><div class="app" data-state="normal">' + inner + "</div></div></div>";
+  }
   var STATES = [
     { name: "default", cls: "", disabled: false },
     { name: "pressed", cls: "is-pressed", disabled: false },
@@ -30,9 +35,9 @@
       });
       out += "</div>";
     });
-    out += '<div class="mk-card mk-w-320"><span class="cap t-caption cap-strong">320: long labels wrap between words, no clipping</span>' +
-      '<div class="stack-2 mt-2"><button type="button" class="btn btn-primary btn-block" data-i18n="action.saveApply"></button>' +
-      '<button type="button" class="btn btn-secondary btn-block" data-i18n="action.moveHerd"></button></div></div>';
+    out += '<div class="mk-card" style="min-width:0;max-width:100%"><span class="cap t-caption cap-strong">320: long labels wrap between words, no clipping (limit mode)</span>' +
+      phone320('<div class="stack-2 mt-2"><button type="button" class="btn btn-primary btn-block" data-i18n="action.saveApply"></button>' +
+      '<button type="button" class="btn btn-secondary btn-block" data-i18n="action.moveHerd"></button></div>') + "</div>";
     fill("btn-grid", out);
   })();
 
@@ -100,7 +105,7 @@
 
   /* ---------- rows ---------- */
   (function () {
-    function host(w, inner) { return '<div class="mk-w-' + w + ' row-host list">' + inner + "</div>"; }
+    function host(w, inner) { return w === 320 ? phone320('<div class="list">' + inner + "</div>") : '<div class="mk-w-' + w + ' row-host list">' + inner + "</div>"; }
     var out = "";
     [["default", "ok", "inZone"], ["pressed", "ok", "inZone"], ["selected", "danger", "outOfZone"], ["focus", "offline", "noConn"], ["disabled", "ok", "inZone"]].forEach(function (r) {
       out += cell("343 · " + r[0], host(343, M.rowHTML({ status: r[1], badge: r[2], state: r[0] === "default" ? "" : r[0], ago: 5 })));
@@ -138,7 +143,7 @@
     out += cell("danger · read", '<div class="mk-w-343">' + card("danger", false, 40) + "</div>");
     out += cell("offline · unread", '<div class="mk-w-343">' + card("offline", true, 12) + "</div>");
     out += cell("offline · read", '<div class="mk-w-343">' + card("offline", false, 90) + "</div>");
-    out += cell("320 · danger · unread (buttons must not clip)", '<div class="mk-w-320">' + card("danger", true, 5) + "</div>");
+    out += cell("320 · danger · unread (buttons must not clip)", phone320(card("danger", true, 5)));
     out += cell("focus", '<div class="mk-w-343">' + card("danger", false, 5, "focus") + "</div>");
     fill("alert-grid", out);
   })();

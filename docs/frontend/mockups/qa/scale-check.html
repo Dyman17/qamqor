@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mockups QA: phone scaling (brief 5.5)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; }
+    iframe { position: absolute; left: -9999px; top: 0; border: 0; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <!--
+    QA helper (not part of the mockups). Serve the mockups folder over http and open this page; drive it from the console:
+      await SC.dump(name)               rect/font dump of many screens at 375, 412, 768, 1366 (for before/after diffs, brief 5.5.5 item 1)
+      await SC.check(widths, langs)     320-class checks on every phone screen: overflow, clipped text, font floor 11, hit zones 44, hit overlap
+    Results are returned and, when the server accepts POST /save/<file>, saved there.
+    Every iframe has an explicit width, so the result does not depend on the size of the host window.
+  -->
+  <h1>Mockups QA: phone scaling</h1>
+  <pre id="out"></pre>
+  <iframe id="f" title="qa"></iframe>
+  <script>
+  (function () {
+    "use strict";
+    var f = document.getElementById("f");
+    var H = { 320: 640, 337: 700, 338: 700, 340: 700, 360: 740, 375: 812, 390: 844, 412: 915, 768: 1024, 1366: 768 };
+
+    function newFrame() { var x = document.createElement("iframe"); x.title = "qa"; document.body.appendChild(x); return x; }
+    function load(url, w, h, fr) {
+      fr = fr || f;
+      return new Promise(function (resolve) {
+        fr.style.width = w + "px"; fr.style.height = h + "px";
+        fr.onload = function () {
+          var d = fr.contentDocument;
+          var st = d.createElement("style");
+          st.textContent = "*,*::before,*::after{animation:none!important;transition:none!important}";
+          d.head.appendChild(st);
+          (d.fonts && d.fonts.ready ? d.fonts.ready : Promise.resolve()).then(function () { setTimeout(function () { resolve(fr.contentWindow); }, 120); });
+        };
+        fr.src = "../" + url;
+      });
+    }
+    function save(name, obj) {
+      return fetch("/save/" + name, { method: "POST", body: JSON.stringify(obj) }).catch(function () {});
+    }
+    function r2(n) { return Math.round(n * 100) / 100; }
+    function pathOf(el) {
+      var p = [];
+      while (el && el.parentElement) { p.push(Array.prototype.indexOf.call(el.parentElement.children, el)); el = el.parentElement; }
+      return p.reverse().join("/");
+    }
+    function capSkip(el) {
+      for (var a = el; a && a !== a.ownerDocument.body; a = a.parentElement) {
+        if (a.classList && (a.classList.contains("mk-cell") || a.classList.contains("mk-card"))) {
+          var c = a.querySelector(":scope > .cap");
+          if (c && /^320/.test(c.textContent.trim())) { return true; }
+        }
+      }
+      return false;
+    }
+
+    /* ---------- dump: position, size and font of every rendered element ---------- */
+    function dumpDoc(win) {
+      var d = win.document, out = {};
+      d.body.querySelectorAll("*").forEach(function (el) {
+        var tag = el.tagName.toLowerCase();
+        if (tag === "script" || tag === "style" || tag === "link") { return; }
+        if (el.closest("svg") && tag !== "svg") { return; }
+        var cs = win.getComputedStyle(el);
+        if (cs.display === "none") { return; }
+        var r = el.getBoundingClientRect();
+        var base = el.closest(".device, .mk-cell, .mk-sec, .mk-header, .mk-frame-wrap");
+        var br = base ? base.getBoundingClientRect() : { left: 0, top: 0 };
+        var dev = el.closest(".device");
+        var skip = (dev && dev.offsetWidth === 320) || capSkip(el);
+        var hasText = Array.prototype.some.call(el.childNodes, function (n) { return n.nodeType === 3 && n.textContent.trim(); });
+        out[pathOf(el)] = [tag + (typeof el.className === "string" && el.className ? "." + el.className.split(" ")[0] : ""), r2(r.left - br.left), r2(r.top - br.top), r2(r.width), r2(r.height), hasText ? cs.fontSize : "", skip ? 1 : 0];
+      });
+      out.__sw = [win.document.documentElement.scrollWidth, win.innerWidth];
+      return out;
+    }
+
+    function dumpScenarios() {
+      var list = [];
+      var sheets = ["peek", "half", "full"];
+      var states = ["normal", "loading", "loadingLong", "emptyAnimals", "emptyPens", "error", "offline", "allOk", "wifi"];
+      sheets.forEach(function (s) { states.forEach(function (st) { list.push("view=map&state=" + st + "&sheet=" + s); }); });
+      ["herd", "profile", "alerts", "collars", "settings", "draw", "move", "auth"].forEach(function (v) { list.push("view=" + v + "&state=normal&sheet=peek"); });
+      list.push("view=herd&state=offline&sheet=peek"); list.push("view=alerts&state=error&sheet=peek");
+      return list;
+    }
+
+    async function dump(name, only) {
+      var widths = only || [375, 412, 768, 1366];
+      await Promise.all(widths.map(function (w) { return dumpWidth(name, w, widths.length === 1); }));
+      return widths;
+    }
+    async function dumpWidth(name, w, useMain) {
+      var res = {}, langs = ["ru", "kk", "en"], fr = useMain ? f : newFrame();
+      {
+          for (var li = 0; li < langs.length; li++) {
+          var lang = langs[li], bucket = {};
+          for (var s of dumpScenarios()) {
+            var win = await load("screen-map.html?embed=1&lang=" + lang + "&" + s, w, H[w], fr);
+            bucket["embed|" + s] = dumpDoc(win);
+          }
+          var comp = await load("components.html?lang=" + lang, w, 900, fr);
+          bucket["components"] = dumpDoc(comp);
+          if (w === 375 || w === 1366) {
+            for (var s2 of ["view=map&sheet=peek", "view=map&sheet=half", "view=map&sheet=full", "view=herd", "view=alerts", "view=settings", "view=profile"]) {
+              var wn = await load("screen-map.html?lang=" + lang + "&" + s2, w === 375 ? 375 : 1440, 900, fr);
+              bucket["page|" + s2] = dumpDoc(wn);
+            }
+          }
+          res[w + "_" + lang] = bucket;
+          await save(name + "_" + w + "_" + lang + ".json", bucket);
+        }
+      }
+      if (!useMain) { fr.remove(); }
+      return Object.keys(res);
+    }
+
+    /* ---------- check: acceptance measurements on phone screens ---------- */
+    var ELLIPSIS_OK = ".farm-name, .row-title, .row-sub, .badge > span:last-child, .attrib, .trigger-title, .trigger-sub";
+    var INTERACTIVE = 'a[href], button, select, textarea, input:not([type=hidden]), [role=button], [tabindex]:not([tabindex="-1"])';
+
+    function visible(win, el) {
+      for (var a = el; a && a.nodeType === 1; a = a.parentElement) {
+        var cs = win.getComputedStyle(a);
+        if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0" && !a.matches("input")) { return false; }
+      }
+      return true;
+    }
+    function zone(win, el) {
+      var r = el.getBoundingClientRect(), w = r.width, h = r.height;
+      ["::before", "::after"].forEach(function (p) {
+        var cs = win.getComputedStyle(el, p);
+        if (cs.content !== "none" && cs.position === "absolute") {
+          var pw = parseFloat(cs.width), ph = parseFloat(cs.height);
+          if (pw >= 40 && ph >= 40) { w = Math.max(w, pw); h = Math.max(h, ph); }
+        }
+      });
+      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      return { l: cx - w / 2, r: cx + w / 2, t: cy - h / 2, b: cy + h / 2, w: w, h: h, vw: r.width, vh: r.height };
+    }
+    function label(el) {
+      var t = (el.getAttribute("aria-label") || el.textContent || el.className || "").replace(/\s+/g, " ").trim().slice(0, 22);
+      return el.tagName.toLowerCase() + (typeof el.className === "string" && el.className ? "." + el.className.split(" ")[0] : "") + "[" + t + "]";
+    }
+
+    function checkDoc(win) {
+      var d = win.document, rep = { overflow: [], clipped: [], tiny: [], hit: [], overlap: [], titleCut: [], u: null, btnH: null, minFont: 999 };
+      var de = d.documentElement;
+      if (de.scrollWidth > win.innerWidth) { rep.overflow.push("document " + de.scrollWidth + ">" + win.innerWidth); }
+      d.querySelectorAll(".app, .device").forEach(function (a) {
+        if (a.scrollWidth > a.clientWidth + 0.5) {
+          var ar = a.getBoundingClientRect(), who = [];
+          a.querySelectorAll("*").forEach(function (e) { var b = e.getBoundingClientRect(); if (!e.closest(".map") && b.width > 0 && (b.right > ar.right + 0.5 || b.left < ar.left - 0.5) && who.length < 2) { who.push(label(e)); } });
+          rep.overflow.push(label(a) + " " + a.scrollWidth + ">" + a.clientWidth + " by " + who.join(","));
+        }
+      });
+      var app = d.querySelector(".app");
+      if (app) { rep.u = win.getComputedStyle(app).getPropertyValue("--u").trim(); var pb = d.querySelector(".app .btn-primary"); if (pb && pb.offsetParent) { rep.btnH = r2(pb.getBoundingClientRect().height); } }
+      var scope = d.querySelectorAll(".app, .app *");
+      var texts = [];
+      scope.forEach(function (el) {
+        if (el.closest("svg") || el.closest(".map") || el.matches("script,style")) { return; }
+        var own = Array.prototype.filter.call(el.childNodes, function (n) { return n.nodeType === 3 && n.textContent.trim(); });
+        if (!own.length || !visible(win, el)) { return; }
+        var cs = win.getComputedStyle(el), fs = parseFloat(cs.fontSize);
+        if (el.closest(".mk-toast")) { return; }
+        rep.minFont = Math.min(rep.minFont, fs);
+        if (fs < 11 - 0.001) { rep.tiny.push(label(el) + " " + fs); }
+        var eb = el.getBoundingClientRect();
+        if (eb.width <= 2 || eb.height <= 2) { return; }   /* visually hidden (sr-only) text */
+        var rg = d.createRange(); rg.selectNodeContents(el);
+        var rr = rg.getBoundingClientRect();
+        if (rr.width === 0) { return; }
+        var cut = false, where = "";
+        var appR = el.closest(".app").getBoundingClientRect();
+        var inScroller = false;
+        for (var sc = el; sc && sc !== el.closest(".app"); sc = sc.parentElement) { var scs = win.getComputedStyle(sc); if (scs.overflowX === "auto" || scs.overflowX === "scroll") { inScroller = true; } }
+        if (!inScroller && (rr.right > appR.right + 0.5 || rr.left < appR.left - 0.5)) { cut = true; where = "outside app"; }
+        for (var a = el; a && a !== el.closest(".app").parentElement && !cut && !inScroller; a = a.parentElement) {
+          var acs = win.getComputedStyle(a);
+          if (acs.overflowX !== "visible" && acs.overflowX !== "auto" && acs.overflowX !== "scroll") {
+            var ar = a.getBoundingClientRect();
+            if (rr.right > ar.right + 0.5 || rr.left < ar.left - 0.5) { cut = true; where = "clipped by " + label(a); }
+          }
+        }
+        if (!cut && cs.display !== "inline" && !(el.matches(INTERACTIVE) && win.getComputedStyle(el, "::after").content !== "none") && el.scrollWidth > el.clientWidth + 0.5 && cs.overflowX !== "auto" && cs.overflowX !== "scroll") { cut = true; where = "scrollWidth " + el.scrollWidth + ">" + el.clientWidth; }
+        if (!cut && el.matches(INTERACTIVE) && (rr.right > eb.right + 0.5 || rr.left < eb.left - 0.5)) { cut = true; where = "text wider than its control"; }
+        if (cut) {
+          var allowed = el.matches(ELLIPSIS_OK) && cs.textOverflow === "ellipsis";
+          var item = label(el) + " " + where;
+          if (allowed) {
+            if (el.matches(".row-title")) { rep.titleCut.push(item); }
+          } else { rep.clipped.push(item); }
+        }
+      });
+      /* one-line rule (brief 3.2, 5.5.3): button labels, nav labels and summary tile labels stay on one line from 337.5 up */
+      if (app) {
+        var aw = app.getBoundingClientRect().width;
+        if (aw >= 337.5) {
+          d.querySelectorAll(".app .btn, .app .sum-tile .l, .app .nav-label").forEach(function (el) {
+            if (!visible(win, el) || el.closest(".map-loading")) { return; }
+            var tops = {}, wk = d.createTreeWalker(el, NodeFilter.SHOW_TEXT), nd;
+            while ((nd = wk.nextNode())) { if (!nd.textContent.trim()) { continue; } var rg2 = d.createRange(); rg2.selectNodeContents(nd); Array.prototype.forEach.call(rg2.getClientRects(), function (x) { if (x.width > 0) { tops[Math.round(x.top)] = 1; } }); }
+            if (Object.keys(tops).length > 1) { rep.clipped.push(label(el) + " wraps to " + Object.keys(tops).length + " lines at w=" + Math.round(aw)); }
+          });
+        }
+      }
+      /* hit zones */
+      var items = [];
+      d.querySelectorAll(INTERACTIVE).forEach(function (el) {
+        if (!el.closest(".app") || el.closest(".map") || !visible(win, el)) { return; }
+        if (el.matches('input[type=checkbox]') && win.getComputedStyle(el).display === "none") { return; }
+        var tgt = el;
+        if (el.matches("input[type=checkbox], input[type=radio]")) { tgt = el.closest("label") || el.closest(".row") || el; }
+        if (tgt !== el && items.some(function (x) { return x.el === tgt; })) { return; }
+        var r = tgt.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) { return; }
+        var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        if (cx < 0 || cy < 0 || cx > win.innerWidth || cy > win.innerHeight) { return; }
+        var top = d.elementFromPoint(cx, cy);
+        if (!top || !(tgt.contains(top))) { return; }
+        items.push({ el: tgt, z: zone(win, tgt) });
+      });
+      items.forEach(function (it) {
+        if (it.z.w < 43.99 || it.z.h < 43.99) { rep.hit.push(label(it.el) + " " + r2(it.z.w) + "x" + r2(it.z.h) + " (visible " + r2(it.z.vw) + "x" + r2(it.z.vh) + ")"); }
+      });
+      for (var i = 0; i < items.length; i++) {
+        for (var j = i + 1; j < items.length; j++) {
+          var a = items[i], b = items[j];
+          if (a.el.contains(b.el) || b.el.contains(a.el)) { continue; }
+          /* list content that scrolls under the navigation pill is clipped by design (brief 5.1: content under the pill is hidden) */
+          if ((a.el.closest(".bottomnav") && b.el.closest(".sheet-body, .app-view")) || (b.el.closest(".bottomnav") && a.el.closest(".sheet-body, .app-view"))) { continue; }
+          var ox = Math.min(a.z.r, b.z.r) - Math.max(a.z.l, b.z.l), oy = Math.min(a.z.b, b.z.b) - Math.max(a.z.t, b.z.t);
+          if (ox > 1 && oy > 1) { rep.overlap.push(label(a.el) + " x " + label(b.el) + " " + r2(ox) + "x" + r2(oy)); }
+        }
+      }
+      return rep;
+    }
+
+    var CHECK_SCEN = [];
+    (function () {
+      ["peek", "half", "full"].forEach(function (s) { ["normal", "loading", "loadingLong", "emptyAnimals", "emptyPens", "error", "offline", "allOk", "wifi"].forEach(function (st) { CHECK_SCEN.push("screen-map.html?embed=1&view=map&state=" + st + "&sheet=" + s); }); });
+      ["herd", "profile", "alerts", "collars", "settings", "draw", "move", "auth"].forEach(function (v) { CHECK_SCEN.push("screen-map.html?embed=1&view=" + v + "&state=normal&sheet=peek"); });
+      CHECK_SCEN.push("screen-map.html?embed=1&view=herd&state=offline&sheet=peek", "screen-map.html?embed=1&view=alerts&state=error&sheet=peek", "screen-map.html?embed=1&view=herd&state=error&sheet=peek");
+      CHECK_SCEN.push("components.html?");
+    })();
+
+    function trim(a, n) { return a.slice(0, n || 4); }
+    async function check(widths, langs, name) {
+      var all = {}, summary = [], tasks = [];
+      widths.forEach(function (w) { langs.forEach(function (lang) { tasks.push([w, lang]); }); });
+      await Promise.all(tasks.map(async function (t) {
+        var w = t[0], lang = t[1], fr = tasks.length === 1 ? f : newFrame();
+        for (var s of CHECK_SCEN) {
+          var sep = s.indexOf("?") >= 0 && !/\?$/.test(s) ? "&" : "";
+          var url = s + sep + "lang=" + lang;
+          var win = await load(url, w, /^components/.test(s) ? 7000 : (H[w] || 800), fr);
+          var rep = checkDoc(win);
+          var key = w + "|" + lang + "|" + s.replace("screen-map.html?embed=1&", "").replace("?", "");
+          var bad = rep.overflow.length + rep.clipped.length + rep.tiny.length + rep.hit.length + rep.overlap.length + rep.titleCut.length;
+          all[key] = rep;
+          if (bad) { summary.push(key + " :: " + JSON.stringify({ o: trim(rep.overflow), c: trim(rep.clipped), t: trim(rep.tiny), h: trim(rep.hit), ov: trim(rep.overlap), tc: trim(rep.titleCut) })); }
+        }
+        if (fr !== f) { fr.remove(); }
+      }));
+      await save((name || "check") + ".json", all);
+      return { scenarios: Object.keys(all).length, withFindings: summary.length, findings: summary };
+    }
+
+    /* index.html (the showcase that wraps the mockups in iframes): same dump format, for the before/after diff */
+    async function dumpIndex(name) {
+      var widths = [375, 412, 768, 1366], langs = ["ru", "kk", "en"];
+      await Promise.all(widths.map(async function (w) {
+        var fr = newFrame();
+        for (var lang of langs) {
+          var win = await load("index.html?lang=" + lang, w, 1200, fr);
+          var bucket = { index: dumpDoc(win) };
+          await save(name + "_" + w + "_" + lang + ".json", bucket);
+        }
+        fr.remove();
+      }));
+      return widths;
+    }
+
+    window.SC = { dumpIndex: dumpIndex, dump: dump, check: check, load: load, dumpDoc: dumpDoc, checkDoc: checkDoc };
+  })();
+  </script>
+</body>
+</html>

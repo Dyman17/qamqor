@@ -114,8 +114,8 @@
   function renderHerdRows(animals) {
     return animals.map(function (a) {
       var dotCls = a.st === "danger" ? "out" : (a.st === "offline" ? "off" : (a.st === "warning" ? "warn" : "ok"));
-      return '<div class="row pad-3 herd-row" data-animal="' + a.id + '" style="display:flex; align-items:center; gap:var(--space-3);">' +
-        '<input type="checkbox" class="herd-check" style="display:none; width:20px; height:20px; accent-color:var(--primary);">' +
+      return '<div class="row pad-3 herd-row" data-animal="' + a.id + '">' +
+        '<input type="checkbox" class="herd-check" style="display:none; width:calc(20 * var(--u)); height:calc(20 * var(--u)); accent-color:var(--primary);">' +
         '<span class="row-dot ' + dotCls + '"></span>' +
         '<div class="row-main">' +
           '<span class="row-title">Корова #' + a.id + '</span>' +
@@ -123,7 +123,7 @@
         '</div>' +
         '<div class="row-side">' +
           M.badgeHTML(BADGE_KIND[a.st]) +
-          '<span class="t-caption t-muted" style="margin-top:2px;">' + a.ago + ' мин назад</span>' +
+          '<span class="t-caption t-muted" style="margin-top:calc(2 * var(--u));">' + a.ago + ' мин назад</span>' +
         '</div>' +
       '</div>';
     }).join("");
@@ -321,15 +321,6 @@
           '</div>' +
         '</div>' +
       '</div>' +
-            '<div class="alert-head"><i data-icon="wifi-slash" data-size="20"></i><span class="alert-title">Ошейники вне зоны Wi-Fi</span><span class="alert-time">25 мин назад</span></div>' +
-            '<p class="t-body" style="font-weight:600;">Корова #0410, #0415 (2 животных)</p>' +
-            '<p class="t-caption t-muted">Ошейники удерживают виртуальный забор автономно</p>' +
-            '<div class="alert-actions" style="display:flex; gap:var(--space-2); margin-top:var(--space-2);">' +
-              '<button type="button" class="btn btn-tertiary btn-sm" data-act="alert-dismiss" data-i18n="wifi.ok">Понятно</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
 
       /* ---------- S8: COLLARS VIEW ---------- */
       '<div class="app-view view-collars" role="region" aria-label="Ошейники">' +
@@ -380,7 +371,7 @@
             '<div class="field">' +
               '<label class="field-label" data-i18n="collars.chooseAnimal">Выберите животное</label>' +
               '<div class="input">' +
-                '<select class="wizard-animal-select" style="width:100%; height:52px; background:transparent; border:0; color:var(--ink); font:inherit; outline:none; padding:0 var(--space-2);">' +
+                '<select class="wizard-animal-select" style="width:100%; height:calc(52 * var(--u)); background:transparent; border:0; color:var(--ink); font:inherit; outline:none; padding:0 var(--space-2);">' +
                   '<option value="0301" style="background:var(--surface-1); color:var(--ink);">Корова #0301 (бирка DEMO-A01)</option>' +
                   '<option value="0310" style="background:var(--surface-1); color:var(--ink);">Корова #0310 (бирка DEMO-A10)</option>' +
                   '<option value="0322" style="background:var(--surface-1); color:var(--ink);">Корова #0322 (бирка DEMO-A22)</option>' +
@@ -412,8 +403,8 @@
             '<div class="row pad-3" style="display:flex; justify-content:space-between; align-items:center;"><div><p class="t-body" style="font-weight:600;">owner@qamqor.kz</p><p class="t-caption t-muted" data-i18n="settings.ownerRole">Владелец</p></div><span class="badge badge-zone">Полный доступ</span></div>' +
             '<div class="row pad-3" style="display:flex; justify-content:space-between; align-items:center;"><div><p class="t-body" style="font-weight:600;">serik@qamqor.kz</p><p class="t-caption t-muted" data-i18n="settings.workerRole">Работник</p></div><span class="badge badge-ok">Оператор</span></div>' +
           '</div>' +
-          '<label style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-2); cursor:pointer;"><input type="checkbox" checked style="width:20px; height:20px; accent-color:var(--primary);"><span class="t-body" data-i18n="settings.workerCanEdit">Работник может изменять границы</span></label>' +
-          '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:var(--space-1);" data-stub="settings.inviteWorker" data-i18n="settings.inviteWorker">+ Пригласить сотрудника</button>' +
+          '<label class="check-row" style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-2); cursor:pointer;"><input type="checkbox" checked style="width:calc(20 * var(--u)); height:calc(20 * var(--u)); accent-color:var(--primary);"><span class="t-body" data-i18n="settings.workerCanEdit">Работник может изменять границы</span></label>' +
+          '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:max(var(--space-1), calc((44px - 36 * var(--u)) / 2));" data-stub="settings.inviteWorker" data-i18n="settings.inviteWorker">+ Пригласить сотрудника</button>' +
         '</div>' +
         '<div class="profile-card">' +
           '<span class="cap t-caption cap-strong" data-i18n="settings.signalsSection">Лимиты и пороги сигналов</span>' +
@@ -458,15 +449,15 @@
       '<div class="app-view view-auth" role="region" aria-label="Вход">' +
         '<div class="profile-card" style="width:100%; max-width:400px; box-shadow:var(--shadow-modal);">' +
           '<div style="text-align:center; margin-bottom:var(--space-2);">' +
-            '<h1 class="t-display" style="color:var(--primary); font-size:32px; letter-spacing:0.04em;">QAMQOR</h1>' +
+            '<h1 class="t-display" style="color:var(--primary); font-size:max(11px, calc(32 * var(--u))); letter-spacing:0.04em;">QAMQOR</h1>' +
             '<p class="t-caption t-muted" data-i18n="auth.sub">Умный спутниковый выпас скота</p>' +
           '</div>' +
           '<div class="field"><label class="field-label" data-i18n="field.email">Email</label><div class="input"><input type="email" value="owner@qamqor.kz"></div></div>' +
           '<div class="field"><label class="field-label" data-i18n="field.password">Пароль</label><div class="input"><input type="password" value="••••••••••••"></div></div>' +
           '<button type="button" class="btn btn-primary btn-block" data-act="do-login" data-i18n="auth.loginBtn" style="margin-top:var(--space-2);">Войти в систему</button>' +
           '<div style="display:flex; justify-content:space-between; font-size:var(--fs-caption); margin-top:var(--space-2);">' +
-            '<a href="#" class="t-muted" data-stub="auth.forgot" data-i18n="auth.forgot">Забыли пароль?</a>' +
-            '<a href="#" style="color:var(--primary); font-weight:600;" data-stub="auth.createFarm" data-i18n="auth.createFarm">Создать ферму</a>' +
+            '<a href="#" class="t-muted hit-link" data-stub="auth.forgot" data-i18n="auth.forgot">Забыли пароль?</a>' +
+            '<a href="#" class="hit-link" style="color:var(--primary); font-weight:600;" data-stub="auth.createFarm" data-i18n="auth.createFarm">Создать ферму</a>' +
           '</div>' +
           '<div class="filter-pills" style="justify-content:center; margin-top:var(--space-3);">' +
             '<button type="button" class="chip" data-lang="kk">Қазақша</button>' +
