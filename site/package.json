@@ -1,0 +1,21 @@
+{
+  "name": "qamqor-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Qamqor website: landing + web dashboard (Vite, plain TypeScript, three.js, MapLibre)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "build:model": "node scripts/stl-to-glb.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.17.0",
+    "three": "^0.187.0"
+  }
+}

@@ -1,0 +1,52 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: calc(var(--header-h) + 16px); }
+/* data-motion is resolved in JS (src/motion.ts): "on" only if the system, the footer switch and the watchdog all allow motion. */
+html[data-motion="on"] { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  background: var(--surface-0);
+  font-optical-sizing: auto;
+  font-feature-settings: "tnum" 0;
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  min-width: 320px;
+}
+h1, h2, h3, h4, p, ul, ol, figure, dl, dd { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+img, svg, canvas { display: block; max-width: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--primary); text-underline-offset: .18em; }
+table { border-collapse: collapse; }
+.num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+html body [hidden] { display: none; }
+
+/* Visible focus on any background: double ring (A3 / site-brief 1.1). */
+:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-inner);
+}
+.on-night :focus-visible {
+  outline-color: var(--focus-night-outer);
+  box-shadow: 0 0 0 2px var(--focus-night-inner);
+}
+.btn-primary:focus-visible, .btn-dark:focus-visible { outline-color: var(--focus-outer); box-shadow: 0 0 0 2px var(--focus-inner); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.skip-link {
+  position: fixed; left: 16px; top: -80px; z-index: 1000;
+  background: var(--surface-2); color: var(--ink); padding: 12px 20px; border-radius: var(--r-btn);
+  font-weight: 600; text-decoration: none;
+  transition: top 120ms;
+}
+.skip-link:focus { top: 16px; }
+

@@ -1,0 +1,99 @@
+/* Shared UI: buttons, chips, language switch, glass, form controls. Tokens only. */
+
+.page-center { min-height: 100svh; display: grid; place-items: center; padding: var(--page-gutter); background: var(--scene-gradient); color: var(--snow); }
+.on-night { color: var(--snow); }
+.notfound { display: grid; gap: var(--space-4); justify-items: start; max-width: 34ch; }
+.notfound-brand { font-weight: 700; letter-spacing: -.02em; color: var(--mint); }
+.notfound h1 { font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: -.04em; font-weight: 700; }
+.notfound p { color: var(--mist-2); }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--btn-h); padding: 0 var(--space-6); border-radius: var(--r-btn);
+  border: 1px solid transparent; background: transparent; font-weight: 600; font-size: var(--fs-label);
+  letter-spacing: -.01em; text-decoration: none; text-align: center; line-height: 1.2; cursor: pointer;
+}
+html[data-motion="on"] .btn { transition: background-color var(--dur-color), transform var(--dur-press), color var(--dur-color); }
+html[data-motion="on"] .btn:hover:not(:disabled):not([aria-disabled="true"]) { transform: translateY(-1px); }
+html[data-motion="on"] .btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.98); }
+.btn-sm { min-height: 44px; padding: 0 var(--space-4); font-size: 15px; border-radius: var(--r-field); }
+.btn-primary { background: var(--primary); color: var(--on-primary); }
+.btn-primary:hover:not(:disabled) { background: var(--primary-pressed); }
+.btn-secondary { background: var(--surface-1); color: var(--ink); }
+.btn-secondary:hover:not(:disabled) { background: var(--tonal-pressed); }
+.btn-danger { background: var(--signal); color: var(--on-primary); }
+.btn-danger:hover:not(:disabled) { background: var(--signal-pressed); }
+.btn-light { background: var(--btn-light); color: var(--ink); }
+.btn-light:hover:not(:disabled) { background: var(--btn-light-hover); }
+.btn-light:active:not(:disabled) { background: var(--btn-light-pressed); }
+.btn-ghost-night { border-color: var(--btn2-border-night); color: var(--snow); }
+.btn-ghost-night:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.btn-ghost { color: var(--primary); }
+.btn-ghost:hover:not(:disabled) { background: var(--row-hover); }
+.btn:disabled, .btn[aria-disabled="true"] { background: var(--surface-1); color: var(--disabled-text); cursor: not-allowed; border-color: transparent; }
+.on-night .btn:disabled, .on-night .btn[aria-disabled="true"] { background: var(--night-2); color: var(--mist-3); }
+.btn-block { width: 100%; }
+.btn .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; }
+html[data-motion="on"] .btn .spinner { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Chip (non-capital label) ---- */
+.chip {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 2px 12px; border-radius: var(--r-chip);
+  font-size: var(--fs-caption); font-weight: 600; line-height: var(--lh-caption);
+  background: var(--surface-1); color: var(--ink);
+}
+.on-night .chip { background: var(--night-2); color: var(--mint); }
+
+/* ---- Language switch (pill, header + switcher only) ---- */
+.lang-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px var(--hair-night); }
+.lang-btn {
+  min-width: 44px; min-height: 44px; border: 0; border-radius: var(--r-pill); background: transparent;
+  color: var(--mist-2); font-size: 14px; font-weight: 600; letter-spacing: .02em;
+}
+.lang-btn[aria-pressed="true"] { background: var(--btn-light); color: var(--ink); }
+.lang-switch.on-light { background: var(--surface-1); box-shadow: none; }
+.lang-switch.on-light .lang-btn { color: var(--ink-2); }
+.lang-switch.on-light .lang-btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+
+/* ---- Glass (site-brief 1.3) with the required fallbacks ---- */
+.glass-dark, .glass-light { position: relative; isolation: isolate; border-radius: var(--r-card); }
+.glass-dark { background: var(--glass-dark-fill); backdrop-filter: var(--blur-dark); -webkit-backdrop-filter: var(--blur-dark); box-shadow: var(--glass-dark-shadow); color: var(--snow); }
+.glass-dark::before, .glass-light::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 96px; border-radius: inherit; pointer-events: none; z-index: -1;
+}
+.glass-dark::before { background: var(--sheen-dark); }
+.glass-light { background: var(--glass-light-fill); backdrop-filter: var(--blur-light); -webkit-backdrop-filter: var(--blur-light); box-shadow: var(--glass-light-shadow); color: var(--ink); }
+.glass-light::before { background: var(--sheen-light); }
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-dark { background: var(--glass-dark-solid); }
+  .glass-light { background: var(--glass-light-solid); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-dark { background: var(--glass-dark-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+html[data-light="1"] .glass-dark { background: var(--glass-dark-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-light="1"] .glass-light { background: var(--glass-light-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (forced-colors: active) {
+  .glass-dark, .glass-light { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; backdrop-filter: none; }
+  .glass-dark::before, .glass-light::before { display: none; }
+}
+
+/* ---- Form controls ---- */
+.field { display: grid; gap: var(--space-2); }
+.field label, .field .label { font-weight: 600; font-size: 15px; color: var(--ink); }
+.field .opt { font-weight: 400; color: var(--ink-3); }
+.field .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--ink-3); }
+.input, .select {
+  width: 100%; min-height: var(--btn-h); padding: 0 var(--space-4); border-radius: var(--r-field);
+  border: 1.5px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 17px;
+}
+.input[aria-invalid="true"] { border-color: var(--signal); }
+.input:disabled, .select:disabled { background: var(--surface-1); color: var(--disabled-text); }
+.field-error { display: flex; gap: var(--space-2); align-items: flex-start; color: var(--signal); font-size: 15px; font-weight: 500; }
+.field-error svg { flex: none; margin-top: 2px; }
+.pw-wrap { position: relative; }
+.pw-wrap .input { padding-right: 96px; }
+.pw-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--r-field); background: transparent; color: var(--primary); font-weight: 600; }
