@@ -9,7 +9,6 @@ import { AnimalsController } from '../src/animals/animals.controller';
 import { AnimalsService } from '../src/animals/animals.service';
 import { GeofenceController } from '../src/geofences/geofence.controller';
 import { DevicesController } from '../src/devices/devices.controller';
-import { MockController } from '../src/mock/mock.controller';
 import { AlertsController } from '../src/alerts/alerts.controller';
 import { AnalyticsController } from '../src/analytics/analytics.controller';
 import { validate } from 'class-validator';
@@ -54,7 +53,6 @@ describe('PermissionsGuard x route matrix', () => {
     [AlertsController, 'listAlerts'],
     [AlertsController, 'updateStatus'],
     [AnalyticsController, 'getOverview'],
-    [MockController, 'injectTelemetry'],
   ];
 
   it.each(ownerOnly)('%p.%s: owner only', (cls, name) => {

@@ -9,7 +9,7 @@ import { DevicesController } from '../src/devices/devices.controller';
 import { AlertsController } from '../src/alerts/alerts.controller';
 import { AnalyticsController } from '../src/analytics/analytics.controller';
 import { TelemetryController } from '../src/telemetry/telemetry.controller';
-import { MockController } from '../src/mock/mock.controller';
+import { SimulationController } from '../src/simulation/simulation.controller';
 import { toAnimalDto, animalStatus } from '../src/animals/mappers';
 import { toAlertDto } from '../src/alerts/mappers';
 import { toCollarDto } from '../src/devices/devices.service';
@@ -44,14 +44,16 @@ const EXPECTED_ROUTES = [
   `GET ${V}/alerts`, `GET ${V}/alerts/stats`, `POST ${V}/alerts/read-all`, `PATCH ${V}/alerts/:id/status`,
   `GET ${V}/analytics/overview`,
   `POST ${V}/device/telemetry`,
-  `POST ${V}/mock/inject-telemetry`, `POST ${V}/mock/simulate-breach`, `POST ${V}/mock/simulate-return`,
+  `GET ${V}/farms/:id/simulation`, `PATCH ${V}/farms/:id/simulation`, `PUT ${V}/farms/:id/data-mode`,
+  `POST ${V}/farms/:id/simulation/start`, `POST ${V}/farms/:id/simulation/stop`, `POST ${V}/farms/:id/simulation/reset`,
+  `POST ${V}/farms/:id/simulate/animals`, `POST ${V}/farms/:id/simulate/telemetry`, `POST ${V}/farms/:id/simulate/events`,
 ];
 
 describe('route inventory matches the contract', () => {
   it('exposes exactly the contract routes (no extra, none missing)', () => {
     const actual = [
       AppController, AuthController, FarmsController, AnimalsController, GeofenceController,
-      DevicesController, AlertsController, AnalyticsController, TelemetryController, MockController,
+      DevicesController, AlertsController, AnalyticsController, TelemetryController, SimulationController,
     ].flatMap(routesOf);
     expect(actual.sort()).toEqual([...EXPECTED_ROUTES].sort());
   });
@@ -78,7 +80,7 @@ describe('response shapes (key snapshots)', () => {
   it('AnimalDto', () => {
     const d = toAnimalDto(animalRow(), now.getTime());
     expect(keys(d)).toEqual(
-      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'species', 'status', 'tag'].sort(),
+      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'species', 'status', 'tag', 'isDemo'].sort(),
     );
     expect(d).toMatchObject({ tag: 'KZ-1', penId: 'p1', collarId: 'QAM-1', lat: 43.65, lng: 51.15, status: 'ok', birthDate: '2024-03-01' });
     expect(JSON.stringify(d)).not.toMatch(forbidden);
@@ -86,14 +88,15 @@ describe('response shapes (key snapshots)', () => {
 
   it('CollarDto', () => {
     const d = toCollarDto({ deviceId: 'QAM-1', signal: -70, firmwareVersion: '1.0.0', lastHeartbeatAt: new Date(), animal: { id: 'a1', name: 'M' }, secretHash: 'x', isSimulated: true });
-    expect(keys(d)).toEqual(['animalId', 'animalName', 'deviceId', 'firmwareVersion', 'lastSeenAt', 'signalRssi', 'status']);
+    expect(keys(d)).toEqual(['animalId', 'animalName', 'code', 'deviceId', 'firmwareVersion', 'isDemo', 'lastSeenAt', 'signalRssi', 'status']);
+    expect(d.isDemo).toBe(true);
     expect(JSON.stringify(d)).not.toMatch(forbidden);
   });
 
   it('PenDto', () => {
     const poly = { type: 'Polygon', coordinates: [[[51.15, 43.645], [51.165, 43.645], [51.165, 43.655], [51.15, 43.655], [51.15, 43.645]]] };
     const d = toPenDto({ id: 'p1', farmId: 'F', name: 'P', color: '#10B981', polygonJson: poly, _count: { animals: 3 } });
-    expect(keys(d)).toEqual(['animalsCount', 'areaHa', 'color', 'farmId', 'id', 'name', 'polygon']);
+    expect(keys(d)).toEqual(['animalsCount', 'areaHa', 'color', 'farmId', 'id', 'isDemo', 'name', 'polygon']);
     expect(d.animalsCount).toBe(3);
     expect(d.areaHa).toBeGreaterThan(100);
   });
@@ -104,13 +107,14 @@ describe('response shapes (key snapshots)', () => {
       latitude: 1, longitude: 2, createdAt: now, isRead: false, deviceId: 'QAM-1',
       animal: { id: 'a1', name: 'Mira', activeGeofence: { name: 'North' } },
     });
-    expect(keys(d)).toEqual(['animalId', 'animalName', 'createdAt', 'id', 'isRead', 'lat', 'lng', 'message', 'penName', 'severity', 'status', 'type']);
+    expect(keys(d)).toEqual(['animalId', 'animalName', 'createdAt', 'id', 'isDemo', 'isRead', 'lat', 'lng', 'message', 'penName', 'severity', 'status', 'type']);
     expect(d).toMatchObject({ animalName: 'Mira', penName: 'North', lat: 1, lng: 2, isRead: false });
   });
 
   it('FarmDto', () => {
     const d = toFarmDto({ id: 'F', name: 'Farm', description: null, timezone: 'Asia/Aqtau', workerCanEditBoundaries: false, ownerId: 'u' }, 'WORKER');
-    expect(keys(d)).toEqual(['description', 'id', 'myRole', 'name', 'timezone', 'workerCanEditBoundaries']);
+    expect(keys(d)).toEqual(['dataMode', 'description', 'id', 'myRole', 'name', 'timezone', 'workerCanEditBoundaries']);
+    expect(d.dataMode).toBe('REAL');
   });
 });
 

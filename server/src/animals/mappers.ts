@@ -20,6 +20,8 @@ export interface AnimalDto {
   accuracyM: number | null;
   lastSeenAt: string | null;
   status: AnimalStatus;
+  /** Demo (simulated) animal; deleted when the farm returns to REAL mode. */
+  isDemo: boolean;
 }
 
 /** What `toAnimalDto` needs from Prisma (never selects any secret). */
@@ -65,5 +67,6 @@ export function toAnimalDto(a: any, now: number = Date.now()): AnimalDto {
     accuracyM: a.lastAccuracy ?? null,
     lastSeenAt: a.lastSeenAt ? a.lastSeenAt.toISOString() : null,
     status: animalStatus(a, now),
+    isDemo: a.isDemo ?? false,
   };
 }

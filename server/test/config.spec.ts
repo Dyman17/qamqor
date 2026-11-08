@@ -44,3 +44,19 @@ describe('loadAppConfig', () => {
     ]);
   });
 });
+
+describe('demo mode settings', () => {
+  it('DEMO_MODES_ENABLED defaults to on and only "false" turns it off', () => {
+    expect(loadAppConfig({}).demoModesEnabled).toBe(true);
+    expect(loadAppConfig({ DEMO_MODES_ENABLED: 'true' }).demoModesEnabled).toBe(true);
+    expect(loadAppConfig({ DEMO_MODES_ENABLED: 'false' }).demoModesEnabled).toBe(false);
+  });
+  it('tick 10 s and demo offline threshold 90 s by default', () => {
+    expect(loadAppConfig({})).toMatchObject({ simTickSec: 10, simDemoOfflineSec: 90 });
+    expect(loadAppConfig({ SIM_TICK_SEC: '5', SIM_DEMO_OFFLINE_SEC: '60' })).toMatchObject({ simTickSec: 5, simDemoOfflineSec: 60 });
+  });
+  it('rejects non-positive tick settings', () => {
+    expect(() => validateEnv({ ...good, SIM_TICK_SEC: '0' })).toThrow(/SIM_TICK_SEC/);
+    expect(() => validateEnv({ ...good, SIM_DEMO_OFFLINE_SEC: 'x' })).toThrow(/SIM_DEMO_OFFLINE_SEC/);
+  });
+});

@@ -62,6 +62,8 @@ export interface RateRule {
   windowMs: number;
   /** Body field mixed into the key (lower-cased), e.g. "email". Omit for a per-IP rule. */
   keyField?: string;
+  /** Request header read when the body has no `keyField` (e.g. "x-device-code"). */
+  headerField?: string;
   /** false = the key does not include the client IP (limits one account across all IPs). Default true. */
   perIp?: boolean;
 }
@@ -94,7 +96,7 @@ export class RateLimitGuard implements CanActivate {
     for (const [i, rule] of meta.rules.entries()) {
       let key = `${meta.name}:${i}:${rule.perIp === false ? '*' : ip}`;
       if (rule.keyField) {
-        const v = req.body?.[rule.keyField];
+        const v = req.body?.[rule.keyField] ?? (rule.headerField ? req.headers?.[rule.headerField] : undefined);
         key += `:${typeof v === 'string' ? v.toLowerCase().trim().slice(0, 256) : ''}`;
       }
       const r = this.service.limiter.consume(key, rule.limit, rule.windowMs);

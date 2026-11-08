@@ -10,17 +10,17 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { configureApp } from '../src/bootstrap';
 import { loadAppConfig } from '../src/config/config';
 import { MAILER } from '../src/mail/mailer';
-import { hashDeviceSecret } from '../src/devices/device-secret';
+import { RateLimitGuard, RateLimiterService } from '../src/common/rate-limit';
 
-const SECRET = 'a'.repeat(64);
-const device = { id: 'd1', deviceId: 'QAM-0001', secretHash: hashDeviceSecret(SECRET), farm: null, animal: null };
+const CODE = '12345678';
+const device = { id: 'd1', deviceId: 'QAM-12345678', code: CODE, farmId: 'f1', farm: null, animal: null };
 
 const fakePrisma = {
   device: {
-    findUnique: jest.fn(async ({ where }: any) => (where.secretHash === device.secretHash ? device : null)),
+    findUnique: jest.fn(async ({ where }: any) => (where.code === CODE ? device : null)),
   },
 };
-const telemetry = { processDeviceTelemetry: jest.fn(async () => ({ success: true })) };
+const telemetry = { processDeviceTelemetry: jest.fn(async () => ({ success: true, zone: 'GREEN', nextInterval: 300 })) };
 
 @Module({
   controllers: [AppController, TelemetryController],
@@ -29,6 +29,8 @@ const telemetry = { processDeviceTelemetry: jest.fn(async () => ({ success: true
     { provide: TelemetryService, useValue: telemetry },
     { provide: MAILER, useValue: { status: () => 'none', send: jest.fn() } },
     DeviceAuthGuard,
+    RateLimiterService,
+    RateLimitGuard,
   ],
 })
 class TestModule {}
@@ -49,16 +51,16 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   const ping = {
-    deviceId: 'QAM-0001',
+    code: CODE,
     timestamp: new Date().toISOString(),
     latitude: 43.65,
     longitude: 51.157,
     accuracy: 5,
   };
-  const post = (body: any, token?: string) =>
+  const post = (body: any, headers: Record<string, string> = {}) =>
     fetch(`${base}/api/v1/device/telemetry`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
     });
 
@@ -97,49 +99,74 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
     expect(ok.headers.get('access-control-allow-origin')).toBe('https://ok.example');
   });
 
-  it('telemetry: no credentials + invalid body -> 401 (authentication precedes validation, no schema leak)', async () => {
+  it('telemetry: no code + invalid body -> 401 (identification precedes validation, no schema leak)', async () => {
     const r = await post({ junk: true });
     expect(r.status).toBe(401);
     const body: any = await r.json();
-    expect(body).toMatchObject({ statusCode: 401, code: 'UNAUTHENTICATED', message: 'Invalid device credentials' });
+    expect(body).toMatchObject({ statusCode: 401, error: 'UNAUTHENTICATED', message: 'Invalid device credentials', code: null });
     expect(JSON.stringify(body)).not.toMatch(/latitude|timestamp|must be|should not exist/i);
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
   });
 
-  it('telemetry: unknown or wrong secret + invalid body -> the same 401', async () => {
-    const a = await post({}, 'f'.repeat(64));
-    const b = await post({ deviceId: 'x' }, 'short');
-    expect(a.status).toBe(401);
-    expect(b.status).toBe(401);
-    expect(await a.json()).toEqual(await b.json());
-  });
-
-  it('telemetry: valid secret + invalid body -> 400 with validation errors', async () => {
-    const r = await post({ deviceId: 'QAM-0001', timestamp: 'abc' }, SECRET);
-    expect(r.status).toBe(400);
+  it('telemetry: unknown code -> 401, the error JSON carries the request code, nothing is processed', async () => {
+    const r = await post({ ...ping, code: '87654321' });
+    expect(r.status).toBe(401);
+    expect(await r.json()).toMatchObject({ statusCode: 401, code: '87654321', error: 'UNAUTHENTICATED' });
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
   });
 
-  it('telemetry: another device id in the body with a valid secret -> 401', async () => {
-    const r = await post({ ...ping, deviceId: 'QAM-0002' }, SECRET);
+  it('telemetry: a code that is not 8 digits is rejected like an unknown one', async () => {
+    for (const c of ['1234567', '123456789', 'abcdefgh', '1234 678']) {
+      const r = await post({ ...ping, code: c });
+      expect(r.status).toBe(401);
+    }
+    expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
+  });
+
+  it('telemetry: claimed code + invalid body -> 400 that still carries the code', async () => {
+    const r = await post({ code: CODE, timestamp: 'abc' });
+    expect(r.status).toBe(400);
+    expect(await r.json()).toMatchObject({ statusCode: 400, code: CODE, error: 'VALIDATION' });
+    expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
+  });
+
+  it('telemetry: claimed code + valid body -> 200 with the same code and the command fields', async () => {
+    const r = await post(ping);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ success: true, code: CODE, zone: 'GREEN', nextInterval: 300 });
+    expect(telemetry.processDeviceTelemetry).toHaveBeenCalledTimes(1);
+    expect((telemetry.processDeviceTelemetry.mock.calls[0] as any)[1]).toMatchObject({ deviceId: 'QAM-12345678' });
+  });
+
+  it('telemetry: the code may come in the X-Device-Code header', async () => {
+    const { code, ...rest } = ping;
+    const r = await post(rest, { 'x-device-code': CODE });
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as any).code).toBe(CODE);
+  });
+
+  it('telemetry: body code and header code that disagree -> 401', async () => {
+    const r = await post(ping, { 'x-device-code': '87654321' });
     expect(r.status).toBe(401);
   });
 
-  it('telemetry: valid secret + valid body -> 200', async () => {
-    const r = await post(ping, SECRET);
-    expect(r.status).toBe(200);
-    expect(telemetry.processDeviceTelemetry).toHaveBeenCalledTimes(1);
-  });
-
-  it('telemetry: unknown extra field -> 400', async () => {
-    const r = await post({ ...ping, extra: 80 }, SECRET);
+  it('telemetry: unknown extra field -> 400 (code still echoed)', async () => {
+    const r = await post({ ...ping, extra: 80 });
     expect(r.status).toBe(400);
+    expect(((await r.json()) as any).code).toBe(CODE);
   });
 
   it('telemetry: timestamp must be a real ISO date with a zone', async () => {
     for (const ts of ['abc', '2026-13-45T00:00:00Z', '2026-11-08 10:00:00Z', '2026-11-08T10:00:00']) {
-      const r = await post({ ...ping, timestamp: ts }, SECRET);
+      const r = await post({ ...ping, timestamp: ts });
       expect(r.status).toBe(400);
     }
+  });
+
+  it('telemetry: rate limited per code (429 carries the code), other codes are unaffected', async () => {
+    let last: Response | undefined;
+    for (let i = 0; i < 40; i++) last = await post({ ...ping, code: '11112222' });
+    expect(last!.status).toBe(429);
+    expect(await last!.json()).toMatchObject({ statusCode: 429, error: 'RATE_LIMITED', code: '11112222' });
   });
 });

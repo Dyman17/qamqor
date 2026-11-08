@@ -1,12 +1,12 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { DeviceAuthGuard } from '../src/devices/device-auth.guard';
+import { DeviceSecretAuthGuard as DeviceAuthGuard } from '../src/devices/device-secret-auth.guard';
 import { generateDeviceSecret, hashDeviceSecret } from '../src/devices/device-secret';
 
 function ctx(req: any) {
   return { switchToHttp: () => ({ getRequest: () => req }) } as any;
 }
 
-describe('DeviceAuthGuard', () => {
+describe('DeviceSecretAuthGuard (legacy, camera only)', () => {
   const secret = generateDeviceSecret();
   const device = { id: '1', deviceId: 'QAM-0001', secretHash: hashDeviceSecret(secret) };
   const prisma: any = {

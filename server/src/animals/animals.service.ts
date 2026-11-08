@@ -149,11 +149,12 @@ export class AnimalsService {
           },
         });
         if (dto.collarId) {
+          // A real animal never takes a simulated (demo) collar.
           const res = await tx.device.updateMany({
-            where: { deviceId: dto.collarId, farmId, animalId: null },
+            where: { deviceId: dto.collarId, farmId, animalId: null, isSimulated: false },
             data: { animalId: animal.id },
           });
-          if (res.count !== 1) throw new ConflictException('Ошейник уже привязан к другому животному');
+          if (res.count !== 1) throw new ConflictException('Ошейник уже привязан к другому животному или демо-ошейник');
         }
         return animal;
       });
@@ -191,11 +192,12 @@ export class AnimalsService {
         if (dto.collarId !== undefined) {
           await tx.device.updateMany({ where: { animalId }, data: { animalId: null } });
           if (dto.collarId !== null) {
+            // Demo and real never mix: a demo animal takes only a simulated collar and vice versa.
             const res = await tx.device.updateMany({
-              where: { deviceId: dto.collarId, farmId, animalId: null },
+              where: { deviceId: dto.collarId, farmId, animalId: null, isSimulated: !!animal.isDemo },
               data: { animalId },
             });
-            if (res.count !== 1) throw new ConflictException('Ошейник уже привязан к другому животному');
+            if (res.count !== 1) throw new ConflictException('Ошейник уже привязан к другому животному или не подходит (демо и реальные данные не смешиваются)');
           }
         }
         await tx.animal.update({
@@ -237,6 +239,11 @@ export class AnimalsService {
         if (!device) throw new NotFoundException('Устройство не найдено');
         if (device.animalId === animalId) return; // already bound to this animal
         if (device.animalId) throw new ConflictException('Ошейник уже привязан к другому животному');
+        // Demo and real never mix (409): a simulated collar belongs to a demo animal only.
+        const target = await tx.animal.findFirst({ where: { id: animalId, farmId }, select: { isDemo: true } });
+        if (!!target?.isDemo !== !!device.isSimulated) {
+          throw new ConflictException('Демо и реальные данные не смешиваются: ошейник и животное должны быть оба демо или оба реальные');
+        }
         await tx.device.updateMany({ where: { animalId }, data: { animalId: null } });
         const res = await tx.device.updateMany({
           where: { id: device.id, farmId, animalId: null },

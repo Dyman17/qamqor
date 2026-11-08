@@ -13,6 +13,8 @@ export interface AlertDto {
   lng: number | null;
   createdAt: string;
   isRead: boolean;
+  /** Alert of a demo (simulated) animal. */
+  isDemo: boolean;
 }
 
 /** Prisma include that `toAlertDto` needs. */
@@ -34,5 +36,6 @@ export function toAlertDto(a: any): AlertDto {
     lng: a.longitude ?? null,
     createdAt: a.createdAt.toISOString(),
     isRead: a.isRead ?? false,
+    isDemo: a.isDemo ?? false,
   };
 }

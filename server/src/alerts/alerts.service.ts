@@ -48,12 +48,13 @@ export class AlertsService {
     latitude?: number | null;
     longitude?: number | null;
     dedupeKey: string;
+    isDemo?: boolean;
   }, db: any = this.prisma) {
     // An ACKNOWLEDGED alert is still "open": the condition has not cleared, so it is not re-raised.
     const open = await db.alert.findFirst({ where: { dedupeKey: data.dedupeKey, status: { in: OPEN_STATUSES } } });
     if (open) return open;
     try {
-      return await db.alert.create({ data: { ...data, status: AlertStatus.ACTIVE } });
+      return await db.alert.create({ data: { ...data, isDemo: data.isDemo ?? false, status: AlertStatus.ACTIVE } });
     } catch (e: any) {
       // Inside a transaction a failed statement aborts it, so only the shared client can recover here.
       if (e?.code === 'P2002' && db === this.prisma) {
@@ -70,6 +71,7 @@ export class AlertsService {
     deviceId: string;
     latitude: number;
     longitude: number;
+    isDemo?: boolean;
   }) {
     const dedupeKey = `${AlertType.GEOFENCE_BREACH}:${data.animalId}`;
     const existing = await this.prisma.alert.findFirst({
@@ -93,11 +95,12 @@ export class AlertsService {
       latitude: data.latitude,
       longitude: data.longitude,
       dedupeKey,
+      isDemo: data.isDemo,
     });
   }
 
   /** The fix is too inaccurate to judge the position (zone UNKNOWN). One ACTIVE alert per animal. */
-  async triggerGpsLost(data: { farmId: string; animalId: string; animalName: string; deviceId: string }) {
+  async triggerGpsLost(data: { farmId: string; animalId: string; animalName: string; deviceId: string; isDemo?: boolean }) {
     const dedupeKey = `${AlertType.GPS_LOST}:${data.animalId}`;
     const existing = await this.prisma.alert.findFirst({ where: { dedupeKey, status: { in: OPEN_STATUSES } } });
     if (existing) return existing;
@@ -109,6 +112,7 @@ export class AlertsService {
       severity: AlertSeverity.WARNING,
       message: `Ненадёжный GPS-сигнал у животного "${data.animalName}": положение не определено.`,
       dedupeKey,
+      isDemo: data.isDemo,
     });
   }
 
@@ -127,6 +131,7 @@ export class AlertsService {
     animalName: string;
     deviceId: string;
     lastSeenAt: Date;
+    isDemo?: boolean;
   }, db: any = this.prisma) {
     return this.createActiveOnce({
       farmId: data.farmId,
@@ -136,11 +141,12 @@ export class AlertsService {
       severity: AlertSeverity.WARNING,
       message: `Нет связи с ошейником ${data.deviceId} (животное "${data.animalName}"). Последний сигнал: ${data.lastSeenAt.toISOString()}.`,
       dedupeKey: `${AlertType.DEVICE_OFFLINE}:${data.animalId}`,
+      isDemo: data.isDemo,
     }, db);
   }
 
   /** The collar pinged again: close ACTIVE DEVICE_OFFLINE alerts and leave a DEVICE_RESTORED note. */
-  async restoreDevice(data: { farmId: string; animalId: string; animalName: string; deviceId: string }) {
+  async restoreDevice(data: { farmId: string; animalId: string; animalName: string; deviceId: string; isDemo?: boolean }) {
     const closed = await this.prisma.alert.updateMany({
       where: { animalId: data.animalId, type: AlertType.DEVICE_OFFLINE, status: { in: OPEN_STATUSES } },
       data: { status: AlertStatus.RESOLVED, resolvedAt: new Date() },
@@ -155,6 +161,7 @@ export class AlertsService {
         severity: AlertSeverity.INFO,
         status: AlertStatus.RESOLVED,
         resolvedAt: new Date(),
+        isDemo: data.isDemo ?? false,
         message: `Связь с ошейником ${data.deviceId} (животное "${data.animalName}") восстановлена.`,
       },
     });
@@ -171,6 +178,7 @@ export class AlertsService {
     deviceId: string;
     level: 'SOUND' | 'VIBRATION';
     day: string;
+    isDemo?: boolean;
   }) {
     const dedupeKey = `${AlertType.SIGNAL_LIMIT_REACHED}:${data.animalId}:${data.level}:${data.day}`;
     const existing = await this.prisma.alert.findFirst({ where: { dedupeKey } });
@@ -184,6 +192,7 @@ export class AlertsService {
       severity: AlertSeverity.WARNING,
       message: `Достигнут суточный лимит сигнала «${label}» для животного "${data.animalName}". Дальнейшие сигналы сегодня подавляются.`,
       dedupeKey,
+      isDemo: data.isDemo,
     });
   }
 
@@ -194,6 +203,7 @@ export class AlertsService {
     deviceId: string;
     latitude: number;
     longitude: number;
+    isDemo?: boolean;
   }) {
     const activeBreaches = await this.prisma.alert.findMany({
       where: {
@@ -224,6 +234,7 @@ export class AlertsService {
           severity: AlertSeverity.INFO,
           status: AlertStatus.RESOLVED,
           resolvedAt: new Date(),
+          isDemo: data.isDemo ?? false,
           message: `Животное "${data.animalName}" вернулось в безопасную зону пастбища.`,
           latitude: data.latitude,
           longitude: data.longitude,

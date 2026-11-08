@@ -37,7 +37,7 @@ export class SignalsService {
   async applyLimits(args: {
     farmId: string;
     timezone: string;
-    animal: { id: string; name: string };
+    animal: { id: string; name: string; isDemo?: boolean };
     deviceId: string;
     sound: boolean;
     vibrate: boolean;
@@ -74,6 +74,7 @@ export class SignalsService {
             deviceId,
             level,
             day: win.day,
+            isDemo: animal.isDemo,
           });
           continue;
         }

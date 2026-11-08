@@ -55,16 +55,20 @@ NestJS 11 (TypeScript), Prisma 6, PostgreSQL, JWT (Passport), bcrypt (стоим
 - `GET /api/v1/devices`, `GET /api/v1/devices/:id`, `POST /api/v1/devices`, `PATCH /api/v1/devices/:id` (W)
 - `POST /api/v1/devices/:id/rotate-secret`, `POST /api/v1/devices/:id/test-signal` (W)
 - `DELETE /api/v1/devices/:id` (O)
-- `POST /api/v1/device/telemetry` (Д) — пинг ошейника
+- `POST /api/v1/device/telemetry` (Д) — пинг ошейника по 8-значному коду (`code` в теле или `X-Device-Code`); ответ содержит тот же `code`
 
 Оповещения и аналитика (W):
 
 - `GET /api/v1/alerts`, `GET /api/v1/alerts/stats`, `POST /api/v1/alerts/read-all`, `PATCH /api/v1/alerts/:id/status`
 - `GET /api/v1/analytics/overview`
 
-Симулятор (только `NODE_ENV` не `production`, работает только с ошейниками `isSimulated`):
+Режимы данных «Реальный / Ручной (пилот) / Авто (симуляция)», все с `:id` фермы (во всех окружениях; выключатель `DEMO_MODES_ENABLED`):
 
-- `POST /api/v1/mock/inject-telemetry`, `POST /api/v1/mock/simulate-breach`, `POST /api/v1/mock/simulate-return`
+- `GET /api/v1/farms/:id/simulation` (W; отмечает, что ферму смотрят), `PATCH /api/v1/farms/:id/simulation` (O)
+- `PUT /api/v1/farms/:id/data-mode` (O), `POST /api/v1/farms/:id/simulation/start`, `POST /api/v1/farms/:id/simulation/stop`, `POST /api/v1/farms/:id/simulation/reset` (O)
+- `POST /api/v1/farms/:id/simulate/animals`, `POST /api/v1/farms/:id/simulate/telemetry`, `POST /api/v1/farms/:id/simulate/events` (O, режим MANUAL)
+
+Демо-данные помечены (`isDemo`, `Device.isSimulated`) и удаляются при возврате в `REAL`; реальные ошейники работают в любом режиме. Подробности: `docs/architecture/api-contract.md`.
 
 Камера (`/camera/*`) не подключена до появления железа. Импульс (шок) сервером не используется и в API не возвращается.
 
@@ -85,6 +89,8 @@ NestJS 11 (TypeScript), Prisma 6, PostgreSQL, JWT (Passport), bcrypt (стоим
 | `TRUST_PROXY_HOPS` | сколько прокси-узлов доверять для IP клиента (по умолчанию 1 в production, 0 иначе; значение пишется в лог при старте) |
 | `SITE_DIST_DIR` | каталог собранного сайта (по умолчанию `../site/dist` относительно `server/`); если его нет, сайт не раздаётся, API работает. Всё, что не под `/api` и `/health`, отдаёт SPA (fallback на `index.html`). CSP задаётся в `src/config/csp.ts` |
 | `APP_BASE_URL` | база ссылок в письмах (необязательна) |
+| `DEMO_MODES_ENABLED` | демо-режимы (ручной и авто); по умолчанию `true`; `false` = маршруты симуляции отвечают 404 (кроме чтения состояния), симулятор не стартует |
+| `SIM_TICK_SEC` / `SIM_DEMO_OFFLINE_SEC` | период тика симулятора (10 с) и сжатый демо-порог «ошейник молчит» сценария AUTO (90 с; только для демо) |
 | `SEED_OWNER_PASSWORD` | только для `prisma:seed` в разработке; пусто = случайный пароль, печатается один раз |
 
 Почтовый провайдер пока не выбран владельцем: письма (приглашения, сброс пароля) пишет `ConsoleMailer`. В production он логирует только адресата и тему, ничего не доставляя.

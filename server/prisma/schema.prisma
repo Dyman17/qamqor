@@ -48,6 +48,13 @@ enum AlertType {
   SIGNAL_LIMIT_REACHED
 }
 
+/// REAL = only real collars; MANUAL = owner-driven pilot demo; AUTO = server-driven demo scenario.
+enum DataMode {
+  REAL
+  MANUAL
+  AUTO
+}
+
 enum AlertSeverity {
   INFO
   WARNING
@@ -89,6 +96,12 @@ model Farm {
   workerCanEditBoundaries Boolean  @default(false)
   // IANA zone; day boundaries for daily signal limits. Asia/Aqtau = UTC+5 (Mangystau).
   timezone        String           @default("Asia/Aqtau")
+  // Demo modes (migration 0012). Demo rows are labelled by isDemo / Device.isSimulated.
+  dataMode        DataMode         @default(REAL)
+  simSpeed        Int              @default(1)   // scenario speed multiplier: 1, 2, 5, 10
+  simHerd         Int              @default(8)   // number of demo animals, 1..20
+  simUntil        DateTime?                      // auto-stop of the AUTO simulation
+  simLeaseUntil   DateTime?                      // tick lease, see SimulatorService
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -123,6 +136,8 @@ model Device {
   id                String           @id @default(uuid())
   deviceId          String           @unique // e.g. "QAM-0001" or "QAM-CAM-0001"
   secretHash        String           @unique // SHA-256 (hex) of the device secret; the secret itself is never stored
+  // 8-digit identity of an ESP32 (^[0-9]{8}$), claimed by the owner; null for legacy and simulated collars.
+  code              String?          @unique
   isSimulated       Boolean          @default(false)
   status            DeviceStatus     @default(INACTIVE)
   signal            Int?             // dBm RSSI
@@ -156,6 +171,7 @@ model Animal {
   breed             String?
   birthDate         DateTime?
   photoUrl          String?
+  isDemo            Boolean          @default(false)
 
   device            Device?
   activeGeofenceId  String?
@@ -190,6 +206,7 @@ model Geofence {
   color       String   @default("#10B981")
   polygonJson Json
   isActive    Boolean  @default(true)
+  isDemo      Boolean  @default(false)
 
   animals     Animal[]
 
@@ -235,6 +252,7 @@ model Alert {
   longitude   Float?
   resolvedAt  DateTime?
   isRead      Boolean       @default(false)
+  isDemo      Boolean       @default(false)
   // "<type>:<animalId>" while ACTIVE; a partial UNIQUE index (WHERE status = 'ACTIVE' AND dedupeKey
   // IS NOT NULL) created in migration 0007_alert_dedupe makes alert creation idempotent under races.
   // Prisma cannot express partial indexes; do not let `migrate dev` drop it.

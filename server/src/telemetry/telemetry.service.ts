@@ -112,7 +112,7 @@ export class TelemetryService {
           const limited = await this.signals.applyLimits({
             farmId: device.farmId,
             timezone: device.farm?.timezone ?? 'Asia/Aqtau',
-            animal: { id: animal.id, name: animal.name },
+            animal: { id: animal.id, name: animal.name, isDemo: !!animal.isDemo },
             deviceId: device.deviceId,
             sound,
             vibrate,
@@ -140,6 +140,7 @@ export class TelemetryService {
               deviceId: device.deviceId,
               latitude: dto.latitude,
               longitude: dto.longitude,
+              isDemo: !!animal.isDemo,
             });
           }
         } else if (animal.isOutsideGeofence && device.farmId) {
@@ -151,6 +152,7 @@ export class TelemetryService {
             deviceId: device.deviceId,
             latitude: dto.latitude,
             longitude: dto.longitude,
+            isDemo: !!animal.isDemo,
           });
         }
       } else if (evaluation.reason === 'LOW_ACCURACY' && device.farmId && !stale) {
@@ -159,6 +161,7 @@ export class TelemetryService {
           animalId: animal.id,
           animalName: animal.name,
           deviceId: device.deviceId,
+          isDemo: !!animal.isDemo,
         });
       }
 
@@ -192,6 +195,7 @@ export class TelemetryService {
         animalId: animal.id,
         animalName: animal.name,
         deviceId: device.deviceId,
+        isDemo: !!animal.isDemo,
       });
     }
 

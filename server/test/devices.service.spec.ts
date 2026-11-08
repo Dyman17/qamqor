@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DevicesService, toCollarDto } from '../src/devices/devices.service';
 import { TestSignalDto } from '../src/devices/dto/device.dto';
 import { validate } from 'class-validator';
@@ -13,7 +13,11 @@ function makePrisma() {
     deviceCommand: { create: jest.fn(async ({ data }: any) => ({ id: 'cmd-1', ...data })) },
     device: {
       findUnique: jest.fn(async ({ where }: any) => rows.find((r) => r.deviceId === where.deviceId) ?? null),
-      findFirst: jest.fn(async ({ where }: any) => rows.find((r) => r.deviceId === where.deviceId && r.farmId === where.farmId) ?? null),
+      findFirst: jest.fn(async ({ where }: any) =>
+        where.OR
+          ? rows.find((r) => where.OR.some((c: any) => Object.entries(c).every(([k, v]) => r[k] === v))) ?? null
+          : rows.find((r) => r.deviceId === where.deviceId && r.farmId === where.farmId) ?? null,
+      ),
       findMany: jest.fn(async ({ where }: any) => rows.filter((r) => r.farmId === where.farmId)),
       create: jest.fn(async ({ data }: any) => {
         const r = { id: 'id-' + rows.length, lastHeartbeatAt: null, signal: null, animal: null, ...data };
@@ -40,6 +44,25 @@ describe('DevicesService', () => {
     const rot: any = await svc.rotateSecret('u', 'f', 'QAM-0001');
     expect(rot.deviceSecret).not.toBe(res.deviceSecret);
     expect(Object.keys(rot)).toEqual(['deviceSecret']);
+  });
+
+  it('claims a collar by its 8-digit code: no secret, deviceId derived, code in the DTO; 409 for a second claim', async () => {
+    const prisma = makePrisma();
+    const svc = new DevicesService(prisma as any);
+    const res: any = await svc.registerDevice('u', 'f', { code: '12345678' } as any);
+    expect(res).not.toHaveProperty('deviceSecret');
+    expect(res.collar).toMatchObject({ deviceId: 'QAM-12345678', code: '12345678' });
+    expect(prisma.rows[0]).toMatchObject({ code: '12345678', farmId: 'f' });
+    await expect(svc.registerDevice('u', 'other-farm', { code: '12345678' } as any)).rejects.toThrow(ConflictException);
+    // listing shows the code, never a secret
+    const list = await svc.listDevices('u', 'f');
+    expect(list[0].code).toBe('12345678');
+    expect(JSON.stringify(list)).not.toMatch(/secret|hash/i);
+  });
+
+  it('registration needs a code or a deviceId', async () => {
+    const svc = new DevicesService(makePrisma() as any);
+    await expect(svc.registerDevice('u', 'f', {} as any)).rejects.toThrow(BadRequestException);
   });
 
   it('409 when the id already exists, whichever farm owns it', async () => {

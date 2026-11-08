@@ -39,8 +39,15 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  /** One pass. Returns whether the lock was obtained and how many stale collars were handled. */
-  async tick(now: Date = new Date()): Promise<{ locked: boolean; stale: number }> {
+  /**
+   * One pass. Returns whether the lock was obtained and how many stale collars were handled.
+   * The periodic pass never touches simulated (demo) collars: their silence is staged by the demo
+   * modes, which call this with `deviceIds` to run the real offline logic for exactly those collars.
+   */
+  async tick(
+    now: Date = new Date(),
+    opts: { deviceIds?: string[] } = {},
+  ): Promise<{ locked: boolean; stale: number }> {
     if (this.running) return { locked: false, stale: 0 };
     this.running = true;
     try {
@@ -55,8 +62,9 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
               farmId: { not: null },
               animalId: { not: null },
               lastHeartbeatAt: { not: null, lt: cutoff },
+              ...(opts.deviceIds ? { deviceId: { in: opts.deviceIds } } : { isSimulated: false }),
             },
-            include: { animal: { select: { id: true, name: true } } },
+            include: { animal: { select: { id: true, name: true, isDemo: true } } },
           });
           // Collars that already have an open (ACTIVE or ACKNOWLEDGED) offline alert are skipped.
           // All writes go through `tx`: the lock transaction owns the connection, so using the
@@ -79,6 +87,7 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
                 animalName: d.animal.name,
                 deviceId: d.deviceId,
                 lastSeenAt: d.lastHeartbeatAt,
+                isDemo: !!d.animal.isDemo,
               },
               tx,
             );

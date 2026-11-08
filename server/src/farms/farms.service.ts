@@ -15,6 +15,8 @@ export interface FarmDto {
   timezone: string;
   workerCanEditBoundaries: boolean;
   myRole: Role;
+  /** REAL | MANUAL | AUTO (demo modes). */
+  dataMode: 'REAL' | 'MANUAL' | 'AUTO';
 }
 
 export function toFarmDto(farm: any, myRole: Role): FarmDto {
@@ -25,6 +27,7 @@ export function toFarmDto(farm: any, myRole: Role): FarmDto {
     timezone: farm.timezone,
     workerCanEditBoundaries: farm.workerCanEditBoundaries,
     myRole,
+    dataMode: farm.dataMode ?? 'REAL',
   };
 }
 

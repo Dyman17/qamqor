@@ -8,7 +8,9 @@ import { CreateInvitationDto } from '../src/farms/dto/invitation.dto';
 import { CreateAnimalInputDto, UpdateAnimalInputDto, AssignCollarDto } from '../src/animals/dto/animal.dto';
 import { CreateGeofenceInputDto } from '../src/geofences/dto/geofence.dto';
 import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from '../src/devices/dto/device.dto';
-import { InjectTelemetryDto, SimulateActionDto } from '../src/mock/dto/mock.dto';
+import {
+  SetDataModeDto, StartSimulationDto, PatchSimulationDto, SimulateAnimalDto, SimulateTelemetryDto, SimulateEventDto,
+} from '../src/simulation/dto/simulation.dto';
 import { UpdateAlertStatusDto, ListAlertsQueryDto } from '../src/alerts/dto/alerts.dto';
 import { DeviceTelemetryDto } from '../src/telemetry/dto/device-telemetry.dto';
 import { DeviceIdPipe } from '../src/devices/device-id.pipe';
@@ -21,7 +23,7 @@ import { DevicesController } from '../src/devices/devices.controller';
 import { AlertsController } from '../src/alerts/alerts.controller';
 import { AnalyticsController } from '../src/analytics/analytics.controller';
 import { TelemetryController } from '../src/telemetry/telemetry.controller';
-import { MockController } from '../src/mock/mock.controller';
+import { SimulationController } from '../src/simulation/simulation.controller';
 import { routesOf } from './helpers/routes';
 
 const pipe = new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true });
@@ -58,8 +60,27 @@ describe('DTOs reject too long strings, bad ids and unknown fields (400)', () =>
     ['device: secret supplied by the client', RegisterDeviceDto, { deviceId: 'QAM-0001', secretKey: 'abc' }],
     ['device update: animalId not uuid', UpdateDeviceDto, { animalId: 'x' }],
     ['test signal: IMPULSE', TestSignalDto, { signal: 'IMPULSE' }],
-    ['mock inject: animalId too long', InjectTelemetryDto, { animalId: long(65), latitude: 1, longitude: 1 }],
-    ['mock simulate: animalId not uuid', SimulateActionDto, { animalId: 'x' }],
+    ['device claim: code with 7 digits', RegisterDeviceDto, { code: '1234567' }],
+    ['device claim: code with letters', RegisterDeviceDto, { code: '1234abcd' }],
+    ['device claim: code with 9 digits', RegisterDeviceDto, { code: '123456789' }],
+    ['telemetry: code with letters', DeviceTelemetryDto, { code: 'abcdefgh', timestamp: new Date().toISOString(), latitude: 1, longitude: 1, accuracy: 1 }],
+    ['data-mode: unknown mode', SetDataModeDto, { mode: 'DEMO' }],
+    ['data-mode: missing mode', SetDataModeDto, {}],
+    ['sim start: speed 3', StartSimulationDto, { speed: 3 }],
+    ['sim start: herd 0', StartSimulationDto, { herd: 0 }],
+    ['sim start: herd 21', StartSimulationDto, { herd: 21 }],
+    ['sim start: hours 9', StartSimulationDto, { hours: 9 }],
+    ['sim start: hours 0', StartSimulationDto, { hours: 0 }],
+    ['sim start: unknown field', StartSimulationDto, { speed: 1, extra: true }],
+    ['sim patch: speed 100', PatchSimulationDto, { speed: 100 }],
+    ['simulate animal: bad species', SimulateAnimalDto, { species: 'DRAGON' }],
+    ['simulate animal: name too long', SimulateAnimalDto, { name: long(61) }],
+    ['simulate telemetry: animalId not uuid', SimulateTelemetryDto, { animalId: 'x', lat: 1, lng: 1 }],
+    ['simulate telemetry: lat out of range', SimulateTelemetryDto, { animalId: UUID, lat: 91, lng: 1 }],
+    ['simulate telemetry: lng out of range', SimulateTelemetryDto, { animalId: UUID, lat: 1, lng: 181 }],
+    ['simulate telemetry: negative accuracy', SimulateTelemetryDto, { animalId: UUID, lat: 1, lng: 1, accuracyM: -1 }],
+    ['simulate event: unknown event', SimulateEventDto, { animalId: UUID, event: 'EXPLODE' }],
+    ['simulate event: animalId not uuid', SimulateEventDto, { animalId: 'x', event: 'BREACH' }],
     ['alert status: bad value', UpdateAlertStatusDto, { status: 'DELETED' }],
     ['telemetry: deviceId with a path', DeviceTelemetryDto, { deviceId: '../x', timestamp: new Date().toISOString(), latitude: 1, longitude: 1, accuracy: 1 }],
     ['telemetry: signal out of range', DeviceTelemetryDto, { deviceId: 'QAM-0001', timestamp: new Date().toISOString(), latitude: 1, longitude: 1, accuracy: 1, signal: 50 }],
@@ -79,6 +100,13 @@ describe('DTOs reject too long strings, bad ids and unknown fields (400)', () =>
     await expect(check(RegisterDeviceDto, { deviceId: 'QAM-0001' })).resolves.toBeDefined();
     await expect(check(TestSignalDto, { signal: 'SOUND' })).resolves.toBeDefined();
     await expect(check(CreateGeofenceInputDto, { name: 'g', polygon, color: '#10B981' })).resolves.toBeDefined();
+    await expect(check(RegisterDeviceDto, { code: '12345678' })).resolves.toBeDefined();
+    await expect(check(DeviceTelemetryDto, { code: '12345678', timestamp: new Date().toISOString(), latitude: 1, longitude: 1, accuracy: 1 })).resolves.toBeDefined();
+    await expect(check(SetDataModeDto, { mode: 'AUTO' })).resolves.toBeDefined();
+    await expect(check(StartSimulationDto, {})).resolves.toBeDefined();
+    await expect(check(StartSimulationDto, { speed: 10, herd: 20, hours: 8 })).resolves.toBeDefined();
+    await expect(check(SimulateTelemetryDto, { animalId: UUID, lat: 43.65, lng: 51.157 })).resolves.toBeDefined();
+    await expect(check(SimulateEventDto, { animalId: UUID, event: 'COLLAR_OFFLINE' })).resolves.toBeDefined();
   });
 
   it('DeviceIdPipe guards the collar id in the URL', () => {
@@ -92,7 +120,7 @@ describe('DTOs reject too long strings, bad ids and unknown fields (400)', () =>
 describe('README documents only routes that exist', () => {
   const norm = (r: string) => r.replace(/:\w+/g, ':p');
   const actual = new Set(
-    [AppController, AuthController, FarmsController, AnimalsController, GeofenceController, DevicesController, AlertsController, AnalyticsController, TelemetryController, MockController]
+    [AppController, AuthController, FarmsController, AnimalsController, GeofenceController, DevicesController, AlertsController, AnalyticsController, TelemetryController, SimulationController]
       .flatMap(routesOf)
       .map(norm),
   );

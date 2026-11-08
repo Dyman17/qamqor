@@ -8,6 +8,6 @@ import { AlertsModule } from '../alerts/alerts.module';
   imports: [AlertsModule],
   controllers: [DevicesController],
   providers: [DevicesService, OfflineWatcherService],
-  exports: [DevicesService],
+  exports: [DevicesService, OfflineWatcherService],
 })
 export class DevicesModule {}

@@ -33,7 +33,10 @@ export type VirtualFenceZone = Zone;
 // ==========================================
 
 export interface DeviceTelemetryRequestDto {
-  deviceId: string;
+  /** 8-digit device code (^[0-9]{8}$); may also be sent in the X-Device-Code header. */
+  code?: string;
+  /** Legacy public collar id; optional, ignored: the code identifies the device. */
+  deviceId?: string;
   /** ISO 8601; accepted when not older than 10 min and not later than +2 min (configurable). */
   timestamp: string;
   latitude: number;
@@ -47,6 +50,8 @@ export interface DeviceTelemetryRequestDto {
 
 export interface DeviceTelemetryResponseDto {
   success: boolean;
+  /** The request's device code, echoed. The firmware discards a response whose code differs. */
+  code?: string;
   serverTime: string;
   nextInterval: number;
   configVersion: number;

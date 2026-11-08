@@ -13,10 +13,18 @@ import {
 import { DeviceTelemetryRequestDto } from '@qamqor/contracts';
 
 export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
+  /** 8-digit device code; identifies the collar (the guard also accepts the X-Device-Code header). */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9]{8}$/, { message: 'code: ровно 8 цифр' })
+  code?: string;
+
+  /** Legacy; overwritten by the controller from the authenticated device. */
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @Matches(/^[A-Za-z0-9_-]{3,40}$/, { message: 'deviceId: 3-40 символов (латиница, цифры, _ и -)' })
-  deviceId!: string;
+  deviceId?: string;
 
   /** ISO 8601 with a time zone designator; the acceptance window is checked by the service. */
   @IsISO8601({ strict: true, strictSeparator: true })

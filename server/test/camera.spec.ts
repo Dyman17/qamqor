@@ -11,7 +11,7 @@ import { CameraModule } from '../src/camera/camera.module';
 import { CameraService } from '../src/camera/camera.service';
 import { MAX_IMAGE_BYTES, decodeBase64Image, detectImageType } from '../src/camera/image-type';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
-import { DeviceAuthGuard } from '../src/devices/device-auth.guard';
+import { DeviceSecretAuthGuard } from '../src/devices/device-secret-auth.guard';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { configureApp } from '../src/bootstrap';
 import { loadAppConfig } from '../src/config/config';
@@ -133,7 +133,7 @@ describe('CameraController routes', () => {
     );
     const guards = Reflect.getMetadata('__guards__', CameraController.prototype.serveImage);
     expect(guards).toContain(JwtAuthGuard);
-    expect(Reflect.getMetadata('__guards__', CameraController.prototype.uploadSnapshot)).toContain(DeviceAuthGuard);
+    expect(Reflect.getMetadata('__guards__', CameraController.prototype.uploadSnapshot)).toContain(DeviceSecretAuthGuard);
   });
 });
 
@@ -148,7 +148,7 @@ describe('upload over HTTP (module mounted only inside this test)', () => {
 
   @Module({
     controllers: [CameraController],
-    providers: [{ provide: PrismaService, useValue: prisma }, CameraService, DeviceAuthGuard],
+    providers: [{ provide: PrismaService, useValue: prisma }, CameraService, DeviceSecretAuthGuard],
   })
   class CamTestModule {}
 

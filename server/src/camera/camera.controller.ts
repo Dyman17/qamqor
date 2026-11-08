@@ -19,7 +19,7 @@ import type { Response } from 'express';
 import { CameraService } from './camera.service';
 import { UploadCameraSnapshotDto, RequestPhotoCommandDto, ListSnapshotsQueryDto } from './dto/camera.dto';
 import { MAX_IMAGE_BYTES } from './image-type';
-import { DeviceAuthGuard } from '../devices/device-auth.guard';
+import { DeviceSecretAuthGuard } from '../devices/device-secret-auth.guard';
 import { CurrentDevice } from '../devices/current-device.decorator';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
 import { PermissionsGuard } from '../farms/permissions.guard';
@@ -34,7 +34,7 @@ export class CameraController {
 
   /** Camera collar: upload a snapshot (multipart field `image`, JPEG/PNG, up to 1 MB). */
   @Post('upload')
-  @UseGuards(DeviceAuthGuard)
+  @UseGuards(DeviceSecretAuthGuard)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 8 } }))
   async uploadSnapshot(
@@ -52,7 +52,7 @@ export class CameraController {
 
   /** Camera collar: poll pending commands. */
   @Get('commands')
-  @UseGuards(DeviceAuthGuard)
+  @UseGuards(DeviceSecretAuthGuard)
   async pollCommands(@CurrentDevice() device: any, @Query('deviceId') deviceId: string) {
     if (!deviceId) throw new BadRequestException('Параметр deviceId обязателен');
     return this.cameraService.pollPendingCommands(device, deviceId);

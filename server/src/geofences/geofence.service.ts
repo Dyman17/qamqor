@@ -18,6 +18,7 @@ export interface PenDto {
   polygon: any;
   animalsCount: number;
   areaHa: number;
+  isDemo: boolean;
 }
 
 export function toPenDto(g: any, animalsCount?: number): PenDto {
@@ -29,6 +30,7 @@ export function toPenDto(g: any, animalsCount?: number): PenDto {
     polygon: g.polygonJson,
     animalsCount: animalsCount ?? g._count?.animals ?? 0,
     areaHa: polygonAreaHa(g.polygonJson),
+    isDemo: g.isDemo ?? false,
   };
 }
 

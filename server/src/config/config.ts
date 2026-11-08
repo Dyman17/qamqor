@@ -18,6 +18,12 @@ export interface AppConfig {
   offlineCheckIntervalSec: number;
   /** The offline watcher is off in tests and when SCHEDULER_ENABLED=false. */
   schedulerEnabled: boolean;
+  /** Demo modes (MANUAL / AUTO). false = simulation routes answer 404 and the simulator never starts. */
+  demoModesEnabled: boolean;
+  /** Simulator tick period (seconds). */
+  simTickSec: number;
+  /** Demo-only shortened "collar is silent" threshold of the AUTO scenario (seconds). */
+  simDemoOfflineSec: number;
 }
 
 function intOr(v: string | undefined, def: number): number {
@@ -50,5 +56,8 @@ export function loadAppConfig(env: Record<string, string | undefined> = process.
     offlineThresholdSec: offlineAfterMissedPings * normalPingIntervalSec,
     offlineCheckIntervalSec: intOr(env.OFFLINE_CHECK_INTERVAL_SEC, 60),
     schedulerEnabled: env.NODE_ENV !== 'test' && env.SCHEDULER_ENABLED !== 'false',
+    demoModesEnabled: env.DEMO_MODES_ENABLED !== 'false',
+    simTickSec: intOr(env.SIM_TICK_SEC, 10),
+    simDemoOfflineSec: intOr(env.SIM_DEMO_OFFLINE_SEC, 90),
   };
 }

@@ -1,3 +1,4 @@
+import { requestDeviceCode } from '../devices/device-auth.guard';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 
 export type ApiErrorCode =
@@ -64,7 +65,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
     if (statusCode >= 500) {
       this.logger.error(exception instanceof Error ? exception.stack : String(exception));
     }
-    const res = host.switchToHttp().getResponse();
+    const http = host.switchToHttp();
+    const res = http.getResponse();
+    const req = http.getRequest();
+    if (typeof req?.originalUrl === 'string' && req.originalUrl.split('?')[0].endsWith('/api/v1/device/telemetry')) {
+      // Device protocol: `code` is the request's 8-digit device code (the firmware matches it);
+      // the error kind moves to `error`.
+      res.status(statusCode).json({ ...body, error: body.code, code: requestDeviceCode(req) });
+      return;
+    }
     res.status(statusCode).json(body);
   }
 }
