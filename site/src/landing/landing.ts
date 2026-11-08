@@ -10,6 +10,8 @@ import type { StageApi } from './stage';
 import { stats } from './stats';
 import { APP_LINKS } from './app-links';
 import { initFx, countUp } from './fx';
+import { bgfx, initBgFx } from './bgfx';
+import '../styles/landing-fx.css';
 
 const POSTER_W = 1280;
 const POSTER_H = 960;
@@ -118,7 +120,7 @@ const template = () => html`
   <main id="main">
     <div class="stage" id="stage">
       <div class="stage-sticky" id="stage-sticky">
-        <div class="stage-bg" id="stage-bg">${photo('hero-steppe', 'l.alt.hero', 'photo', true)}<div class="dotfield" aria-hidden="true"><canvas></canvas></div></div>
+        <div class="stage-bg" id="stage-bg">${photo('hero-steppe', 'l.alt.hero', 'photo', true)}<div class="dotfield" aria-hidden="true"><canvas></canvas></div>${bgfx({ topo: 13, aurora: true, dust: 'beam', radar: { x: '50%', y: '54%', sweep: true }, edge: false })}</div>
         <div class="stage-light" aria-hidden="true"></div>
         <div class="stage-fig-wrap">
           <figure class="stage-fig" id="stage-fig" role="img" aria-label="${t('l.fig.aria', { scene: t('l.hero.title') })}">
@@ -144,8 +146,8 @@ const template = () => html`
       </div>
     </div>
 
-    <section class="section night-0 on-night photo-section" id="problems" aria-labelledby="prob-h">
-      <div class="photo-bg" data-parallax>${photo('night-road-cow', 'l.alt.road', 'photo')}</div>
+    <section class="section night-0 on-night has-bgfx" id="problems" aria-labelledby="prob-h">
+      ${bgfx({ photo: 'night-road-cow', scrim: 0.4, topo: 1, aurora: true, dust: 'free' })}
       <div class="container">
         <header class="section-head">
           <h2 class="h2" id="prob-h" data-i18n="l.prob.title"></h2>
@@ -167,8 +169,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section night-1 on-night photo-section" id="how" aria-labelledby="how-h">
-      <div class="photo-bg" data-parallax>${photo('aerial-pasture', 'l.alt.aerial', 'photo')}</div>
+    <section class="section night-1 on-night has-bgfx" id="how" aria-labelledby="how-h">
+      ${bgfx({ photo: 'aerial-pasture', scrim: 0.68, topo: 2, radar: { x: '82%', y: '38%', sweep: true } })}
       <div class="container">
         <header class="section-head">
           <h2 class="h2" id="how-h" data-i18n="l.how.title"></h2>
@@ -181,7 +183,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section night-0 on-night" id="animals" aria-labelledby="an-h">
+    <section class="section night-0 on-night has-bgfx" id="animals" aria-labelledby="an-h">
+      ${bgfx({ photo: 'hero-steppe', scrim: 0.64, pos: '50% 40%', topo: 3, aurora: true })}
       <div class="container">
         <header class="section-head">
           <h2 class="h2" id="an-h" data-i18n="l.an.title"></h2>
@@ -197,7 +200,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section night-1 on-night" id="safety" aria-labelledby="safe-h">
+    <section class="section night-1 on-night has-bgfx" id="safety" aria-labelledby="safe-h">
+      ${bgfx({ photo: 'cow-portrait', flip: true, pos: '20% 50%', scrim: 0.6, topo: 4, fence: true, dust: 'free' })}
       <div class="container">
         <header class="section-head">
           <h2 class="h2" id="safe-h" data-i18n="l.safe.title"></h2>
@@ -216,7 +220,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section light sheet" id="app" aria-labelledby="app-h" data-sheet>
+    <section class="section light sheet has-bgfx" id="app" aria-labelledby="app-h" data-sheet>
+      ${bgfx({ tone: 'light', photo: 'aerial-pasture', topo: 5, aurora: true })}
       <div class="container">
         <h2 class="h2" id="app-h" data-i18n="l.app.title"></h2>
         <ul class="app-list">
@@ -238,7 +243,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section tone" aria-labelledby="roles-h">
+    <section class="section tone has-bgfx" aria-labelledby="roles-h">
+      ${bgfx({ tone: 'light', topo: 6, aurora: true })}
       <div class="container">
         <h2 class="h2" id="roles-h" data-i18n="l.roles.title"></h2>
         <div class="roles">
@@ -247,7 +253,8 @@ const template = () => html`
         </div>
       </div>
     </section>
-    <section class="section light" id="compare" aria-labelledby="cmp-h">
+    <section class="section light has-bgfx" id="compare" aria-labelledby="cmp-h">
+      ${bgfx({ tone: 'light', topo: 7, aurora: true })}
       <div class="container">
         <header class="section-head">
           <h2 class="h2" id="cmp-h" data-i18n="l.cmp.title"></h2>
@@ -268,7 +275,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section night-1 on-night sheet" id="specs" data-sheet aria-labelledby="specs-h">
+    <section class="section night-1 on-night sheet has-bgfx" id="specs" data-sheet aria-labelledby="specs-h">
+      ${bgfx({ photo: 'night-road-cow', flip: true, pos: '60% 50%', scrim: 0.5, topo: 8, dust: 'free', radar: { x: '78%', y: '45%' } })}
       <div class="stage-light stage-light-static" aria-hidden="true"></div>
       <div class="container">
         <h2 class="h2" id="specs-h" data-i18n="l.specs.title"></h2>
@@ -279,7 +287,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section night-0 on-night" id="roadmap" aria-labelledby="road-h">
+    <section class="section night-0 on-night has-bgfx" id="roadmap" aria-labelledby="road-h">
+      ${bgfx({ photo: 'hero-steppe', flip: true, pos: '30% 60%', scrim: 0.66, topo: 9, aurora: true })}
       <div class="container narrow">
         <h2 class="h2" id="road-h" data-i18n="l.road.title"></h2>
         <p class="lead section-lead" data-i18n="l.road.body"></p>
@@ -292,7 +301,8 @@ const template = () => html`
         </div>
       </div>
     </section>
-    <section class="section tone sheet" id="faq" data-sheet aria-labelledby="faq-h">
+    <section class="section tone sheet has-bgfx" id="faq" data-sheet aria-labelledby="faq-h">
+      ${bgfx({ tone: 'light', topo: 10, aurora: true })}
       <div class="container narrow">
         <h2 class="h2" id="faq-h" data-i18n="l.faq.title"></h2>
         <div class="faq">
@@ -305,7 +315,8 @@ const template = () => html`
       </div>
     </section>
 
-    <section class="section light cta" aria-labelledby="cta-h">
+    <section class="section light cta has-bgfx" aria-labelledby="cta-h">
+      ${bgfx({ tone: 'light', photo: 'hero-steppe', pos: '50% 55%', topo: 11, aurora: true, radar: { x: '50%', y: '50%' } })}
       <div class="container narrow">
         <h2 class="h2" id="cta-h" data-i18n="l.cta.title"></h2>
         <p class="lead section-lead" data-i18n="l.cta.body"></p>
@@ -316,7 +327,8 @@ const template = () => html`
       </div>
     </section>
   </main>
-  <footer class="site-footer on-night sheet" data-sheet>
+  <footer class="site-footer on-night sheet has-bgfx" data-sheet>
+    ${bgfx({ topo: 12, aurora: true })}
     <div class="container foot">
       <a class="brand" href="/" aria-label="Qamqor" data-i18n="brand"></a>
       <p class="foot-line" data-i18n="l.foot.line"></p>
@@ -355,6 +367,7 @@ const view: View = {
     bindLangSwitch(root);
     const fx = initFx(root);
     cleanups.push(() => fx.destroy());
+    cleanups.push(initBgFx(root, fx));
     const langCur = $('#lang-cur', root)!;
     const setLangLabel = () => { langCur.textContent = getLang().toUpperCase(); };
     setLangLabel();

@@ -1,0 +1,126 @@
+/* Landing background layers and effects (owner request: no empty backgrounds). Tokens only, colours come from tokens via color-mix.
+   Markup: src/landing/bgfx.ts. Motion lives under html[data-motion="on"]; without it every layer is a static picture, photos stay. */
+
+.has-bgfx { position: relative; isolation: isolate; overflow: hidden; }
+.section.night-0, .site-footer { --base: var(--night-0); }
+.section.night-1 { --base: var(--night-1); }
+.section.light { --base: var(--surface-0); }
+.section.tone { --base: var(--surface-1); }
+
+.bgfx { --sa: .7; --play: paused; position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; contain: paint; }
+.bgfx.live { --play: running; }
+html.tab-hidden .bgfx.live { --play: paused; }
+.bgfx > * { position: absolute; }
+.stage-bg > .bgfx { z-index: 1; }
+
+/* ---- photo: green tint, scrim for contrast, fade into the neighbour sections ---- */
+.bgfx .photo-bg { z-index: 0; }
+.bgfx .photo-bg::after { background: linear-gradient(color-mix(in srgb, var(--night-0) calc((var(--sa) + .14) * 100%), transparent), color-mix(in srgb, var(--night-0) calc(var(--sa) * 100%), transparent) 50%, color-mix(in srgb, var(--night-0) calc((var(--sa) + .14) * 100%), transparent)); }
+.bgfx .photo.flip { transform: scaleX(-1); }
+.bg-tint { inset: 0; background: color-mix(in srgb, var(--glow) 70%, transparent); mix-blend-mode: color; }
+.bg-fade { inset: 0; background: linear-gradient(var(--base) 0, transparent 24%, transparent 76%, var(--base) 100%); }
+.bgfx-light .photo-bg::after { background: linear-gradient(color-mix(in srgb, var(--surface-0) 94%, transparent), color-mix(in srgb, var(--surface-0) 84%, transparent) 50%, color-mix(in srgb, var(--surface-0) 94%, transparent)); }
+.bgfx-light .bg-tint { background: color-mix(in srgb, var(--primary-lift) 50%, transparent); }
+
+/* ---- aurora: soft drifting light blobs (no filter, only gradients; transform-only animation) ---- */
+.bg-aurora i { position: absolute; width: max(62vw, 520px); aspect-ratio: 1; border-radius: 50%; opacity: .9; will-change: transform; }
+.bg-aurora i:nth-child(1) { left: -14%; top: -30%; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 46%, transparent), transparent); }
+.bg-aurora i:nth-child(2) { right: -18%; top: 10%; background: radial-gradient(closest-side, color-mix(in srgb, var(--edge-hot) 26%, transparent), transparent); }
+.bg-aurora i:nth-child(3) { left: 24%; bottom: -46%; background: radial-gradient(closest-side, color-mix(in srgb, var(--mint) 12%, transparent), transparent); }
+.bgfx-light .bg-aurora i:nth-child(1) { background: radial-gradient(closest-side, color-mix(in srgb, var(--mint) 30%, transparent), transparent); }
+.bgfx-light .bg-aurora i:nth-child(2) { background: radial-gradient(closest-side, color-mix(in srgb, var(--primary-lift) 12%, transparent), transparent); }
+.bgfx-light .bg-aurora i:nth-child(3) { background: radial-gradient(closest-side, color-mix(in srgb, var(--mint) 22%, transparent), transparent); }
+html[data-motion="on"] .bg-aurora i:nth-child(1) { animation: aur-a 26s ease-in-out infinite alternate var(--play); }
+html[data-motion="on"] .bg-aurora i:nth-child(2) { animation: aur-b 34s ease-in-out infinite alternate var(--play); }
+html[data-motion="on"] .bg-aurora i:nth-child(3) { animation: aur-a 42s ease-in-out -12s infinite alternate-reverse var(--play); }
+@keyframes aur-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(14vw, 10%, 0) scale(1.25); } }
+@keyframes aur-b { from { transform: translate3d(0, 0, 0) scale(1.15); } to { transform: translate3d(-16vw, 14%, 0) scale(.9); } }
+
+/* ---- topographic contours (pastures): two weights, slow drift ---- */
+.bg-topo { left: -6%; top: -6%; width: 112%; height: 112%; fill: none; stroke-linecap: round; }
+.bg-topo path { vector-effect: non-scaling-stroke; }
+.bg-topo .t-minor { stroke: color-mix(in srgb, var(--mint) 22%, transparent); stroke-width: 1; }
+.bg-topo .t-major { stroke: color-mix(in srgb, var(--mint) 40%, transparent); stroke-width: 1.5; }
+.bgfx-light .bg-topo .t-minor { stroke: color-mix(in srgb, var(--primary) 11%, transparent); }
+.bgfx-light .bg-topo .t-major { stroke: color-mix(in srgb, var(--primary) 20%, transparent); }
+html[data-motion="on"] .bg-topo { will-change: transform; animation: topo-drift 70s ease-in-out infinite alternate var(--play); }
+@keyframes topo-drift { from { transform: translate3d(-2%, -1.5%, 0) rotate(-.6deg) scale(1); } to { transform: translate3d(2%, 1.5%, 0) rotate(.6deg) scale(1.06); } }
+
+/* ---- radar / GPS pulse rings (+ sweep) ---- */
+.bg-radar { left: var(--rx); top: var(--ry); width: min(130vw, 1100px); aspect-ratio: 1; translate: -50% -50%; }
+.bg-radar b { position: absolute; inset: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--mint) 38%, transparent); transform: scale(var(--s)); opacity: .45; }
+.bgfx-light .bg-radar b { border-color: color-mix(in srgb, var(--primary) 30%, transparent); }
+.bg-radar .sweep { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 292deg, color-mix(in srgb, var(--mint) 20%, transparent) 358deg, color-mix(in srgb, var(--mint) 42%, transparent) 360deg); -webkit-mask-image: radial-gradient(closest-side, #000 20%, transparent 100%); mask-image: radial-gradient(closest-side, #000 20%, transparent 100%); }
+html[data-motion="on"] .bg-radar b { animation: ring-out 7.2s cubic-bezier(.2, .6, .3, 1) calc(var(--i) * 1.8s) infinite var(--play); }
+html[data-motion="on"] .bg-radar .sweep { animation: sweep 11s linear infinite var(--play); }
+@keyframes ring-out { from { transform: scale(.08); opacity: .8; } to { transform: scale(1); opacity: 0; } }
+@keyframes sweep { to { transform: rotate(360deg); } }
+@media (max-width: 767px) { .bg-radar { width: 150vw; } }
+
+/* ---- virtual fence: outline draws itself with the scroll ---- */
+.bg-fence { inset: 0 0 0 auto; width: 100%; height: 100%; fill: none; opacity: .6; }
+@media (min-width: 900px) { .bg-fence { width: 64%; } }
+.bg-fence path { vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.fence-line { stroke: var(--mint); stroke-width: 2; stroke-opacity: .6; stroke-dasharray: 8 10; }
+.fence-glow { stroke: var(--mint); stroke-width: 9; stroke-opacity: .12; }
+.bg-fence[data-fp] .fence-line, .bg-fence[data-fp] .fence-glow { stroke-dasharray: 1; }
+.fence-post { fill: var(--night-1); stroke: var(--mint); stroke-width: 2; }
+.fence-ping circle:first-child { fill: var(--mint); }
+.fence-ping .pr { fill: none; stroke: var(--mint); stroke-width: 1.5; stroke-opacity: .5; transform-box: fill-box; transform-origin: center; }
+.bg-fence[data-fp] .fence-post { opacity: clamp(0, calc((var(--fp, 1) - var(--t)) * 10), 1); }
+html[data-motion="on"] .fence-ping .pr { animation: ping 3.4s ease-out var(--pd) infinite var(--play); }
+@keyframes ping { from { transform: scale(.4); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+@media (max-width: 767px) { .bg-fence { opacity: .35; } }
+
+/* ---- dust in the beam ---- */
+.bg-dust { inset: 0; width: 100%; height: 100%; }
+
+/* ---- glowing section edge ---- */
+.bg-edge { left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mint) 70%, transparent) 50%, transparent); box-shadow: 0 0 22px 2px color-mix(in srgb, var(--mint) 24%, transparent); }
+.bgfx-light .bg-edge { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary-lift) 50%, transparent) 50%, transparent); box-shadow: 0 0 22px 2px color-mix(in srgb, var(--mint) 30%, transparent); }
+.bg-edge::after { content: ""; position: absolute; top: 0; bottom: 0; width: 22%; left: -22%; background: linear-gradient(90deg, transparent, var(--snow), transparent); opacity: .85; }
+html[data-motion="on"] .bg-edge::after { animation: edge-run 7s ease-in-out infinite var(--play); }
+@keyframes edge-run { 0%, 35% { left: -22%; } 100% { left: 100%; } }
+html:not([data-motion="on"]) .bg-edge::after { display: none; }
+
+/* ---- photos: Ken Burns (slow zoom), only while on screen ---- */
+html[data-motion="on"] .bgfx .photo img { animation: kenburns 44s ease-in-out infinite alternate var(--play); }
+@keyframes kenburns { from { transform: scale(1.02) translate3d(0, 0, 0); } to { transform: scale(1.13) translate3d(-1.5%, -1%, 0); } }
+
+/* ---- hero stack: photo -> scrim -> effects -> beam -> model ---- */
+.stage-bg > .bgfx .bg-fade { display: none; }
+.stage-bg > .bgfx .bg-radar { width: min(120vw, 980px); }
+@media (max-width: 767px) { .stage-bg > .bgfx .bg-radar { --ry: 36%; width: 140vw; } }
+
+/* ---- cursor: glow plus lit dot grid (screen blend: only shows on dark) ---- */
+.cursor-fx { position: fixed; z-index: 3; left: 0; top: 0; width: 440px; height: 440px; pointer-events: none; opacity: 0; mix-blend-mode: screen; will-change: transform, opacity;
+  background-image: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 55%, transparent), transparent), radial-gradient(color-mix(in srgb, var(--mint) 55%, transparent) 1.3px, transparent 1.8px);
+  background-size: 100% 100%, 32px 32px; background-repeat: no-repeat, repeat;
+  -webkit-mask-image: radial-gradient(closest-side, #000 25%, transparent); mask-image: radial-gradient(closest-side, #000 25%, transparent); }
+html:not([data-motion="on"]) .cursor-fx, .landing[data-layout="static"] .cursor-fx { display: none; }
+@media (pointer: coarse) { .cursor-fx { display: none; } }
+
+/* ---- film grain: static noise tile, jitters in steps when motion is on ---- */
+.grain { position: fixed; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; opacity: .055; }
+.grain::before { content: ""; position: absolute; inset: -120px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+html[data-motion="on"] .grain::before { animation: grain 1.1s steps(7) infinite; }
+html.tab-hidden .grain::before { animation-play-state: paused; }
+@keyframes grain { 0% { transform: translate(0, 0); } 15% { transform: translate(-37px, 22px); } 30% { transform: translate(24px, -48px); } 45% { transform: translate(-61px, -30px); } 60% { transform: translate(52px, 41px); } 75% { transform: translate(-18px, 66px); } 100% { transform: translate(0, 0); } }
+@media (forced-colors: active) { .grain, .cursor-fx, .bgfx { display: none; } }
+
+/* ---- reveals: blur-in on cards, mask wipe on photos (hidden state only under .js-motion) ---- */
+html.js-motion .rv:not(.in) { filter: blur(6px); }
+html.js-motion .rv.in { transition: opacity var(--dur-3) var(--ease-out) var(--rd, 0ms), transform var(--dur-3) var(--ease-out) var(--rd, 0ms), filter var(--dur-3) var(--ease-out) var(--rd, 0ms); }
+html[data-motion="on"] .stat.lit { transition: border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out), opacity var(--dur-3) var(--ease-out) var(--rd, 0ms), filter var(--dur-3) var(--ease-out) var(--rd, 0ms); }
+html.js-motion .animal.rv:not(.in) { filter: none; }
+html.js-motion .animal .photo { clip-path: inset(0 0 0 0 round var(--r-block)); }
+html.js-motion .animal.rv:not(.in) .photo { clip-path: inset(0 100% 0 0 round var(--r-block)); }
+html.js-motion .animal.rv:not(.in) .photo img { transform: scale(1.18); }
+html.js-motion .animal.rv.in .photo { transition: clip-path 1100ms var(--ease-out) calc(var(--rd, 0ms) + 120ms); }
+html.js-motion .animal.rv.in .photo img { transition: transform 1500ms var(--ease-out) calc(var(--rd, 0ms) + 120ms); }
+/* section head: accent line wipes in under the lead */
+.section-head { position: relative; }
+.section-head::after { content: ""; display: block; width: min(160px, 40%); height: 2px; background: linear-gradient(90deg, var(--mint), transparent); transform-origin: left; }
+.light .section-head::after, .tone .section-head::after { background: linear-gradient(90deg, var(--primary-lift), transparent); }
+html.js-motion .section-head:has(.section-lead:not(.in))::after { transform: scaleX(0); }
+html.js-motion .section-head::after { transition: transform 900ms var(--ease-out) 300ms; }
