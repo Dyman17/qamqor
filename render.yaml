@@ -1,0 +1,30 @@
+# Render Blueprint: Qamqor API (server/). DB is Neon (DATABASE_URL set in the Render dashboard).
+services:
+  - type: web
+    name: qamqor-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: server
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    # free plan has no preDeployCommand, so migrations run at start
+    startCommand: npx prisma migrate deploy && npm run start:prod
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGINS
+        sync: false
+      - key: NORMAL_PING_INTERVAL_SEC
+        value: "300"
+      - key: EMERGENCY_PING_INTERVAL_SEC
+        value: "15"
