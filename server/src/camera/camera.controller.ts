@@ -18,6 +18,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { CameraService } from './camera.service';
 import { UploadCameraSnapshotDto, RequestPhotoCommandDto } from './dto/camera.dto';
+import { DeviceAuthGuard } from '../devices/device-auth.guard';
+import { CurrentDevice } from '../devices/current-device.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
@@ -30,19 +32,15 @@ export class CameraController {
    * Supports both multipart/form-data (field 'image') and JSON base64
    */
   @Post('upload')
+  @UseGuards(DeviceAuthGuard)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('image'))
   async uploadSnapshot(
-    @Headers('authorization') authHeader: string | undefined,
+    @CurrentDevice() device: any,
     @Body() dto: UploadCameraSnapshotDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    let token: string | undefined;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7).trim();
-    }
-
-    return this.cameraService.saveSnapshot(token, {
+    return this.cameraService.saveSnapshot(device, {
       deviceId: dto.deviceId,
       trigger: dto.trigger,
       fileBuffer: file?.buffer,
@@ -56,20 +54,16 @@ export class CameraController {
    * ESP32 queries: does the farmer want me to take a picture now?
    */
   @Get('commands')
+  @UseGuards(DeviceAuthGuard)
   async pollCommands(
-    @Headers('authorization') authHeader: string | undefined,
+    @CurrentDevice() device: any,
     @Query('deviceId') deviceId: string,
   ) {
     if (!deviceId) {
       throw new BadRequestException('Параметр deviceId обязателен');
     }
 
-    let token: string | undefined;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7).trim();
-    }
-
-    return this.cameraService.pollPendingCommands(token, deviceId);
+    return this.cameraService.pollPendingCommands(device, deviceId);
   }
 
   /**

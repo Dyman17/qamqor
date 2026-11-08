@@ -4,6 +4,8 @@ import {
   Post,
   Patch,
   Delete,
+  HttpCode,
+  HttpStatus,
   Param,
   Body,
   Headers,
@@ -11,7 +13,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { DevicesService } from './devices.service';
-import { RegisterDeviceDto, UpdateDeviceDto } from './dto/device.dto';
+import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
@@ -68,7 +70,30 @@ export class DevicesController {
     return this.devicesService.updateDevice(user.id, farmId, deviceId, dto);
   }
 
+  @Post(':id/rotate-secret')
+  async rotateSecret(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') deviceId: string,
+    @Headers('x-farm-id') headerFarmId?: string,
+  ) {
+    const farmId = this.resolveFarmId(user, headerFarmId);
+    return this.devicesService.rotateSecret(user.id, farmId, deviceId);
+  }
+
+  @Post(':id/test-signal')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async testSignal(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') deviceId: string,
+    @Body() dto: TestSignalDto,
+    @Headers('x-farm-id') headerFarmId?: string,
+  ) {
+    const farmId = this.resolveFarmId(user, headerFarmId);
+    return this.devicesService.queueTestSignal(user.id, farmId, deviceId, dto);
+  }
+
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async deleteDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') deviceId: string,

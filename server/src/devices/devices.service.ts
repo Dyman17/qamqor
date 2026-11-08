@@ -5,9 +5,50 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDeviceDto, UpdateDeviceDto } from './dto/device.dto';
-import * as crypto from 'crypto';
+import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
+import { generateDeviceSecret, hashDeviceSecret } from './device-secret';
 import { DeviceStatus } from '@prisma/client';
+
+/** Explicit projection: secrets and hashes are never selected. */
+const COLLAR_SELECT = {
+  deviceId: true,
+  status: true,
+  signal: true,
+  firmwareVersion: true,
+  lastHeartbeatAt: true,
+  isSimulated: true,
+  animal: { select: { id: true, name: true } },
+} as const;
+
+const ONLINE_WINDOW_MS = 900 * 1000;
+
+export type ConnState = 'ONLINE' | 'OFFLINE' | 'UNASSIGNED';
+
+export interface CollarDto {
+  deviceId: string;
+  status: ConnState;
+  animalId: string | null;
+  animalName: string | null;
+  signalRssi: number | null;
+  firmwareVersion: string | null;
+  lastSeenAt: string | null;
+}
+
+export function toCollarDto(d: any): CollarDto {
+  const last: Date | null = d.lastHeartbeatAt ?? null;
+  let status: ConnState;
+  if (!d.animal) status = 'UNASSIGNED';
+  else status = last && Date.now() - last.getTime() < ONLINE_WINDOW_MS ? 'ONLINE' : 'OFFLINE';
+  return {
+    deviceId: d.deviceId,
+    status,
+    animalId: d.animal?.id ?? null,
+    animalName: d.animal?.name ?? null,
+    signalRssi: d.signal ?? null,
+    firmwareVersion: d.firmwareVersion ?? null,
+    lastSeenAt: last ? last.toISOString() : null,
+  };
+}
 
 @Injectable()
 export class DevicesService {
@@ -22,128 +63,109 @@ export class DevicesService {
     }
   }
 
+  private async findOwned(farmId: string, deviceId: string) {
+    const device = await this.prisma.device.findFirst({ where: { deviceId, farmId } });
+    if (!device) throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
+    return device;
+  }
+
   async listDevices(userId: string, farmId: string) {
     await this.verifyFarmAccess(userId, farmId);
-
-    return this.prisma.device.findMany({
+    const rows = await this.prisma.device.findMany({
       where: { farmId },
-      include: {
-        animal: {
-          select: {
-            id: true,
-            name: true,
-            tagNumber: true,
-            species: true,
-            isOutsideGeofence: true,
-          },
-        },
-      },
+      select: COLLAR_SELECT,
       orderBy: { deviceId: 'asc' },
     });
+    return rows.map(toCollarDto);
   }
 
   async getDeviceById(userId: string, farmId: string, deviceId: string) {
     await this.verifyFarmAccess(userId, farmId);
-
     const device = await this.prisma.device.findFirst({
       where: { deviceId, farmId },
-      include: {
-        animal: true,
-        _count: {
-          select: { telemetries: true, alerts: true },
-        },
-      },
+      select: COLLAR_SELECT,
     });
-
-    if (!device) {
-      throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
-    }
-
-    return device;
+    if (!device) throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
+    return toCollarDto(device);
   }
 
   async registerDevice(userId: string, farmId: string, dto: RegisterDeviceDto) {
     await this.verifyFarmAccess(userId, farmId);
 
-    const existing = await this.prisma.device.findUnique({
-      where: { deviceId: dto.deviceId.trim() },
-    });
+    const deviceId = dto.deviceId.trim();
+    // Same answer whichever farm owns the id: do not reveal ownership.
+    const existing = await this.prisma.device.findUnique({ where: { deviceId } });
+    if (existing) throw new ConflictException('Устройство с таким ID уже зарегистрировано');
 
-    if (existing) {
-      throw new ConflictException(`Устройство с ID "${dto.deviceId}" уже существует`);
+    if (dto.animalId) {
+      const animal = await this.prisma.animal.findFirst({ where: { id: dto.animalId, farmId } });
+      if (!animal) throw new NotFoundException('Животное не найдено');
     }
 
-    const secretKey =
-      dto.secretKey?.trim() || `qam_${crypto.randomBytes(16).toString('hex')}`;
-
-    return this.prisma.device.create({
+    const deviceSecret = generateDeviceSecret();
+    const created = await this.prisma.device.create({
       data: {
-        deviceId: dto.deviceId.trim(),
-        secretKey,
+        deviceId,
+        secretHash: hashDeviceSecret(deviceSecret),
         farmId,
         firmwareVersion: dto.firmwareVersion || '1.0.0',
         status: DeviceStatus.INACTIVE,
         animalId: dto.animalId,
       },
-      include: { animal: true },
+      select: COLLAR_SELECT,
     });
+    // The secret is returned this once; only its hash is stored.
+    return { collar: toCollarDto(created), deviceSecret };
   }
 
-  async updateDevice(
-    userId: string,
-    farmId: string,
-    deviceId: string,
-    dto: UpdateDeviceDto,
-  ) {
+  async rotateSecret(userId: string, farmId: string, deviceId: string) {
     await this.verifyFarmAccess(userId, farmId);
-
-    const device = await this.prisma.device.findFirst({
-      where: { deviceId, farmId },
+    const device = await this.findOwned(farmId, deviceId);
+    const deviceSecret = generateDeviceSecret();
+    await this.prisma.device.update({
+      where: { id: device.id },
+      data: { secretHash: hashDeviceSecret(deviceSecret) },
     });
+    return { deviceSecret };
+  }
 
-    if (!device) {
-      throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
+  async updateDevice(userId: string, farmId: string, deviceId: string, dto: UpdateDeviceDto) {
+    await this.verifyFarmAccess(userId, farmId);
+    const device = await this.findOwned(farmId, deviceId);
+
+    if (dto.animalId) {
+      const animal = await this.prisma.animal.findFirst({ where: { id: dto.animalId, farmId } });
+      if (!animal) throw new NotFoundException('Животное не найдено');
     }
 
-    // Handle animal assignment
-    if (dto.animalId !== undefined) {
-      if (dto.animalId === null) {
-        await this.prisma.device.update({
-          where: { id: device.id },
-          data: { animalId: null },
-        });
-      } else {
-        await this.prisma.device.update({
-          where: { id: device.id },
-          data: { animalId: dto.animalId },
-        });
-      }
-    }
-
-    return this.prisma.device.update({
+    const updated = await this.prisma.device.update({
       where: { id: device.id },
       data: {
+        ...(dto.animalId !== undefined && { animalId: dto.animalId }),
         ...(dto.firmwareVersion && { firmwareVersion: dto.firmwareVersion }),
-        ...(dto.secretKey && { secretKey: dto.secretKey.trim() }),
       },
-      include: { animal: true },
+      select: COLLAR_SELECT,
     });
+    return toCollarDto(updated);
   }
 
   async deleteDevice(userId: string, farmId: string, deviceId: string) {
     await this.verifyFarmAccess(userId, farmId);
+    const device = await this.findOwned(farmId, deviceId);
+    await this.prisma.device.delete({ where: { id: device.id } });
+  }
 
-    const device = await this.prisma.device.findFirst({
-      where: { deviceId, farmId },
+  async queueTestSignal(userId: string, farmId: string, deviceId: string, dto: TestSignalDto) {
+    await this.verifyFarmAccess(userId, farmId);
+    const device = await this.findOwned(farmId, deviceId);
+    const command = await this.prisma.deviceCommand.create({
+      data: {
+        deviceId: device.deviceId,
+        command: dto.signal === 'SOUND' ? 'TEST_SOUND' : 'TEST_VIBRATION',
+        status: 'PENDING',
+        payload: { requestedBy: userId },
+      },
     });
-
-    if (!device) {
-      throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
-    }
-
-    return this.prisma.device.delete({
-      where: { id: device.id },
-    });
+    return { commandId: command.id };
   }
 }
-

@@ -138,7 +138,7 @@ export interface DeviceTelemetryResponseDto {
   serverTime: string;
   nextInterval: number;
   configVersion: number;
-  command?: string;
+  command?: { id: string; type: 'TEST_SOUND' | 'TEST_VIBRATION' };
   inFence: boolean;
   zone?: Zone | 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
   distanceToBorderMeters?: number;
@@ -146,10 +146,7 @@ export interface DeviceTelemetryResponseDto {
   toneLevel?: number;
   vibrate: boolean;
   vibrateDurationMs: number;
-  buzzer: boolean;
-  sound?: boolean;
-  shock?: boolean;
-  shockDurationMs?: number;
+  sound: boolean;
   blockReason?: string | null;
   warningMessage?: string;
 }

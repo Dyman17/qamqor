@@ -4,7 +4,6 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,7 +16,6 @@ export class CameraService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
   ) {
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
@@ -28,31 +26,20 @@ export class CameraService {
    * Save snapshot received from ESP32-CAM or Mock
    */
   async saveSnapshot(
-    token: string | undefined,
+    device: any,
     data: {
-      deviceId: string;
+      deviceId?: string;
       trigger?: string;
       fileBuffer?: Buffer;
       imageBase64?: string;
       originalName?: string;
     },
   ) {
-    const masterSecret = this.configService.get<string>('DEVICE_MASTER_SECRET');
-
-    // 1. Verify device
-    const device = await this.prisma.device.findUnique({
-      where: { deviceId: data.deviceId },
-      include: { animal: true, farm: true },
-    });
-
-    if (!device) {
-      throw new NotFoundException(`Устройство "${data.deviceId}" не зарегистрировано`);
+    // `device` is already authenticated (DeviceAuthGuard) or a simulated device (MockService).
+    if (!device || (data.deviceId && data.deviceId !== device.deviceId)) {
+      throw new UnauthorizedException('Invalid device credentials');
     }
-
-    const isValid = (!!token && token === device.secretKey) || (!!masterSecret && token === masterSecret);
-    if (!isValid) {
-      throw new UnauthorizedException('Неверный ключ доступа устройства');
-    }
+    data = { ...data, deviceId: device.deviceId } as typeof data & { deviceId: string };
 
     if (!device.farmId) {
       throw new NotFoundException(`Устройство "${data.deviceId}" не привязано к хозяйству`);
@@ -127,26 +114,16 @@ export class CameraService {
    * ESP32-CAM queries: Are there any pending commands for me?
    * (e.g. CAPTURE_PHOTO, BUZZER_ON, etc.)
    */
-  async pollPendingCommands(token: string | undefined, deviceId: string) {
-    const masterSecret = this.configService.get<string>('DEVICE_MASTER_SECRET');
-
-    const device = await this.prisma.device.findUnique({
-      where: { deviceId },
-    });
-
-    if (!device) {
-      throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
-    }
-
-    const isValid = (!!token && token === device.secretKey) || (!!masterSecret && token === masterSecret);
-    if (!isValid) {
-      throw new UnauthorizedException('Неверный ключ доступа устройства');
+  async pollPendingCommands(device: any, deviceId: string) {
+    if (!device || device.deviceId !== deviceId) {
+      throw new UnauthorizedException('Invalid device credentials');
     }
 
     const pendingCommand = await this.prisma.deviceCommand.findFirst({
       where: {
         deviceId,
         status: 'PENDING',
+        command: 'CAPTURE_PHOTO',
       },
       orderBy: { createdAt: 'desc' },
     });

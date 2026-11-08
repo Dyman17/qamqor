@@ -10,7 +10,7 @@ import { TelemetryService } from '../telemetry/telemetry.service';
 import { CameraService } from '../camera/camera.service';
 import { InjectTelemetryDto, InjectPhotoDto } from './dto/mock.dto';
 import { DeviceStatus } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { generateDeviceSecret, hashDeviceSecret } from '../devices/device-secret';
 
 @Injectable()
 export class MockService {
@@ -55,15 +55,25 @@ export class MockService {
 
     let device = animal.device;
 
-    // If animal has no device assigned, auto-create a mock test collar!
+    // The simulator never touches real collars.
+    if (device && !device.isSimulated) {
+      throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
+    }
+
+    // If animal has no device assigned, create a simulated collar (random secret, only its hash is stored).
     if (!device) {
       const mockDeviceId = `QAM-MOCK-${animal.tagNumber.replace(/[^a-zA-Z0-9]/g, '')}`;
+      const clash = await this.prisma.device.findUnique({ where: { deviceId: mockDeviceId } });
+      if (clash && !clash.isSimulated) {
+        throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
+      }
       device = await this.prisma.device.upsert({
         where: { deviceId: mockDeviceId },
         update: { animalId: animal.id, farmId },
         create: {
           deviceId: mockDeviceId,
-          secretKey: randomBytes(32).toString('hex'),
+          secretHash: hashDeviceSecret(generateDeviceSecret()),
+          isSimulated: true,
           animalId: animal.id,
           farmId,
           status: DeviceStatus.ONLINE,
@@ -79,8 +89,12 @@ export class MockService {
     };
 
     // Process through the actual telemetry engine!
+    const fullDevice = await this.prisma.device.findUnique({
+      where: { id: device.id },
+      include: { farm: true, animal: { include: { activeGeofence: true } } },
+    });
     const response = await this.telemetryService.processDeviceTelemetry(
-      device.secretKey,
+      fullDevice,
       {
         deviceId: device.deviceId,
         timestamp: new Date().toISOString(),
@@ -91,14 +105,6 @@ export class MockService {
         signal: dto.signal ?? -68,
       },
     );
-
-    // Save manual override so any subsequent ESP32 requests reflect this manual test!
-    this.telemetryService.setManualOverride(device.deviceId, {
-      latitude: dto.latitude,
-      longitude: dto.longitude,
-      isOutside: response.vibrate || false,
-      active: true,
-    });
 
     // Fetch updated animal state
     const updatedAnimal = await this.prisma.animal.findUnique({
@@ -219,15 +225,23 @@ export class MockService {
       throw new NotFoundException('Животное не найдено');
     }
 
+    if (animal.device && !animal.device.isSimulated) {
+      throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
+    }
     let deviceId = animal.device?.deviceId;
     if (!deviceId) {
       deviceId = `QAM-MOCK-${animal.tagNumber.replace(/[^a-zA-Z0-9]/g, '')}`;
+      const clash = await this.prisma.device.findUnique({ where: { deviceId: deviceId } });
+      if (clash && !clash.isSimulated) {
+        throw new ForbiddenException('Симулятор работает только с симулированными ошейниками');
+      }
       await this.prisma.device.upsert({
         where: { deviceId },
         update: { animalId: animal.id, farmId },
         create: {
           deviceId,
-          secretKey: randomBytes(32).toString('hex'),
+          secretHash: hashDeviceSecret(generateDeviceSecret()),
+          isSimulated: true,
           animalId: animal.id,
           farmId,
           status: DeviceStatus.ONLINE,
@@ -277,8 +291,11 @@ export class MockService {
 </svg>
     `.trim();
 
-    const snapshotDevice = await this.prisma.device.findUnique({ where: { deviceId } });
-    return this.cameraService.saveSnapshot(snapshotDevice?.secretKey, {
+    const snapshotDevice = await this.prisma.device.findUnique({
+      where: { deviceId },
+      include: { farm: true, animal: true },
+    });
+    return this.cameraService.saveSnapshot(snapshotDevice, {
       deviceId,
       trigger: 'MOCK_TEST',
       fileBuffer: Buffer.from(svgContent, 'utf-8'),

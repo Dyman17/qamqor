@@ -109,7 +109,8 @@ model FarmMember {
 model Device {
   id                String           @id @default(uuid())
   deviceId          String           @unique // e.g. "QAM-0001" or "QAM-CAM-0001"
-  secretKey         String           // Bearer secret for authentication
+  secretHash        String           @unique // SHA-256 (hex) of the device secret; the secret itself is never stored
+  isSimulated       Boolean          @default(false)
   status            DeviceStatus     @default(INACTIVE)
   battery           Int              @default(100)
   signal            Int?             // dBm RSSI

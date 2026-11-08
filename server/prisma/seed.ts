@@ -1,6 +1,6 @@
 import { PrismaClient, AnimalSpecies, AnimalGender, UserRole, DeviceStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -138,22 +138,27 @@ async function main() {
       },
     });
 
-    // Upsert device
+    // Upsert device. The secret is generated here, shown once, and only its hash is stored.
+    const deviceSecret = randomBytes(32).toString('hex');
+    const secretHash = createHash('sha256').update(deviceSecret, 'utf8').digest('hex');
+    console.log(`Device ${item.deviceId} secret (shown once): ${deviceSecret}`);
     await prisma.device.upsert({
       where: { deviceId: item.deviceId },
       update: {
         farmId: farm.id,
         animalId: animal.id,
-        secretKey: randomBytes(32).toString('hex'),
+        secretHash,
         status: DeviceStatus.ONLINE,
+        isSimulated: true,
       },
       create: {
         deviceId: item.deviceId,
-        secretKey: randomBytes(32).toString('hex'),
+        secretHash,
         farmId: farm.id,
         animalId: animal.id,
         status: DeviceStatus.ONLINE,
         battery: 95,
+        isSimulated: true,
       },
     });
   }

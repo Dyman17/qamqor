@@ -82,7 +82,17 @@ export class AnimalsService {
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },
       include: {
-        device: true,
+        device: {
+          select: {
+            id: true,
+            deviceId: true,
+            status: true,
+            battery: true,
+            signal: true,
+            lastHeartbeatAt: true,
+            firmwareVersion: true,
+          },
+        },
         activeGeofence: true,
         alerts: {
           take: 10,

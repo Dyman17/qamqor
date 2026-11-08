@@ -1,34 +1,35 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class RegisterDeviceDto {
   @IsString()
   @IsNotEmpty({ message: 'Идентификатор устройства (Device ID) обязателен' })
+  @Matches(/^[A-Za-z0-9_-]{3,40}$/, { message: 'deviceId: 3-40 символов (латиница, цифры, _ и -)' })
   deviceId!: string; // e.g. "QAM-0005"
 
   @IsOptional()
   @IsString()
-  secretKey?: string;
-
-  @IsOptional()
-  @IsString()
+  @MaxLength(32)
   firmwareVersion?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   animalId?: string;
 }
 
 export class UpdateDeviceDto {
   @IsOptional()
   @IsString()
+  @MaxLength(32)
   firmwareVersion?: string;
 
+  /** UUID of the animal to assign, or null to unassign. */
   @IsOptional()
-  @IsString()
+  @IsUUID()
   animalId?: string | null;
-
-  @IsOptional()
-  @IsString()
-  secretKey?: string;
 }
 
+/** IMPULSE is deliberately not accepted. */
+export class TestSignalDto {
+  @IsIn(['SOUND', 'VIBRATION'])
+  signal!: 'SOUND' | 'VIBRATION';
+}
