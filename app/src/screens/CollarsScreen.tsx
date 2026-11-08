@@ -4,7 +4,7 @@ import { useTheme, Theme } from '../theme/scale';
 import { api, errorText, COLLAR_CODE_RE, timeAgo } from '../services/api';
 import { useLoad } from '../state/useLoad';
 import { useSession } from '../state/session';
-import { StateBox, CONN_LABEL } from '../components';
+import { StateBox, CONN_LABEL, DemoBadge } from '../components';
 
 export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
@@ -29,11 +29,8 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     setFormError(null);
     try {
       const res = await api.registerCollarByCode(code);
-      setNotice(
-        res.deviceSecret
-          ? `Ошейник ${code} добавлен. Секрет (показывается один раз): ${res.deviceSecret}`
-          : `Ошейник ${code} добавлен`,
-      );
+      void res;
+      setNotice(`Ошейник ${code} добавлен`);
       setCode('');
       setAdding(false);
       collars.reload();
@@ -59,7 +56,7 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
       {adding && (
         <View style={styles.addBox}>
-          <Text style={typography.caption}>Введите 8-значный код ошейника</Text>
+          <Text style={typography.caption}>Введите 8-значный код ошейника (он указан в прошивке)</Text>
           <TextInput
             style={styles.codeInput}
             value={code}
@@ -100,7 +97,8 @@ export const CollarsScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
-                <Text style={[typography.bodyL, typography.tabular]}>{item.deviceId}</Text>
+                <Text style={[typography.bodyL, typography.tabular]}>{item.code ?? item.deviceId}</Text>
+                {item.isDemo && <DemoBadge />}
                 <View style={[styles.badge, item.status === 'ONLINE' ? styles.badgeOk : item.status === 'UNASSIGNED' ? styles.badgeFree : styles.badgeOff]}>
                   <Text style={styles.badgeText}>{CONN_LABEL[item.status] ?? item.status}</Text>
                 </View>

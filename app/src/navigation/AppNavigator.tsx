@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -78,7 +79,9 @@ function MainTabs() {
 
 export function AppNavigator() {
   const { colors } = useTheme();
-  const { user, ready, restoring } = useSession();
+  const { user, ready, restoring, dataMode } = useSession();
+  const insets = useSafeAreaInsets();
+  const { spacing, typography } = useTheme();
   if (restoring) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface0, justifyContent: 'center' }}>
@@ -87,6 +90,17 @@ export function AppNavigator() {
     );
   }
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    {ready && dataMode !== 'REAL' && (
+      <View
+        accessibilityRole="alert"
+        style={{ backgroundColor: colors.warning, paddingTop: insets.top + 2, paddingBottom: 4, paddingHorizontal: spacing.lg }}
+      >
+        <Text style={[typography.caption, { color: colors.onPrimary, fontWeight: '700', textAlign: 'center' }]}>
+          Демо: {dataMode === 'AUTO' ? 'автоматическая симуляция' : 'пилотный режим'}. Данные не настоящие.
+        </Text>
+      </View>
+    )}
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface0 } }}>
         {!user ? (
@@ -103,5 +117,6 @@ export function AppNavigator() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    </View>
   );
 }

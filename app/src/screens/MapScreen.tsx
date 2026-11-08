@@ -34,7 +34,7 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const penRings = (pens.data ?? []).map((p) => {
       const ring = (p.polygon?.coordinates?.[0] ?? []).map(([lng, lat]) => ({ lat, lng }));
       pts.push(...ring);
-      return { id: p.id, name: p.name, ring };
+      return { id: p.id, name: p.name, isDemo: p.isDemo, ring };
     });
     const located = list.filter((a) => a.lat != null && a.lng != null);
     located.forEach((a) => pts.push({ lat: a.lat as number, lng: a.lng as number }));
@@ -96,7 +96,7 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               />
               {p.xy.length > 0 && (
                 <SvgText x={p.xy[0].x + 4} y={p.xy[0].y - 6} fill={colors.mapLine} fontSize={fs(11)}>
-                  {p.name}
+                  {p.isDemo ? `${p.name} (демо)` : p.name}
                 </SvgText>
               )}
             </React.Fragment>
@@ -118,7 +118,7 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 a.status === 'offline' && { backgroundColor: colors.offline },
               ]}
             />
-            <Text style={styles.markerText} numberOfLines={1}>{a.name}</Text>
+            <Text style={styles.markerText} numberOfLines={1}>{a.isDemo ? `${a.name} (демо)` : a.name}</Text>
           </TouchableOpacity>
         ))}
 

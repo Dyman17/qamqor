@@ -49,6 +49,15 @@ export const StateBox: React.FC<{
   return null;
 };
 
+export const DemoBadge: React.FC = () => {
+  const { colors, spacing, typography, radius } = useTheme();
+  return (
+    <View style={{ backgroundColor: colors.warning, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.pill }}>
+      <Text style={[typography.caption, { color: colors.onPrimary, fontWeight: '700' }]}>Демо</Text>
+    </View>
+  );
+};
+
 export const STATUS_LABEL: Record<string, string> = {
   ok: 'В зоне',
   danger: 'Вне зоны',

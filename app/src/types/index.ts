@@ -2,6 +2,7 @@
 
 export type Role = 'OWNER' | 'WORKER';
 export type AnimalStatus = 'ok' | 'danger' | 'warning' | 'offline';
+export type DataMode = 'REAL' | 'MANUAL' | 'AUTO';
 export type ConnState = 'ONLINE' | 'OFFLINE' | 'UNASSIGNED';
 
 export interface UserDto {
@@ -30,6 +31,7 @@ export interface FarmDto {
   timezone: string;
   workerCanEditBoundaries: boolean;
   myRole: Role;
+  dataMode: DataMode;
 }
 
 export interface Animal {
@@ -47,6 +49,7 @@ export interface Animal {
   accuracyM: number | null;
   lastSeenAt: string | null;
   status: AnimalStatus;
+  isDemo: boolean;
 }
 
 export interface Collar {
@@ -57,6 +60,8 @@ export interface Collar {
   signalRssi: number | null;
   firmwareVersion: string | null;
   lastSeenAt: string | null;
+  code: string | null;
+  isDemo: boolean;
 }
 
 export interface GeoJSONPolygon {
@@ -72,6 +77,7 @@ export interface GeofencePen {
   polygon: GeoJSONPolygon;
   animalsCount: number;
   areaHa: number;
+  isDemo: boolean;
 }
 
 export type AlertType =
@@ -95,6 +101,7 @@ export interface AlertItem {
   lng: number | null;
   createdAt: string;
   isRead: boolean;
+  isDemo: boolean;
 }
 
 export interface AlertStats {
@@ -102,3 +109,25 @@ export interface AlertStats {
   activeBreaches: number;
   offline: number;
 }
+
+export interface SimulationDto {
+  dataMode: DataMode;
+  running: boolean;
+  speed: 1 | 2 | 5 | 10;
+  herd: number;
+  until: string | null;
+  demo: { animals: number; alerts: number };
+  enabled: boolean;
+}
+
+export interface CollarResponseDto {
+  zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+  inFence: boolean | null;
+  distanceToBorderMeters: number | null;
+  sound: boolean;
+  vibrate: boolean;
+  toneFrequencyHz: number;
+  suppressedBy: 'SIGNAL_LIMIT' | null;
+}
+
+export type SimEvent = 'BREACH' | 'ESCAPE' | 'RETURN' | 'GPS_LOST' | 'COLLAR_OFFLINE' | 'COLLAR_ONLINE';

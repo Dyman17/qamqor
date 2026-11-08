@@ -7,6 +7,10 @@ import {
   AuthResponse,
   FarmDto,
   GeofencePen,
+  SimulationDto,
+  CollarResponseDto,
+  SimEvent,
+  DataMode,
   MembershipDto,
   UserDto,
 } from '../types';
@@ -154,16 +158,43 @@ class QamqorApiClient {
     });
   }
 
-  /**
-   * Collar registration by its 8-digit code (owner only).
-   * ASSUMPTION: the server's current contract is POST /devices {deviceId, animalId?};
-   * the 8-digit code is sent as `deviceId` (it satisfies 3-40 chars A-Za-z0-9_-).
-   * If the server adds a dedicated "claim by code" endpoint, change ONLY this function.
-   */
+  /** Collar registration by its 8-digit code (owner only): POST /devices {code}. No secret is returned. */
   registerCollarByCode(code: string) {
-    return this.request<{ collar: Collar; deviceSecret?: string }>('/devices', {
+    return this.request<{ collar: Collar }>('/devices', {
       method: 'POST',
-      body: JSON.stringify({ deviceId: code }),
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  // --- demo modes (docs/architecture/api-contract.md, "Режимы данных") ---
+  getSimulation(farmId: string) {
+    return this.request<SimulationDto>(`/farms/${farmId}/simulation`);
+  }
+  setDataMode(farmId: string, mode: DataMode) {
+    return this.request<SimulationDto>(`/farms/${farmId}/data-mode`, { method: 'PUT', body: JSON.stringify({ mode }) });
+  }
+  startSimulation(farmId: string, p: { speed?: 1 | 2 | 5 | 10; herd?: number; hours?: number } = {}) {
+    return this.request<SimulationDto>(`/farms/${farmId}/simulation/start`, { method: 'POST', body: JSON.stringify(p) });
+  }
+  stopSimulation(farmId: string) {
+    return this.request<SimulationDto>(`/farms/${farmId}/simulation/stop`, { method: 'POST' });
+  }
+  resetSimulation(farmId: string) {
+    return this.request<SimulationDto>(`/farms/${farmId}/simulation/reset`, { method: 'POST' });
+  }
+  setSimulationSpeed(farmId: string, speed: 1 | 2 | 5 | 10) {
+    return this.request<SimulationDto>(`/farms/${farmId}/simulation`, { method: 'PATCH', body: JSON.stringify({ speed }) });
+  }
+  simAddAnimal(farmId: string) {
+    return this.request<Animal>(`/farms/${farmId}/simulate/animals`, { method: 'POST', body: JSON.stringify({}) });
+  }
+  simTelemetry(farmId: string, p: { animalId: string; lat: number; lng: number }) {
+    return this.request<CollarResponseDto>(`/farms/${farmId}/simulate/telemetry`, { method: 'POST', body: JSON.stringify(p) });
+  }
+  simEvent(farmId: string, animalId: string, event: SimEvent) {
+    return this.request<CollarResponseDto | { ok: true }>(`/farms/${farmId}/simulate/events`, {
+      method: 'POST',
+      body: JSON.stringify({ animalId, event }),
     });
   }
 

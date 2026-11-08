@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollVi
 import { useTheme, Theme } from '../theme/scale';
 import { api, timeAgo } from '../services/api';
 import { useLoad } from '../state/useLoad';
-import { StateBox, STATUS_LABEL } from '../components';
+import { StateBox, STATUS_LABEL, DemoBadge } from '../components';
 import { AnimalStatus } from '../types';
 
 export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -94,7 +94,10 @@ export const HerdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               ]}
             />
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{item.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Text style={[styles.rowTitle, { flexShrink: 1 }]} numberOfLines={1}>{item.name}</Text>
+                {item.isDemo && <DemoBadge />}
+              </View>
               <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">Бирка {item.tag} · {penName(item.penId)}</Text>
             </View>
             <Text style={styles.rowTime} numberOfLines={1}>{timeAgo(item.lastSeenAt)}</Text>

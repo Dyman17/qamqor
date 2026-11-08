@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useTheme, Theme } from '../theme/scale';
 import { api, errorText, timeAgo } from '../services/api';
 import { useLoad } from '../state/useLoad';
-import { StateBox, STATUS_LABEL, CONN_LABEL } from '../components';
+import { StateBox, STATUS_LABEL, CONN_LABEL, DemoBadge } from '../components';
 
 export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({ route, navigation }) => {
   const t = useTheme();
@@ -62,7 +62,10 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
           <View style={styles.card}>
             <View style={styles.headerRow}>
               <View style={{ flex: 1 }}>
-                <Text style={typography.title1}>{a.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Text style={[typography.title1, { flexShrink: 1 }]}>{a.name}</Text>
+                  {a.isDemo && <DemoBadge />}
+                </View>
                 <Text style={[typography.caption, { color: colors.ink2 }]}>
                   {a.breed ? `${a.breed} · ` : ''}Бирка {a.tag}
                 </Text>

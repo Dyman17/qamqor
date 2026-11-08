@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
-import { AuthResponse, MembershipDto, Role, UserDto } from '../types';
+import { AuthResponse, DataMode, MembershipDto, Role, UserDto } from '../types';
 
 interface Session {
   user: UserDto | null;
@@ -12,6 +12,10 @@ interface Session {
   isOwner: boolean;
   /** stored session is still being restored */
   restoring: boolean;
+  /** farm data mode; anything but REAL means demo data is present */
+  dataMode: DataMode;
+  setDataMode: (m: DataMode) => void;
+  refreshMode: () => void;
   /** signed in and a farm is chosen (or the only one) */
   ready: boolean;
   signIn: (r: AuthResponse) => void;
@@ -38,6 +42,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [farmId, setFarmId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [dataMode, setDataMode] = useState<DataMode>('REAL');
   const tokenRef = React.useRef<string | null>(null);
   const snapRef = React.useRef<{ user: UserDto; memberships: MembershipDto[] } | null>(null);
 
@@ -126,6 +131,22 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [persist]);
 
+  const refreshMode = useCallback(() => {
+    if (!farmId) return;
+    api
+      .getFarm(farmId)
+      .then((f) => setDataMode(f.dataMode ?? 'REAL'))
+      .catch(() => {});
+  }, [farmId]);
+
+  useEffect(() => {
+    setDataMode('REAL');
+    refreshMode();
+    if (!farmId) return;
+    const id = setInterval(refreshMode, 60000);
+    return () => clearInterval(id);
+  }, [farmId, refreshMode]);
+
   useEffect(() => {
     api.setUnauthorizedHandler(signOut);
     return () => api.setUnauthorizedHandler(null);
@@ -141,13 +162,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       role: farm?.role ?? null,
       isOwner: farm?.role === 'OWNER',
       restoring,
+      dataMode,
+      setDataMode,
+      refreshMode,
       ready: !!user && !!farm,
       signIn,
       signOut,
       selectFarm,
       changeFarm,
     };
-  }, [user, memberships, farmId, restoring, signIn, signOut, selectFarm, changeFarm]);
+  }, [user, memberships, farmId, restoring, dataMode, refreshMode, signIn, signOut, selectFarm, changeFarm]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };

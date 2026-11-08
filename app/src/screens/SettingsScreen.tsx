@@ -4,6 +4,7 @@ import { useTheme, Theme } from '../theme/scale';
 import { api, errorText } from '../services/api';
 import { useLoad } from '../state/useLoad';
 import { useSession } from '../state/session';
+import { ModeSection } from './ModeSection';
 
 export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
@@ -61,6 +62,8 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
         {!isOwner && <Text style={typography.caption}>Менять может только владелец.</Text>}
         {(error || farmData.error) && <Text style={[typography.caption, { color: colors.signal }]}>{error || farmData.error}</Text>}
       </View>
+
+      <ModeSection />
 
       {memberships.length > 1 && (
         <TouchableOpacity style={styles.btnSecondary} onPress={changeFarm} accessibilityRole="button">

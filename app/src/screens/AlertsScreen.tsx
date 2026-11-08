@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native
 import { useTheme, Theme } from '../theme/scale';
 import { api, errorText, timeAgo } from '../services/api';
 import { useLoad } from '../state/useLoad';
-import { StateBox } from '../components';
+import { StateBox, DemoBadge } from '../components';
 import { AlertType } from '../types';
 
 const TITLES: Record<AlertType, string> = {
@@ -65,6 +65,7 @@ export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 >
                   {TITLES[item.type] ?? item.type}
                 </Text>
+                {item.isDemo && <DemoBadge />}
                 <Text style={styles.cardTime}>{timeAgo(item.createdAt)}</Text>
               </View>
               <Text style={[typography.body, { color: colors.ink, marginVertical: spacing.xs }]}>
