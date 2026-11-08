@@ -1,15 +1,26 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { loadAppConfig } from './config/config';
+import { securityHeaders } from './config/security-headers';
 
 async function bootstrap() {
   const logger = new Logger('QamqorBootstrap');
-  const app = await NestFactory.create(AppModule);
+  // Environment is validated by ConfigModule (see AppModule) before this point.
+  const cfg = loadAppConfig(process.env);
+
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+
+  app.disable('x-powered-by');
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '1mb' });
+  app.use(securityHeaders(cfg.isProduction));
 
   app.enableCors({
-    origin: true,
+    origin: cfg.corsOrigins.length ? cfg.corsOrigins : false,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: '*',
+    allowedHeaders: ['authorization', 'content-type', 'x-farm-id'],
     credentials: true,
   });
 
@@ -17,15 +28,12 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: true,
     }),
   );
 
-  const port = process.env.PORT || 4000;
-  await app.listen(port, '0.0.0.0');
-  logger.log(`🛰️ Qamqor Ingestion & REST API running on port ${port} (0.0.0.0)`);
-  logger.log(`📡 ESP32 Endpoint ready at POST http://localhost:${port}/api/v1/device/telemetry`);
+  await app.listen(cfg.port, '0.0.0.0');
+  logger.log(`Qamqor API listening on 0.0.0.0:${cfg.port}`);
 }
 
 bootstrap();
-

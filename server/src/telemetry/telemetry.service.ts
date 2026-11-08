@@ -176,10 +176,7 @@ export class TelemetryService {
     token: string | undefined,
     dto: DeviceTelemetryDto,
   ): Promise<DeviceTelemetryResponseDto> {
-    const masterSecret = this.configService.get<string>(
-      'DEVICE_MASTER_SECRET',
-      'qamqor_esp32_device_shared_key_2026',
-    );
+    const masterSecret = this.configService.get<string>('DEVICE_MASTER_SECRET');
 
     // 1. Verify Device Existence and Auth Token
     let device = await this.prisma.device.findUnique({
@@ -196,7 +193,7 @@ export class TelemetryService {
 
     // In dev / initial setup: auto-provision device if master secret matches and device does not exist
     if (!device) {
-      if (token === masterSecret) {
+      if (masterSecret && token === masterSecret) {
         this.logger.log(`Auto-provisioning device ${dto.deviceId}`);
         device = await this.prisma.device.create({
           data: {
@@ -220,7 +217,7 @@ export class TelemetryService {
 
     // Verify token against device secretKey or master secret
     const isValidToken =
-      token === device.secretKey || token === masterSecret;
+      (!!token && token === device.secretKey) || (!!masterSecret && token === masterSecret);
     if (!isValidToken) {
       throw new UnauthorizedException('Invalid device authentication token.');
     }
@@ -244,11 +241,11 @@ export class TelemetryService {
     let shock = false;
 
     let nextInterval = parseInt(
-      this.configService.get<string>('DEFAULT_TELEMETRY_INTERVAL_SECONDS', '300'),
+      this.configService.get<string>('NORMAL_PING_INTERVAL_SEC', '300'),
       10,
     );
     const emergencyInterval = parseInt(
-      this.configService.get<string>('EMERGENCY_TELEMETRY_INTERVAL_SECONDS', '60'),
+      this.configService.get<string>('EMERGENCY_PING_INTERVAL_SEC', '60'),
       10,
     );
 

@@ -1,13 +1,21 @@
 import { PrismaClient, AnimalSpecies, AnimalGender, UserRole, DeviceStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding Qamqor initial data...');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to run seed with NODE_ENV=production');
+  }
+  console.log('Seeding Qamqor initial data...');
 
   // 1. Create Default Farm Owner
-  const passwordHash = await bcrypt.hash('qamqor2026', 10);
+  const ownerPassword = process.env.SEED_OWNER_PASSWORD || randomBytes(12).toString('base64url');
+  if (!process.env.SEED_OWNER_PASSWORD) {
+    console.log(`Generated owner password for farmer@qamqor.kz (shown once): ${ownerPassword}`);
+  }
+  const passwordHash = await bcrypt.hash(ownerPassword, 12);
   const user = await prisma.user.upsert({
     where: { email: 'farmer@qamqor.kz' },
     update: {},
@@ -110,7 +118,7 @@ async function main() {
     },
   ];
 
-  const defaultSecret = process.env.DEVICE_MASTER_SECRET || 'qamqor_esp32_device_shared_key_2026';
+  
 
   for (const item of initialAnimals) {
     // Upsert animal
@@ -136,12 +144,12 @@ async function main() {
       update: {
         farmId: farm.id,
         animalId: animal.id,
-        secretKey: defaultSecret,
+        secretKey: randomBytes(32).toString('hex'),
         status: DeviceStatus.ONLINE,
       },
       create: {
         deviceId: item.deviceId,
-        secretKey: defaultSecret,
+        secretKey: randomBytes(32).toString('hex'),
         farmId: farm.id,
         animalId: animal.id,
         status: DeviceStatus.ONLINE,

@@ -10,6 +10,7 @@ import { TelemetryService } from '../telemetry/telemetry.service';
 import { CameraService } from '../camera/camera.service';
 import { InjectTelemetryDto, InjectPhotoDto } from './dto/mock.dto';
 import { DeviceStatus } from '@prisma/client';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class MockService {
@@ -62,7 +63,7 @@ export class MockService {
         update: { animalId: animal.id, farmId },
         create: {
           deviceId: mockDeviceId,
-          secretKey: 'qamqor_esp32_device_shared_key_2026',
+          secretKey: randomBytes(32).toString('hex'),
           animalId: animal.id,
           farmId,
           status: DeviceStatus.ONLINE,
@@ -226,7 +227,7 @@ export class MockService {
         update: { animalId: animal.id, farmId },
         create: {
           deviceId,
-          secretKey: 'qamqor_esp32_device_shared_key_2026',
+          secretKey: randomBytes(32).toString('hex'),
           animalId: animal.id,
           farmId,
           status: DeviceStatus.ONLINE,
@@ -276,7 +277,8 @@ export class MockService {
 </svg>
     `.trim();
 
-    return this.cameraService.saveSnapshot('qamqor_esp32_device_shared_key_2026', {
+    const snapshotDevice = await this.prisma.device.findUnique({ where: { deviceId } });
+    return this.cameraService.saveSnapshot(snapshotDevice?.secretKey, {
       deviceId,
       trigger: 'MOCK_TEST',
       fileBuffer: Buffer.from(svgContent, 'utf-8'),

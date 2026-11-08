@@ -10,7 +10,6 @@ export class AppController {
       service: 'Qamqor Ingestion & REST API',
       version: '1.2.0',
       telemetryEndpoint: 'POST /api/v1/device/telemetry',
-      dashboard: 'https://qamqor-web.onrender.com',
     });
   }
 

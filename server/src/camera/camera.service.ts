@@ -37,10 +37,7 @@ export class CameraService {
       originalName?: string;
     },
   ) {
-    const masterSecret = this.configService.get<string>(
-      'DEVICE_MASTER_SECRET',
-      'qamqor_esp32_device_shared_key_2026',
-    );
+    const masterSecret = this.configService.get<string>('DEVICE_MASTER_SECRET');
 
     // 1. Verify device
     const device = await this.prisma.device.findUnique({
@@ -52,7 +49,7 @@ export class CameraService {
       throw new NotFoundException(`Устройство "${data.deviceId}" не зарегистрировано`);
     }
 
-    const isValid = token === device.secretKey || token === masterSecret;
+    const isValid = (!!token && token === device.secretKey) || (!!masterSecret && token === masterSecret);
     if (!isValid) {
       throw new UnauthorizedException('Неверный ключ доступа устройства');
     }
@@ -131,10 +128,7 @@ export class CameraService {
    * (e.g. CAPTURE_PHOTO, BUZZER_ON, etc.)
    */
   async pollPendingCommands(token: string | undefined, deviceId: string) {
-    const masterSecret = this.configService.get<string>(
-      'DEVICE_MASTER_SECRET',
-      'qamqor_esp32_device_shared_key_2026',
-    );
+    const masterSecret = this.configService.get<string>('DEVICE_MASTER_SECRET');
 
     const device = await this.prisma.device.findUnique({
       where: { deviceId },
@@ -144,7 +138,7 @@ export class CameraService {
       throw new NotFoundException(`Устройство "${deviceId}" не найдено`);
     }
 
-    const isValid = token === device.secretKey || token === masterSecret;
+    const isValid = (!!token && token === device.secretKey) || (!!masterSecret && token === masterSecret);
     if (!isValid) {
       throw new UnauthorizedException('Неверный ключ доступа устройства');
     }

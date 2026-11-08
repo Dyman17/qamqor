@@ -62,3 +62,9 @@ npm run prisma:seed
 npm run start:dev
 ```
 Сервер запустится на `http://localhost:4000`.
+
+## Environment variables
+
+See `.env.example` (placeholders only). Required: `DATABASE_URL`, `JWT_SECRET` (at least 32 characters, not an example value). In production also `CORS_ORIGINS`. The server reads `PORT` (Render sets it) and listens on `0.0.0.0`. The server refuses to start if the configuration is invalid. `MockModule` is mounted only when `NODE_ENV` is not `production`.
+
+Migrations: `npm run prisma:migrate:deploy` (never run against a database you have not backed up). If a database was created earlier with `db push`, mark the baseline once with `prisma migrate resolve --applied 0_init`.

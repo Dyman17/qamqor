@@ -12,12 +12,16 @@ import { TelemetryModule } from './telemetry/telemetry.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CameraModule } from './camera/camera.module';
 import { MockModule } from './mock/mock.module';
+import { validateEnv } from './config/env.validation';
+
+const devOnlyModules = process.env.NODE_ENV === 'production' ? [] : [MockModule];
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../../.env'],
+      envFilePath: ['.env'],
+      validate: validateEnv,
     }),
     PrismaModule,
     AuthModule,
@@ -29,7 +33,7 @@ import { MockModule } from './mock/mock.module';
     TelemetryModule,
     AnalyticsModule,
     CameraModule,
-    MockModule,
+    ...devOnlyModules,
   ],
   controllers: [AppController],
 })
