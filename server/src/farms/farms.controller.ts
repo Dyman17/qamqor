@@ -16,6 +16,8 @@ import { CreateFarmDto, UpdateFarmDto } from './dto/farm.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 import { parseSignalLimits } from './signal-limits';
+import { InvitationsService } from './invitations.service';
+import { CreateInvitationDto } from './dto/invitation.dto';
 
 /**
  * Farm routes address the farm by `:id` (not by x-farm-id); the service checks
@@ -24,7 +26,10 @@ import { parseSignalLimits } from './signal-limits';
 @Controller('api/v1/farms')
 @UseGuards(JwtAuthGuard)
 export class FarmsController {
-  constructor(private readonly farmsService: FarmsService) {}
+  constructor(
+    private readonly farmsService: FarmsService,
+    private readonly invitations: InvitationsService,
+  ) {}
 
   @Get()
   async listFarms(@CurrentUser() user: AuthenticatedUser) {
@@ -52,7 +57,28 @@ export class FarmsController {
 
   @Get(':id/members')
   async listMembers(@CurrentUser() user: AuthenticatedUser, @Param('id') farmId: string) {
-    return this.farmsService.listMembers(user.id, farmId);
+    const members = await this.farmsService.listMembers(user.id, farmId);
+    const invitations = await this.invitations.list(user.id, farmId);
+    return { members, invitations };
+  }
+
+  @Post(':id/invitations')
+  async createInvitation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') farmId: string,
+    @Body() dto: CreateInvitationDto,
+  ) {
+    return this.invitations.create(user.id, farmId, dto.email, dto.lang);
+  }
+
+  @Delete(':id/invitations/:invId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeInvitation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') farmId: string,
+    @Param('invId') invitationId: string,
+  ) {
+    await this.invitations.revoke(user.id, farmId, invitationId);
   }
 
   @Delete(':id/members/:userId')

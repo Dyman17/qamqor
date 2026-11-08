@@ -67,11 +67,15 @@ model User {
   passwordHash String
   fullName     String
   phone        String?
+  // JWTs issued before this moment are rejected (set on password reset).
+  passwordChangedAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   farmMembers  FarmMember[]
   ownedFarms   Farm[]       @relation("FarmOwner")
+  sentInvitations Invitation[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -96,6 +100,7 @@ model Farm {
   alerts          Alert[]
   cameraSnapshots CameraSnapshot[]
   signalLimits    SignalLimit[]
+  invitations     Invitation[]
 
   @@map("farms")
 }
@@ -282,4 +287,36 @@ model SignalLimit {
 
   @@unique([farmId, level])
   @@map("signal_limits")
+}
+
+/// Invitation of a worker by email. Only the SHA-256 of the token is stored.
+model Invitation {
+  id          String    @id @default(uuid())
+  farmId      String
+  farm        Farm      @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  email       String
+  tokenHash   String    @unique
+  invitedById String
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([farmId, email])
+  @@map("invitations")
+}
+
+/// One-time password reset token (1 hour). Only the SHA-256 of the token is stored.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

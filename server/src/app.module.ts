@@ -12,6 +12,7 @@ import { TelemetryModule } from './telemetry/telemetry.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CameraModule } from './camera/camera.module';
 import { MockModule } from './mock/mock.module';
+import { MailModule } from './mail/mail.module';
 import { validateEnv } from './config/env.validation';
 
 const devOnlyModules = process.env.NODE_ENV === 'production' ? [] : [MockModule];
@@ -24,6 +25,7 @@ const devOnlyModules = process.env.NODE_ENV === 'production' ? [] : [MockModule]
       validate: validateEnv,
     }),
     PrismaModule,
+    MailModule,
     AuthModule,
     FarmsModule,
     AnimalsModule,

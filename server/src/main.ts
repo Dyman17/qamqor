@@ -13,6 +13,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
 
   app.disable('x-powered-by');
+  // Behind Render's proxy: real client IP for the rate limiter.
+  if (cfg.isProduction) app.set('trust proxy', 1);
   app.useBodyParser('json', { limit: '1mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '1mb' });
   app.use(securityHeaders(cfg.isProduction));

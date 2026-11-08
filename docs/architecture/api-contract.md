@@ -88,10 +88,10 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 
 | Метод и путь | Права | Запрос | Ответ | Заметки |
 |---|---|---|---|---|
-| `POST /auth/register` | — | `{email, password(10–72), fullName, phone?, farmName?}` | `AuthResponse` | создаёт пользователя, ферму, членство OWNER в одной транзакции; лимит запросов |
+| `POST /auth/register` | — | `{email, password(8–72 символа и не более 72 байт), fullName, phone?, farmName?}` | `AuthResponse` | создаёт пользователя, ферму, членство OWNER в одной транзакции; лимит запросов |
 | `POST /auth/login` | — | `{email, password}` | `AuthResponse` | одинаковый ответ на «нет пользователя» и «неверный пароль»; лимит запросов |
 | `GET /auth/me` | любой | — | `{user, memberships}` | |
-| `POST /auth/password-reset/request` | — | `{email}` | `204` всегда | письмо со ссылкой, токен хранится хешем, срок жизни 1 ч (допущение) |
+| `POST /auth/password-reset/request` | — | `{email, lang?: 'kk'\|'ru'\|'en'}` | `204` всегда | письмо со ссылкой, токен хранится хешем, срок жизни 1 ч (допущение) |
 | `POST /auth/password-reset/confirm` | — | `{token, newPassword}` | `204` | токен одноразовый; ранее выданные JWT становятся недействительны |
 | `POST /auth/invitations/accept` | — или любой | `{token, password?, fullName?}` | `AuthResponse` | новому пользователю нужны `password`, `fullName`; существующему — только токен в авторизованном запросе |
 
@@ -104,7 +104,7 @@ interface InvitationDto { id; email; status: 'PENDING' | 'ACCEPTED' | 'REVOKED' 
 | `GET /farms/:id` | W | — | `FarmDto` |
 | `PATCH /farms/:id` | O | `{name?, description?, timezone?, workerCanEditBoundaries?}` | `FarmDto` |
 | `GET /farms/:id/members` | O | — | `{members: [{userId,email,fullName,role}], invitations: InvitationDto[]}` |
-| `POST /farms/:id/invitations` | O | `{email}` | `InvitationDto` (письмо через Mailer) |
+| `POST /farms/:id/invitations` | O | `{email, lang?}` | `InvitationDto` (письмо через Mailer; срок 7 суток; повторное приглашение отзывает прежнее; уже участник -> 409) |
 | `DELETE /farms/:id/invitations/:invId` | O | — | `204` (отзыв) |
 | `DELETE /farms/:id/members/:userId` | O | — | `204` («Убрать доступ»; владельца убрать нельзя) |
 | `GET /farms/:id/signal-limits` | O | — | `SignalLimitDto[]` |

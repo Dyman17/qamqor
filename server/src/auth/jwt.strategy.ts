@@ -17,13 +17,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string }) {
+  async validate(payload: { sub: string; email: string; iat?: number }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
 
     if (!user) {
       throw new UnauthorizedException('Пользователь не найден или сессия истекла');
+    }
+
+    // Tokens issued before the last password change are no longer valid.
+    if (user.passwordChangedAt) {
+      const changedSec = Math.floor(user.passwordChangedAt.getTime() / 1000);
+      if (typeof payload.iat !== 'number' || payload.iat < changedSec) {
+        throw new UnauthorizedException('Сессия устарела, войдите заново');
+      }
     }
 
     return {
@@ -33,4 +41,3 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
   }
 }
-

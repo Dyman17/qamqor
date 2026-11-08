@@ -15,3 +15,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 }
 
+/**
+ * Like JwtAuthGuard, but anonymous requests pass with `request.user = null`.
+ * A token that is present but invalid is still rejected.
+ */
+@Injectable()
+export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
+  canActivate(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest();
+    if (!req.headers?.authorization) return true;
+    return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any) {
+    if (err || !user) {
+      throw err || new UnauthorizedException('Необходима авторизация');
+    }
+    return user;
+  }
+}
