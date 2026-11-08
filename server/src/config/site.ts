@@ -34,6 +34,7 @@ const ONE_YEAR = 'public, max-age=31536000, immutable';
  * No-op (logged) when the directory or its index.html is missing, so the API still starts.
  */
 export function mountSite(app: NestExpressApplication, distDir: string): boolean {
+  distDir = path.resolve(distDir);
   const logger = new Logger('Site');
   const indexFile = path.join(distDir, 'index.html');
   if (!fs.existsSync(indexFile)) {

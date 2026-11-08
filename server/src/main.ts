@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -13,7 +14,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   configureApp(app, cfg);
-  mountSite(app, process.env.SITE_DIST_DIR || defaultSiteDistDir());
+  mountSite(app, process.env.SITE_DIST_DIR ? path.resolve(process.env.SITE_DIST_DIR) : defaultSiteDistDir());
 
   await app.listen(cfg.port, '0.0.0.0');
   logger.log(`Qamqor API listening on 0.0.0.0:${cfg.port}`);
