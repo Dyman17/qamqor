@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { PermissionsGuard } from '../farms/permissions.guard';
+import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/analytics')
-@UseGuards(JwtAuthGuard, FarmAccessGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 

@@ -8,7 +8,7 @@ function makePrisma() {
   const rows: any[] = [];
   return {
     rows,
-    farmMember: { findUnique: jest.fn(async () => ({ role: 'FARM_OWNER' })) },
+    farmMember: { findUnique: jest.fn(async () => ({ role: 'OWNER' })) },
     animal: { findFirst: jest.fn(async () => null) },
     deviceCommand: { create: jest.fn(async ({ data }: any) => ({ id: 'cmd-1', ...data })) },
     device: {

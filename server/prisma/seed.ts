@@ -1,4 +1,4 @@
-import { PrismaClient, AnimalSpecies, AnimalGender, UserRole, DeviceStatus } from '@prisma/client';
+import { PrismaClient, AnimalSpecies, AnimalGender, DeviceStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 
@@ -24,7 +24,6 @@ async function main() {
       passwordHash,
       fullName: 'Берік Қасымұлы',
       phone: '+7 777 123 4567',
-      role: UserRole.FARM_OWNER,
     },
   });
 
@@ -46,7 +45,7 @@ async function main() {
       data: {
         userId: user.id,
         farmId: farm.id,
-        role: UserRole.FARM_OWNER,
+        role: 'OWNER',
       },
     });
   }

@@ -20,22 +20,22 @@ function guardWith(memberships: Array<{ farmId: string; role: string }>) {
 
 describe('FarmAccessGuard', () => {
   it('403 for a farm the user is not a member of (header)', async () => {
-    const g = guardWith([{ farmId: 'A', role: 'FARM_OWNER' }]);
+    const g = guardWith([{ farmId: 'A', role: 'OWNER' }]);
     await expect(g.canActivate(ctx({ user: { id: 'u' }, headers: { 'x-farm-id': 'B' } }))).rejects.toThrow(ForbiddenException);
   });
   it('sets farmId and role for a member', async () => {
-    const g = guardWith([{ farmId: 'A', role: 'FARM_OWNER' }]);
+    const g = guardWith([{ farmId: 'A', role: 'OWNER' }]);
     const req: any = { user: { id: 'u' }, headers: { 'x-farm-id': 'A' } };
     await expect(g.canActivate(ctx(req))).resolves.toBe(true);
     expect(req.farmId).toBe('A');
-    expect(req.memberRole).toBe('FARM_OWNER');
+    expect(req.memberRole).toBe('OWNER');
   });
   it('single farm is used without a header; two farms without a header -> 400', async () => {
-    const one = guardWith([{ farmId: 'A', role: 'FARM_MANAGER' }]);
+    const one = guardWith([{ farmId: 'A', role: 'WORKER' }]);
     const req: any = { user: { id: 'u' }, headers: {} };
     await expect(one.canActivate(ctx(req))).resolves.toBe(true);
     expect(req.farmId).toBe('A');
-    const two = guardWith([{ farmId: 'A', role: 'FARM_OWNER' }, { farmId: 'B', role: 'VIEWER' }]);
+    const two = guardWith([{ farmId: 'A', role: 'OWNER' }, { farmId: 'B', role: 'WORKER' }]);
     await expect(two.canActivate(ctx({ user: { id: 'u' }, headers: {} }))).rejects.toThrow(BadRequestException);
   });
   it('403 when the user has no farms', async () => {

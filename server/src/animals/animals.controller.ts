@@ -14,13 +14,15 @@ import {
 import { AnimalsService } from './animals.service';
 import { CreateAnimalInputDto, UpdateAnimalInputDto } from './dto/animal.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
-import { FarmId } from '../farms/farm-context.decorator';
+import { PermissionsGuard } from '../farms/permissions.guard';
+import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
+import { FarmId, CanEditBoundaries } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 import { AnimalSpecies } from '@prisma/client';
 
 @Controller('api/v1/animals')
-@UseGuards(JwtAuthGuard, FarmAccessGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class AnimalsController {
   constructor(private readonly animalsService: AnimalsService) {}
 
@@ -69,8 +71,9 @@ export class AnimalsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateAnimalInputDto,
     @FarmId() farmId: string,
+    @CanEditBoundaries() canEditBoundaries: boolean,
   ) {
-    return this.animalsService.createAnimal(user.id, farmId, dto);
+    return this.animalsService.createAnimal(user.id, farmId, dto, canEditBoundaries);
   }
 
   @Patch(':id')
@@ -79,8 +82,9 @@ export class AnimalsController {
     @Param('id') animalId: string,
     @Body() dto: UpdateAnimalInputDto,
     @FarmId() farmId: string,
+    @CanEditBoundaries() canEditBoundaries: boolean,
   ) {
-    return this.animalsService.updateAnimal(user.id, farmId, animalId, dto);
+    return this.animalsService.updateAnimal(user.id, farmId, animalId, dto, canEditBoundaries);
   }
 
   @Delete(':id')

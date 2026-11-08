@@ -21,6 +21,7 @@ import { UploadCameraSnapshotDto, RequestPhotoCommandDto } from './dto/camera.dt
 import { DeviceAuthGuard } from '../devices/device-auth.guard';
 import { CurrentDevice } from '../devices/current-device.decorator';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { PermissionsGuard } from '../farms/permissions.guard';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
@@ -72,7 +73,7 @@ export class CameraController {
    * 3. Farmer / Web Endpoint: Request immediate photo from ESP32-CAM
    */
   @Post('request-photo')
-  @UseGuards(JwtAuthGuard, FarmAccessGuard)
+  @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
   async requestPhoto(
     @CurrentUser() user: AuthenticatedUser,
     @FarmId() farmId: string,
@@ -85,7 +86,7 @@ export class CameraController {
    * 4. Farmer / Web Endpoint: Gallery of snapshots
    */
   @Get('snapshots')
-  @UseGuards(JwtAuthGuard, FarmAccessGuard)
+  @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
   async listSnapshots(
     @CurrentUser() user: AuthenticatedUser,
     @FarmId() farmId: string,

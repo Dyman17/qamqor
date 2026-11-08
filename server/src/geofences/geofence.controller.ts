@@ -13,12 +13,14 @@ import {
 import { GeofenceService } from './geofence.service';
 import { CreateGeofenceInputDto, UpdateGeofenceInputDto } from './dto/geofence.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { PermissionsGuard } from '../farms/permissions.guard';
+import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/geofences')
-@UseGuards(JwtAuthGuard, FarmAccessGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class GeofenceController {
   constructor(private readonly geofenceService: GeofenceService) {}
 
@@ -40,6 +42,7 @@ export class GeofenceController {
   }
 
   @Post()
+  @RequireBoundaryEdit()
   async createGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateGeofenceInputDto,
@@ -49,6 +52,7 @@ export class GeofenceController {
   }
 
   @Patch(':id')
+  @RequireBoundaryEdit()
   async updateGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,
@@ -59,6 +63,7 @@ export class GeofenceController {
   }
 
   @Delete(':id')
+  @FarmRoles('OWNER')
   async deleteGeofence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') geofenceId: string,

@@ -2,11 +2,9 @@
  * Qamqor Shared Domain Types and Enums
  */
 
-export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  FARM_OWNER = 'FARM_OWNER',
-  FARM_MANAGER = 'FARM_MANAGER',
-  VIEWER = 'VIEWER',
+export enum FarmRole {
+  OWNER = 'OWNER',
+  WORKER = 'WORKER',
 }
 
 export enum AnimalSpecies {

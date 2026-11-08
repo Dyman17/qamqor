@@ -5,7 +5,7 @@ import {
   AlertStatus,
   AlertType,
   AlertSeverity,
-  UserRole,
+  FarmRole,
 } from '../shared';
 
 // ==========================================
@@ -174,7 +174,6 @@ export interface AuthResponseDto {
     id: string;
     email: string;
     fullName: string;
-    role: UserRole;
     farmId?: string;
   };
 }

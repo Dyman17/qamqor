@@ -7,11 +7,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  FARM_OWNER
-  FARM_MANAGER
-  VIEWER
+enum FarmRole {
+  OWNER
+  WORKER
+}
+
+enum SignalLevel {
+  SOUND
+  VIBRATION
+  IMPULSE
 }
 
 enum AnimalSpecies {
@@ -63,7 +67,6 @@ model User {
   passwordHash String
   fullName     String
   phone        String?
-  role         UserRole     @default(FARM_OWNER)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -79,6 +82,10 @@ model Farm {
   description     String?
   ownerId         String
   owner           User             @relation("FarmOwner", fields: [ownerId], references: [id])
+  // Worker may draw/edit borders and move herds only when the owner switches this on.
+  workerCanEditBoundaries Boolean  @default(false)
+  // IANA zone; day boundaries for daily signal limits. Asia/Aqtau = UTC+5 (Mangystau).
+  timezone        String           @default("Asia/Aqtau")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -88,6 +95,7 @@ model Farm {
   geofences       Geofence[]
   alerts          Alert[]
   cameraSnapshots CameraSnapshot[]
+  signalLimits    SignalLimit[]
 
   @@map("farms")
 }
@@ -96,7 +104,7 @@ model FarmMember {
   id        String   @id @default(uuid())
   userId    String
   farmId    String
-  role      UserRole @default(FARM_MANAGER)
+  role      FarmRole @default(WORKER)
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -259,4 +267,19 @@ model DeviceCommand {
 
   @@index([deviceId, status])
   @@map("device_commands")
+}
+
+/// Daily per-animal signal limits of a farm. dailyLimit null = not set (no suppression);
+/// unlimited = true = explicitly no suppression. Integer >= 1 only (enforced by the API).
+model SignalLimit {
+  id         String      @id @default(uuid())
+  farmId     String
+  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  level      SignalLevel
+  dailyLimit Int?
+  unlimited  Boolean     @default(false)
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([farmId, level])
+  @@map("signal_limits")
 }

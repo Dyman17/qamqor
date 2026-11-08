@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { assertSameFarm } from '../farms/same-farm';
+import { forbiddenRole } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAnimalInputDto, UpdateAnimalInputDto } from './dto/animal.dto';
 import { AnimalSpecies } from '@prisma/client';
@@ -133,7 +134,16 @@ export class AnimalsService {
     };
   }
 
-  async createAnimal(userId: string, farmId: string, dto: CreateAnimalInputDto) {
+  async createAnimal(
+    userId: string,
+    farmId: string,
+    dto: CreateAnimalInputDto,
+    canEditBoundaries = true,
+  ) {
+    // Putting an animal into a pen is a herd move: owner, or worker with the switch on.
+    if (dto.activeGeofenceId && !canEditBoundaries) {
+      throw forbiddenRole('Назначать загон может владелец или работник при включённом праве');
+    }
 
     await assertSameFarm(this.prisma, farmId, {
       geofenceId: dto.activeGeofenceId,
@@ -177,7 +187,11 @@ export class AnimalsService {
     farmId: string,
     animalId: string,
     dto: UpdateAnimalInputDto,
+    canEditBoundaries = true,
   ) {
+    if (dto.activeGeofenceId !== undefined && !canEditBoundaries) {
+      throw forbiddenRole('Назначать загон может владелец или работник при включённом праве');
+    }
 
     const animal = await this.prisma.animal.findFirst({
       where: { id: animalId, farmId },

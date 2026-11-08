@@ -15,12 +15,14 @@ import {
 import { DevicesService } from './devices.service';
 import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { PermissionsGuard } from '../farms/permissions.guard';
+import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/devices')
-@UseGuards(JwtAuthGuard, FarmAccessGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
@@ -81,6 +83,7 @@ export class DevicesController {
   }
 
   @Delete(':id')
+  @FarmRoles('OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteDevice(
     @CurrentUser() user: AuthenticatedUser,

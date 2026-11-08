@@ -39,7 +39,7 @@ interface MembershipDto { farmId; farmName; role: Role; }
 interface AuthResponse { token: string; user: UserDto; memberships: MembershipDto[]; }
 
 interface FarmDto {
-  id; name; description?: string; timezone: string;        // IANA, по умолчанию 'Asia/Almaty' (допущение, подтвердить)
+  id; name; description?: string; timezone: string;        // IANA, по умолчанию 'Asia/Aqtau' (UTC+5, решение владельца 2026-11-08)
   workerCanEditBoundaries: boolean;                         // по умолчанию false
   myRole: Role;
 }

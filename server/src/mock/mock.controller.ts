@@ -9,12 +9,14 @@ import {
 import { MockService } from './mock.service';
 import { InjectTelemetryDto, SimulateActionDto, InjectPhotoDto } from './dto/mock.dto';
 import { FarmAccessGuard } from '../farms/farm-access.guard';
+import { PermissionsGuard } from '../farms/permissions.guard';
+import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
 
 @Controller('api/v1/mock')
-@UseGuards(JwtAuthGuard, FarmAccessGuard)
+@UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
 export class MockController {
   constructor(private readonly mockService: MockService) {}
 

@@ -8,7 +8,6 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto, LoginUserDto } from './dto/auth.dto';
-import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -34,7 +33,6 @@ export class AuthService {
         passwordHash,
         fullName: dto.fullName.trim(),
         phone: dto.phone?.trim(),
-        role: UserRole.FARM_OWNER,
       },
     });
 
@@ -51,7 +49,7 @@ export class AuthService {
       data: {
         userId: user.id,
         farmId: farm.id,
-        role: UserRole.FARM_OWNER,
+        role: 'OWNER',
       },
     });
 
@@ -63,7 +61,6 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
         farmId: farm.id,
         farmName: farm.name,
       },
@@ -98,7 +95,6 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
         farmId: primaryFarm?.id,
         farmName: primaryFarm?.name,
       },
@@ -124,7 +120,6 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       phone: user.phone,
-      role: user.role,
       farms: user.farmMembers.map((fm) => ({
         id: fm.farm.id,
         name: fm.farm.name,
