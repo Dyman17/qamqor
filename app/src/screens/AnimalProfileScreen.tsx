@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'phosphor-react-native/lib/module/icons/ArrowLeft';
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme, Theme } from '../theme/scale';
@@ -7,7 +8,7 @@ import { StateBox, STATUS_LABEL, CONN_LABEL, DemoBadge } from '../components';
 
 export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({ route, navigation }) => {
   const t = useTheme();
-  const { colors, spacing, typography, hit } = t;
+  const { colors, spacing, typography, hit, fs } = t;
   const styles = useMemo(() => createStyles(t), [t]);
   const animalId: string = route?.params?.animalId;
   const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
@@ -52,7 +53,10 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
   return (
     <ScrollView style={styles.container}>
       <TouchableOpacity style={styles.backButton} hitSlop={hit(36)} onPress={() => navigation.goBack()}>
-        <Text style={styles.backText}>← Назад к списку</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <ArrowLeft color={colors.primary} size={fs(18)} weight="regular" />
+          <Text style={styles.backText}>Назад к списку</Text>
+        </View>
       </TouchableOpacity>
 
       <StateBox loading={animal.loading && !a} error={animal.error} onRetry={animal.reload} />

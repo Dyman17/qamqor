@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
+import { MapTrifold } from 'phosphor-react-native/lib/module/icons/MapTrifold';
+import { Cow } from 'phosphor-react-native/lib/module/icons/Cow';
+import { Bell } from 'phosphor-react-native/lib/module/icons/Bell';
+import { Broadcast } from 'phosphor-react-native/lib/module/icons/Broadcast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -61,18 +65,19 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.navText,
       }}
     >
-      <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Карта' }} />
-      <Tab.Screen name="Herd" component={HerdScreen} options={{ tabBarLabel: 'Стадо' }} />
+      <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Карта', tabBarIcon: ({ color, size, focused }) => <MapTrifold color={color} size={size} weight={focused ? 'fill' : 'regular'} /> }} />
+      <Tab.Screen name="Herd" component={HerdScreen} options={{ tabBarLabel: 'Стадо', tabBarIcon: ({ color, size, focused }) => <Cow color={color} size={size} weight={focused ? 'fill' : 'regular'} /> }} />
       <Tab.Screen
         name="Alerts"
         component={AlertsScreen}
         options={{
           tabBarLabel: 'Оповещения',
+          tabBarIcon: ({ color, size, focused }) => <Bell color={color} size={size} weight={focused ? 'fill' : 'regular'} />,
           tabBarBadge: active > 0 ? active : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.signalMap, color: colors.ink },
         }}
       />
-      <Tab.Screen name="Collars" component={CollarsScreen} options={{ tabBarLabel: 'Ошейники' }} />
+      <Tab.Screen name="Collars" component={CollarsScreen} options={{ tabBarLabel: 'Ошейники', tabBarIcon: ({ color, size, focused }) => <Broadcast color={color} size={size} weight={focused ? 'fill' : 'regular'} /> }} />
     </Tab.Navigator>
   );
 }

@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'phosphor-react-native/lib/module/icons/ArrowLeft';
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useTheme, Theme } from '../theme/scale';
@@ -15,7 +16,7 @@ const SPECIES: { v: Animal['species']; label: string }[] = [
 
 export const AddAnimalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
-  const { colors, spacing, typography, hit } = t;
+  const { colors, spacing, typography, hit, fs } = t;
   const styles = useMemo(() => createStyles(t), [t]);
   const pens = useLoad(() => api.getGeofences());
   const [name, setName] = useState('');
@@ -55,7 +56,10 @@ export const AddAnimalScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <TouchableOpacity hitSlop={hit(36)} onPress={() => navigation.goBack()} style={{ marginBottom: spacing.md }}>
-        <Text style={[typography.body, { color: colors.primary }]}>← Назад</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <ArrowLeft color={colors.primary} size={fs(18)} weight="regular" />
+          <Text style={[typography.body, { color: colors.primary }]}>Назад</Text>
+        </View>
       </TouchableOpacity>
       <Text style={[typography.title1, { marginBottom: spacing.lg }]}>Добавить животное</Text>
 

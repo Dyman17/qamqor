@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutChangeEvent, PanResponder, Pressable, ScrollView } from 'react-native';
 import Svg, { Polygon, Text as SvgText } from 'react-native-svg';
-import { Settings as SettingsIcon } from 'lucide-react-native';
+import { Gear } from 'phosphor-react-native/lib/module/icons/Gear';
 import { useTheme, Theme } from '../theme/scale';
 import { api, errorText } from '../services/api';
 import { useLoad } from '../state/useLoad';
@@ -218,7 +218,7 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <Text style={styles.connText}>{online}/{list.length}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.gearButton} hitSlop={hit(48)} accessibilityLabel="Настройки" onPress={() => navigation.navigate('Settings')}>
-          <SettingsIcon color={colors.ink} size={fs(18)} />
+          <Gear color={colors.ink} size={fs(20)} weight="regular" />
         </TouchableOpacity>
       </View>
 
