@@ -115,7 +115,7 @@ static void pulseTick() {
     uint32_t now = millis();
     // Порог наличия пальца: ниже 25000 — датчик открыт
     if (ir < 25000) {
-      if (lastGoodBeatMs > 0 && now - lastGoodBeatMs > 5000) {
+      if (lastGoodBeatMs > 0 && now - lastGoodBeatMs > 3000) {
         beatAvg = 0;
       }
       lastBeatMs = 0;
@@ -125,14 +125,19 @@ static void pulseTick() {
       if (lastBeatMs != 0) {
         float bpm = 60000.0f / (float)(now - lastBeatMs);
         if (bpm >= 45 && bpm <= 190) {
-          beatAvg = beatAvg <= 0 ? bpm : 0.6f * beatAvg + 0.4f * bpm;
+          // Если это первый замер — сразу берем точное значение без долгого ожидания
+          if (beatAvg <= 0) {
+            beatAvg = bpm;
+          } else {
+            beatAvg = 0.5f * beatAvg + 0.5f * bpm;
+          }
           lastGoodBeatMs = now;
           Serial.printf("[pulse] Удар! BPM: %.0f (IR: %ld)\n", beatAvg, ir);
         }
       }
       lastBeatMs = now;
     }
-    if (beatAvg > 0 && now - lastGoodBeatMs > 6000) {
+    if (beatAvg > 0 && now - lastGoodBeatMs > 4000) {
       beatAvg = 0;
     }
   }
@@ -281,6 +286,10 @@ static bool timeSync() {
   return timeValid();
 }
 
+static WiFiClientSecure g_client;
+static HTTPClient g_http;
+static bool g_httpInited = false;
+
 static void sendTelemetry() {
   Snapshot s;
   portENTER_CRITICAL(&g_mux);
@@ -311,29 +320,38 @@ static void sendTelemetry() {
   String body;
   serializeJson(req, body);
 
-  WiFiClientSecure client;
-  client.setCACert(ROOT_CA_PEM);
-  HTTPClient http;
-  http.setConnectTimeout(HTTP_TIMEOUT_MS);
-  http.setTimeout(HTTP_TIMEOUT_MS);
-  if (!http.begin(client, TELEMETRY_URL)) {
-    Serial.println("[http] begin failed");
-    return;
+  if (!g_httpInited) {
+    g_client.setCACert(ROOT_CA_PEM);
+    g_http.setReuse(true); // Сохраняем TLS-сессию (Keep-Alive) для мгновенной отправки
+    g_http.setConnectTimeout(HTTP_TIMEOUT_MS);
+    g_http.setTimeout(HTTP_TIMEOUT_MS);
+    g_httpInited = true;
   }
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Device-Code", DEVICE_CODE);
 
-  int status = http.POST(body);
+  if (!g_http.connected()) {
+    g_http.end();
+    if (!g_http.begin(g_client, TELEMETRY_URL)) {
+      Serial.println("[http] begin failed");
+      return;
+    }
+  }
+  g_http.addHeader("Content-Type", "application/json");
+  g_http.addHeader("X-Device-Code", DEVICE_CODE);
+
+  uint32_t t0 = millis();
+  int status = g_http.POST(body);
+  uint32_t ms = millis() - t0;
+
   if (status <= 0) {
-    Serial.printf("[http] request failed: %s\n", HTTPClient::errorToString(status).c_str());
-    http.end();
+    Serial.printf("[http] request failed (%u ms): %s\n", ms, HTTPClient::errorToString(status).c_str());
+    g_http.end();
     return;
   }
-  String payload = http.getString();
-  http.end();
+  String payload = g_http.getString();
 
   if (status != 200) {
-    Serial.printf("[http] status %d: %s\n", status, payload.c_str());
+    Serial.printf("[http] status %d (%u ms): %s\n", status, ms, payload.c_str());
+    if (status >= 400 && status < 500) g_http.end();
     return;
   }
 

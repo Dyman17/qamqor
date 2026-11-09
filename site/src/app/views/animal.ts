@@ -115,7 +115,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         if (posVal) posVal.textContent = fresh.lat != null && fresh.lng != null ? t('a.animal.coords', { lat: fresh.lat.toFixed(5), lng: fresh.lng.toFixed(5) }) : '—';
         if (posSub) setHtml(posSub, html`${t('a.animal.accuracy')}: ${fresh.accuracyM != null ? `${Math.round(fresh.accuracyM)} m` : '—'} · ${timeEl(fresh.lastSeenAt)}`);
       } catch {}
-    }, 2000);
+    }, 1000);
 
     $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true })));
     $('#remove')!.addEventListener('click', async () => {
