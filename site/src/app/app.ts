@@ -212,7 +212,7 @@ const view: View = {
       if (!s || s.dataMode === 'REAL') { strip.hidden = true; strip.innerHTML = ''; document.body.classList.remove('is-demo'); return; }
       strip.hidden = false;
       document.body.classList.add('is-demo');
-      strip.innerHTML = html`${raw(icon('stack', 20))}<span class="demo-strip-tag">${t('a.demo.tag')}</span><span>${s.dataMode === 'MANUAL' ? t('a.demo.strip.MANUAL') : t('a.demo.strip.AUTO')}</span>`.s;
+      strip.innerHTML = html`${raw(icon('stack', 20))}<span class="demo-strip-tag">${t('a.demo.tag')}</span> <span aria-hidden="true">·</span> <span>${s.dataMode === 'MANUAL' ? t('a.demo.strip.MANUAL') : t('a.demo.strip.AUTO')}</span>`.s;
       strip.setAttribute('aria-label', modeName(s.dataMode));
     };
     setSim(farm.dataMode ? { dataMode: farm.dataMode, running: false, speed: 1, herd: 8, until: null, demo: { animals: 0, alerts: 0 }, enabled: true } : null, farm.id);

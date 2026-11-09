@@ -3,7 +3,7 @@ import { getLang, langSwitcherHtml, bindLangSwitch, applyI18n, t } from '../../i
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
 import { ApiError, del, get, patch, post, put, setSession, simApi, type DataMode, type FarmDto, type InvitationDto, type MembersResponse, type SignalLimitDto, type SimulationDto } from '../api';
-import { modeName, setSim } from '../demo';
+import { modeName, retryBusy, setSim } from '../demo';
 import { confirmDialog, copyText, errText, loadInto, offlineGuard, timeEl, toast } from '../common';
 
 type Tab = 'farm' | 'data' | 'people' | 'signals' | 'account';
@@ -76,7 +76,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
         if (mode === 'REAL' && !await confirmDialog({ title: t('a.set.data.confirmTitle'), text: t('a.set.data.confirmText'), confirmLabel: t('a.set.data.confirm'), danger: true })) { draw(); return; }
         $$<HTMLInputElement>('input[name="mode"]', el).forEach((x) => { x.disabled = true; });
         try {
-          s = await simApi.setMode(fid, mode);
+          s = await retryBusy(() => simApi.setMode(fid, mode), () => toast(t('a.demo.retrying')));
           setSim(s, fid);
           ctx.farm.dataMode = s.dataMode;
           draw();

@@ -3,8 +3,8 @@ import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppCtx } from '../app';
 import { simApi, type AnimalDto, type PenDto, type SimEvent, type SimSpeed, type SimulationDto } from '../api';
-import { confirmDialog, errText, SPECIES, speciesName } from '../common';
-import { collarResponseText, getSim, onSim, ringCentroid, setSim, stepPoint } from '../demo';
+import { confirmDialog, errText, SPECIES, speciesName, toast } from '../common';
+import { collarResponseText, getSim, onSim, retryBusy, ringCentroid, setSim, stepPoint } from '../demo';
 
 /** What the map view gives the panel. The panel never touches the map directly. */
 export interface DemoHost {
@@ -223,7 +223,7 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
         selectAnimal(a.id);
         host.select(a.id);
       }));
-      $('#d-startsim', box)?.addEventListener('click', () => void guarded(async () => { setSim(await simApi.start(farm, { speed, herd }), farm); await refreshAll(); }));
+      $('#d-startsim', box)?.addEventListener('click', () => void guarded(async () => { setSim(await retryBusy(() => simApi.start(farm, { speed, herd }), () => toast(t('a.demo.retrying'))), farm); await refreshAll(); }));
       return;
     }
     const herdInput = $<HTMLInputElement>('#a-herd', box);
@@ -232,9 +232,9 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
       const v = Number(herdInput?.value);
       if (!Number.isInteger(v) || v < 1 || v > 20) { error = t('a.demo.herdBad'); render(true); return; }
       herd = v;
-      void guarded(async () => { setSim(await simApi.start(farm, { speed, herd }), farm); await refreshAll(); });
+      void guarded(async () => { setSim(await retryBusy(() => simApi.start(farm, { speed, herd }), () => toast(t('a.demo.retrying'))), farm); await refreshAll(); });
     });
-    $('#a-stop', box)?.addEventListener('click', () => void guarded(async () => { setSim(await simApi.stop(farm), farm); await refreshAll(); }));
+    $('#a-stop', box)?.addEventListener('click', () => void guarded(async () => { setSim(await retryBusy(() => simApi.stop(farm), () => toast(t('a.demo.retrying'))), farm); await refreshAll(); }));
     $('#a-reset', box)?.addEventListener('click', async () => {
       if (!await confirmDialog({ title: t('a.demo.resetTitle'), text: t('a.demo.resetText'), confirmLabel: t('a.demo.reset') })) return;
       void guarded(async () => { setSim(await simApi.reset(farm), farm); result = t('a.demo.resetDone'); await refreshAll(); });

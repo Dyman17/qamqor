@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { setLeaveGuard } from '../../router';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
-import { ApiError, DEVICE_CODE_RE, get, net, onNet, registerCollarByCode, type AnimalDto, type CollarDto } from '../api';
+import { ApiError, DEVICE_CODE_RE, get, net, onNet, patch, registerCollarByCode, type AnimalDto, type CollarDto } from '../api';
 import { confirmDialog, copyText, errText, forbiddenState, offlineGuard } from '../common';
 
 const POLL_MS = 10_000;
@@ -164,6 +164,28 @@ export const mount: AppView['mount'] = (el, ctx) => {
     stopNet = onNet((s) => { netNote.hidden = !s.offline; });
   }
 
+  // after the first signal of a collar without an animal: offer to bind it right away
+  async function offerBind(id: string): Promise<void> {
+    let free: AnimalDto[] = [];
+    try { free = (await get<AnimalDto[]>('/animals?limit=100')).filter((a) => !a.collarId && !a.isDemo); } catch { /* binding is optional */ }
+    const box = $('#s3-actions', el);
+    if (!box || !el.isConnected) return;
+    const link = html`<a class="btn btn-secondary" href="/app/collars/${encodeURIComponent(id)}">${t('a.cn.goCollar')}</a>`;
+    if (!free.length) { box.innerHTML = link.s; return; }
+    box.innerHTML = html`<div class="field"><label for="bind-an">${t('a.co.assign')}</label><select class="select" id="bind-an"><option value="">${t('a.co.pick')}</option>${free.map((a) => html`<option value="${a.id}">${a.name} · ${a.tag}</option>`)}</select></div>
+      <p class="field-error" id="bind-err" role="alert" hidden></p>
+      <button type="button" class="btn btn-primary" id="bind-go" disabled>${t('a.cn.bind')}</button>${link}`.s;
+    const sel = $<HTMLSelectElement>('#bind-an', el)!, go = $<HTMLButtonElement>('#bind-go', el)!;
+    sel.addEventListener('change', () => { go.disabled = !sel.value; });
+    go.addEventListener('click', async () => {
+      go.disabled = true;
+      try {
+        await patch(`/devices/${encodeURIComponent(id)}`, { animalId: sel.value });
+        box.innerHTML = html`<p role="status"><strong>${t('a.cn.bound')}</strong></p>${link}`.s;
+      } catch (e) { const er = $('#bind-err', el)!; er.textContent = errText(e); er.hidden = false; go.disabled = false; }
+    });
+  }
+
   // ---------- step 3 ----------
   function step3(): void {
     stopNet?.(); stopNet = null;
@@ -184,8 +206,10 @@ export const mount: AppView['mount'] = (el, ctx) => {
         try {
           const c = await get<CollarDto>(`/devices/${encodeURIComponent(deviceId)}`);
           if (!el.isConnected) return;
-          if (c.status === 'ONLINE') {
-            live.innerHTML = `<span class="ok-mark" aria-hidden="true">${icon('check-circle', 28)}</span><strong>${t('a.cn.online')}</strong>`;
+          if (c.status === 'ONLINE' || c.lastSeenAt) { // an unbound collar is UNASSIGNED but has a lastSeenAt once it pinged
+            const unbound = !c.animalId;
+            live.innerHTML = `<span class="ok-mark" aria-hidden="true">${icon('check-circle', 28)}</span><strong>${unbound ? t('a.cn.signal') : t('a.cn.online')}</strong>`;
+            if (unbound) { await offerBind(c.deviceId); return; }
             actions.innerHTML = `<a class="btn btn-primary" href="/app/collars/${encodeURIComponent(deviceId)}">${t('a.cn.goCollar')}</a><a class="btn btn-secondary" href="/app/collars/connect" id="another">${t('a.cn.another')}</a>`;
             $('#another', el)!.addEventListener('click', (ev) => { ev.preventDefault(); void step1(); });
             return;

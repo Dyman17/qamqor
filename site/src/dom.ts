@@ -19,7 +19,12 @@ function part(v: unknown): string {
 
 export function html(strings: TemplateStringsArray, ...vals: unknown[]): Safe {
   let out = strings[0];
-  for (let i = 0; i < vals.length; i++) out += part(vals[i]) + strings[i + 1];
+  for (let i = 0; i < vals.length; i++) {
+    // a boolean directly inside an attribute value (aria-pressed="${on}") must be "true"/"false", not ""; elsewhere booleans stay empty (conditionals)
+    const v = vals[i];
+    const inAttr = typeof v === 'boolean' && /=["']$/.test(strings[i]) && /^["']/.test(strings[i + 1]);
+    out += (inAttr ? String(v) : part(v)) + strings[i + 1];
+  }
   return new Safe(out);
 }
 

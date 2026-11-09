@@ -112,7 +112,7 @@ try {
   check('connect: step 2 of 2 (waiting for the first signal)', (await text(p)).includes('Шаг 2 из 2'));
   await shot(p, 'connect-step2-waiting-1280');
   await p.eval(`window.__mock.online = true`); await sleep(13000);
-  check('connect: reaches "Ошейник на связи"', (await text(p, '#live')).includes('Ошейник на связи'));
+  check('connect: unbound collar with a signal counts as success and offers binding', (await text(p, '#live')).includes('Сигнал получен') && await p.eval(`Boolean(document.getElementById('bind-an'))`));
   p.close();
 
   // ---- demo modes: owner ----
@@ -125,7 +125,7 @@ try {
   await shot(p, 'settings-data-1280');
   check('demo: no backdrop-filter anywhere in the page', await p.eval(`[...document.querySelectorAll('*')].every((e) => (getComputedStyle(e).backdropFilter || 'none') === 'none')`));
   await p.eval(`document.querySelector('input[value="MANUAL"]').click()`); await sleep(900);
-  check('demo: strip shows manual text', (await text(p, '#demo-strip')).includes('Демо · ручной режим'));
+  check('demo: strip shows manual text', (await p.eval(`document.getElementById('demo-strip').textContent.replace(/s+/g, ' ')`)).includes('Демо · ручной режим'));
   await nav(p, '/app/map');
   await sleep(3500);
   check('demo: manual panel present', await p.eval(`Boolean(document.getElementById('d-an')) && Boolean(document.querySelector('[data-ev="BREACH"]'))`));
@@ -148,6 +148,7 @@ try {
   check('demo: auto controls present', await p.eval(`Boolean(document.getElementById('a-stop')) && document.querySelectorAll('[data-speed]').length === 4`));
   await p.eval(`document.querySelector('[data-speed="5"]').click()`); await sleep(700);
   check('demo: speed PATCH applied', await p.eval(`window.__mock.speed === 5`));
+  check('demo: aria-pressed is true/false (not empty)', await p.eval(`[...document.querySelectorAll('[data-speed]')].map((b) => b.getAttribute('aria-pressed')).join(',') === 'false,false,true,false'`));
   await shot(p, 'map-demo-auto-1280');
   await nav(p, '/app/settings');
   await p.eval(`document.querySelector('[data-tab="data"]').click()`); await sleep(500);

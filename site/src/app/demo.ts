@@ -1,6 +1,6 @@
 import { html, type Safe } from '../dom';
 import { getLang, t } from '../i18n';
-import { simApi, type CollarResponseDto, type PenDto, type SimulationDto } from './api';
+import { ApiError, simApi, type CollarResponseDto, type PenDto, type SimulationDto } from './api';
 
 // ---- shared demo-mode state of the current farm (docs/plans/pilot-modes.md P2) ----
 let sim: SimulationDto | null = null;
@@ -20,6 +20,20 @@ export async function refreshSim(farm: string): Promise<SimulationDto | null> {
   if (simFarm !== farm) { sim = null; simFarm = farm; }
   try { setSim(await simApi.get(farm), farm); } catch { /* keep the last known state */ }
   return sim;
+}
+
+/** The server holds a short lease while a simulation tick runs; a mode change can hit it (409). Retry once after 3 s, then explain. */
+export async function retryBusy<T>(fn: () => Promise<T>, onRetry?: () => void): Promise<T> {
+  const busy = (e: unknown): boolean => e instanceof ApiError && e.status === 409 && /заня|busy/i.test(e.message);
+  try { return await fn(); } catch (e) {
+    if (!busy(e)) throw e;
+    onRetry?.();
+    await new Promise((r) => setTimeout(r, 3000));
+    try { return await fn(); } catch (e2) {
+      if (busy(e2)) throw new ApiError(409, 'CONFLICT', t('a.demo.busy'));
+      throw e2;
+    }
+  }
 }
 
 /** Small "Демо" tag: text + dashed outline, so the meaning is not carried by colour alone. */

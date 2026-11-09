@@ -196,19 +196,21 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   function drawPens(): void {
     if (!map || !ML) return;
     const prim = cssVar('--primary');
-    const fc = { type: 'FeatureCollection' as const, features: pens.map((p) => ({ type: 'Feature' as const, properties: { id: p.id }, geometry: p.polygon })) };
+    const fc = { type: 'FeatureCollection' as const, features: pens.map((p) => ({ type: 'Feature' as const, properties: { id: p.id, demo: p.isDemo ? 1 : 0 }, geometry: p.polygon })) };
     const src = map.getSource('pens') as import('maplibre-gl').GeoJSONSource | undefined;
     if (src) { src.setData(fc as never); } else {
       map.addSource('pens', { type: 'geojson', data: fc as never });
       map.addLayer({ id: 'pens-fill', type: 'fill', source: 'pens', paint: { 'fill-color': prim, 'fill-opacity': 0.1 } });
-      map.addLayer({ id: 'pens-line', type: 'line', source: 'pens', paint: { 'line-color': prim, 'line-width': 2 } });
+      map.addLayer({ id: 'pens-line', type: 'line', source: 'pens', filter: ['==', ['get', 'demo'], 0], paint: { 'line-color': prim, 'line-width': 2 } });
+      map.addLayer({ id: 'pens-line-demo', type: 'line', source: 'pens', filter: ['==', ['get', 'demo'], 1], paint: { 'line-color': prim, 'line-width': 2, 'line-dasharray': [2, 2] } });
     }
     penMarkers.forEach((m) => m.remove());
     penMarkers = pens.map((p) => {
       const n = document.createElement('span');
       n.className = 'pen-chip glass-light';
-      n.textContent = p.name;
-      return new ML!.Marker({ element: n }).setLngLat(centroid(p)).addTo(map!);
+      n.textContent = p.isDemo ? `${p.name} (${t('a.demo.tag').toLowerCase()})` : p.name;
+      // a demo pen may sit exactly on a real one: move its label down so the two do not overlap
+      return new ML!.Marker({ element: n, offset: p.isDemo ? [0, 30] : [0, 0] }).setLngLat(centroid(p)).addTo(map!);
     });
   }
 
