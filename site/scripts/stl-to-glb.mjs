@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds site/public/models/qamqor.glb from hardware/3d-models/qamqor_base.stl and qamqor_lid.stl.
+// Builds site/public/models/qamqor.glb from hardware/enclosure/stl/qamqor_base.stl and qamqor_lid.stl.
 // Pure Node, no dependencies (site-brief 2.1): ASCII STL -> welded indexed mesh -> Int16 quantized positions
 // (KHR_mesh_quantization) + Uint16 indices. Normals are NOT written: the page computes creased normals on load.
 //
@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
 const PARTS = [
-  { name: 'base', file: resolve(repo, 'hardware/3d-models/qamqor_base.stl') },
-  { name: 'lid', file: resolve(repo, 'hardware/3d-models/qamqor_lid.stl') },
+  { name: 'base', file: resolve(repo, 'hardware/enclosure/stl/qamqor_base.stl') },
+  { name: 'lid', file: resolve(repo, 'hardware/enclosure/stl/qamqor_lid.stl') },
 ];
 const OUT = resolve(here, '../public/models/qamqor.glb');
 const MAX_RAW_BYTES = 400 * 1024; // site-brief 2.1 build threshold

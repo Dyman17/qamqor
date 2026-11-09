@@ -9,7 +9,7 @@ npm install
 npm run dev        # http://localhost:5173, proxies /api and /health to http://localhost:4000
 npm run build      # tsc --noEmit + vite build -> dist/ (served by the Nest server, see server/src/config/site.ts)
 npm run preview    # http://127.0.0.1:4173
-npm run build:model  # rebuild public/models/qamqor.glb from hardware/3d-models/*.stl (no dependencies)
+npm run build:model  # rebuild public/models/qamqor.glb from hardware/enclosure/stl/*.stl (no dependencies)
 ```
 
 QA helpers (need Chrome or Edge; no extra packages): `scripts/qa-shots.mjs` (screenshots, overflow, console errors),

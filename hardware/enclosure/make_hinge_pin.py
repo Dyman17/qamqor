@@ -4,12 +4,12 @@ Matches qamqor_enclosure.scad: pin_d = 3.0, pin_hole = 3.3, hinge span -80..80 (
 Pin: head D6 x 2 mm, shaft D3 x 163 mm (160 in the knuckles + 3 for the cap), chamfered tip.
 The pin has a 0.3 mm flat on one side so it prints lying down without supports.
 Cap: ring D6 x 3 mm, hole D2.9 (press fit / glue on the tip).
-Usage: python make_hinge_pin.py  -> writes ../3d-models/qamqor_hinge_pin.stl and qamqor_hinge_cap.stl
+Usage: python make_hinge_pin.py  -> writes stl/qamqor_hinge_pin.stl and qamqor_hinge_cap.stl
 """
 import math, os, struct
 
 N = 48
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "3d-models")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stl")
 
 
 def write_stl(path, tris):
