@@ -97,6 +97,12 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
                 </Text>
               </View>
               <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Пульс</Text>
+                <Text style={styles.gridVal}>
+                  {a.lastHeartRate != null ? `${a.lastHeartRate} уд/мин` : 'нет данных'}
+                </Text>
+              </View>
+              <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Связь</Text>
                 <Text style={styles.gridVal}>{timeAgo(a.lastSeenAt)}</Text>
               </View>

@@ -108,7 +108,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         <h2 class="title-2">${sel.name} · ${sel.tag}</h2>
         <p>${animalBadge(sel)}</p>
         <p class="muted">${speciesName(sel.species)} · ${sel.penId ? pens.find((p) => p.id === sel.penId)?.name ?? '' : t('a.map.noPen')}</p>
-        <p class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</p>
+        <p class="muted">${sel.lastHeartRate != null ? `${t('a.animal.pulse')}: ${t('a.animal.bpm', { n: sel.lastHeartRate })} · ` : ''}${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</p>
         <p><a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a></p>`.s;
       $('#back', panelBody)!.addEventListener('click', () => { selected = null; drawPanel(); renderMarkers(); });
       return;

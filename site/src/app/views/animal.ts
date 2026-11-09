@@ -76,6 +76,9 @@ export const mount: AppView['mount'] = (el, ctx) => {
         <section class="panel-block" aria-labelledby="h-col"><h2 class="title-2" id="h-col">${t('a.animal.collar')}</h2>
           <p>${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</p>
           ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}</section>
+        <section class="panel-block" aria-labelledby="h-pulse"><h2 class="title-2" id="h-pulse">${t('a.animal.pulse')}</h2>
+          <p class="num">${a.lastHeartRate != null ? t('a.animal.bpm', { n: a.lastHeartRate }) : '—'}</p>
+          <p class="muted">${a.lastHeartRateAt ? timeEl(a.lastHeartRateAt) : t('a.animal.noPulse')}</p></section>
         <section class="panel-block" aria-labelledby="h-pen"><h2 class="title-2" id="h-pen">${t('a.animal.pen')}</h2><p>${pen?.name ?? t('a.herd.noPen')}</p></section>
         <section class="panel-block" aria-labelledby="h-sig"><h2 class="title-2" id="h-sig">${t('a.animal.signals')}</h2>
           ${sig ? html`<p>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)})</p><p>${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</p>` : html`<p>—</p>`}</section>

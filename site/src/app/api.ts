@@ -13,6 +13,7 @@ export interface SignalLimitDto { level: 'SOUND' | 'VIBRATION' | 'IMPULSE'; dail
 export interface AnimalDto {
   id: string; farmId: string; name: string; tag: string; species: 'CATTLE' | 'HORSE' | 'CAMEL' | 'SHEEP' | 'GOAT'; gender?: string; breed?: string;
   penId: string | null; collarId: string | null; lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null; status: AnimalStatus; isDemo?: boolean;
+  lastHeartRate?: number | null; lastHeartRateAt?: string | null;
 }
 export interface CollarDto { deviceId: string; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
 export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number; isDemo?: boolean }

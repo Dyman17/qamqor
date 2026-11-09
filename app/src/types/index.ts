@@ -48,6 +48,8 @@ export interface Animal {
   lng: number | null;
   accuracyM: number | null;
   lastSeenAt: string | null;
+  lastHeartRate?: number | null;
+  lastHeartRateAt?: string | null;
   status: AnimalStatus;
   isDemo: boolean;
 }
