@@ -1,75 +1,106 @@
-Status: draft
+Status: implemented (firmware written; hardware test not run)
 
 # esp — прошивка ошейника
 
-Прошивка ESP для умного ошейника. ТЗ и схемы — в `docs/`. Прошивки в этой папке пока нет; ниже контракт обмена с сервером, который она должна выполнять. Решение владельца: [docs/architecture/device-code-protocol.md](../docs/architecture/device-code-protocol.md).
+Прошивка ESP32 (Arduino framework, PlatformIO) для умного ошейника: читает GPS, раз в интервал шлёт позицию на сервер по HTTPS и по ответу включает звук и вибрацию. Контракт и решение владельца: [api-contract.md](../docs/architecture/api-contract.md), [device-code-protocol.md](../docs/architecture/device-code-protocol.md).
+
+## Структура
+
+| Файл | Назначение |
+|---|---|
+| `platformio.ini` | плата `esp32dev`, библиотеки TinyGPSPlus и ArduinoJson |
+| `include/config.h` | пины, таймауты, границы интервалов (все допущения тут) |
+| `include/secrets.h` | **локальный, в .gitignore**: Wi-Fi и код ошейника |
+| `include/secrets.example.h` | шаблон без секретов (можно коммитить) |
+| `src/main.cpp` | главный цикл: Wi-Fi, время, GPS, отправка, пауза |
+| `src/gps.*` | чтение GPS (TinyGPSPlus), оценка точности |
+| `src/net.*` | Wi-Fi, NTP, HTTPS POST, разбор ответа |
+| `src/actuators.*` | звук (LEDC) и вибромотор |
+| `src/certs.h` | корневой сертификат для проверки TLS |
 
 ## Идентичность: 8-значный код
 
-- В прошивке зашит код из 8 цифр (`^[0-9]{8}$`), например `12345678`. Это идентификатор ошейника, **не секрет**.
-- Владелец «принимает» ошейник в кабинете, вводя этот код (`POST /api/v1/devices {"code":"12345678"}`). Пока код не принят, сервер отвечает `401` и ничего не сохраняет.
-- Только HTTPS (на Render). Секретов и токенов в прошивке нет.
+- `DEVICE_CODE` в `secrets.h`: ровно 8 цифр. При старте проверяется; неверный код останавливает прошивку.
+- Код уходит в теле (`code`) и заголовке `X-Device-Code`. Пока владелец не «принял» код в кабинете, сервер отвечает `401`.
+- Ответ принимается, только если `success == true` и `code` в ответе равен своему коду. Иначе ответ отбрасывается (звук, вибрация и `nextInterval` не применяются, пауза 300 с).
+- Сейчас в `secrets.h` стоит заглушка `12345678`: замените на собственные 8 цифр ошейника.
 
-## Запрос
+## Подключение (пины приняты по умолчанию, меняются в `include/config.h`)
 
-`POST https://<сервер>/api/v1/device/telemetry`, `Content-Type: application/json`. Код передаётся в теле (`code`); допустимо дополнительно заголовком `X-Device-Code` с тем же значением (если значения различаются, ответ `401`).
+| Компонент | Вывод модуля | Пин ESP32 | Примечание |
+|---|---|---|---|
+| GPS (NEO-6M/7M/8M) | TX | GPIO16 (RX2) | UART2, 9600 бод |
+| GPS | RX | GPIO17 (TX2) | |
+| GPS | VCC / GND | 3V3 (или 5V по модулю) / GND | проверьте питание вашего модуля |
+| Зуммер или динамик | сигнал | GPIO25 | пассивный зуммер, тон через LEDC; динамик только через усилитель |
+| Вибромотор | база NPN-транзистора через 1 кОм | GPIO26 | мотор между питанием и коллектором, обратный диод параллельно мотору |
 
-```json
-{
-  "code": "12345678",
-  "timestamp": "2026-11-09T08:15:30Z",
-  "latitude": 43.65012,
-  "longitude": 51.15731,
-  "accuracy": 6.5,
-  "signal": -71,
-  "speedKmh": 1.2
-}
+Пины GPS и зуммера-вибромотора не подтверждены железом: это допущение, пока нет схемы платы.
+
+## Что делает прошивка
+
+1. Подключается к Wi-Fi (STA) и синхронизирует время по NTP (нужно для TLS и поля `timestamp`).
+2. Ждёт GPS-фикс до 15 с. Точность `accuracy` = HDOP × 5 м (допущение).
+3. Если фикса нет, но позиция уже была: шлёт последнюю известную позицию с `accuracy` 999 м. Сервер считает зону `UNKNOWN` (исполнительные устройства выключены) и создаёт оповещение `GPS_LOST`. Если позиции не было ни разу, ничего не шлёт (поля координат обязательны) и повторяет через 30 с.
+4. `POST https://qamqor-api.onrender.com/api/v1/device/telemetry`, таймаут 30 с (холодный старт Render free).
+5. Успех: сначала звуковой сигнал (3 коротких на `toneFrequencyHz`), затем вибрация `vibrateDurationMs` (не дольше 5 с); команды `TEST_SOUND` и `TEST_VIBRATION` тоже выполняются. Следующий пинг через `nextInterval` сервера, ограничено 5…3600 с (по умолчанию 300 с; в зоне побега сервер сокращает интервал, значение по умолчанию на сервере 60 с).
+6. Ошибки (исполнительные устройства не включаются): `401` повтор через 300 с; `400` через 60 с; `429` через `retryAfterSec`; `5xx` и сетевые сбои с нарастающей паузой 10, 20, 40 … 300 с.
+
+Лог в Serial (115200) на обычном тексте. Пароль Wi-Fi не печатается (`********`).
+
+## Настройка secrets.h
+
+```
+copy include\secrets.example.h include\secrets.h     (Windows)
+cp include/secrets.example.h include/secrets.h       (Linux/macOS)
 ```
 
-Обязательные поля: `code`, `timestamp` (ISO 8601 с часовым поясом; не старше 10 минут и не позже +2 минут от времени сервера), `latitude`, `longitude`, `accuracy` (метры). Необязательные: `signal` (RSSI, −130…0), `speedKmh` (0–300), `hdop` (0–99), `satellites` (0–64). Других полей быть не должно (`400`).
+Заполните `WIFI_SSID`, `WIFI_PASS`, `DEVICE_CODE`. Файл в `.gitignore`, не коммитьте его и не копируйте пароль в другие файлы. Внимание: `secrets.h` с реальными значениями уже лежит у вас локально, в репозиторий он не попадёт.
 
-## Ответ (успех, HTTP 200)
+## Прошивка: PlatformIO
 
-```json
-{
-  "success": true,
-  "code": "12345678",
-  "serverTime": "2026-11-09T08:15:31.204Z",
-  "nextInterval": 300,
-  "configVersion": 1,
-  "inFence": true,
-  "zone": "YELLOW",
-  "distanceToBorderMeters": 14.3,
-  "toneFrequencyHz": 1124,
-  "sound": true,
-  "vibrate": false,
-  "vibrateDurationMs": 0,
-  "suppressedBy": null,
-  "warningMessage": "Zone YELLOW: warning, 14.3 m to the border. Sound signal (1124 Hz)."
-}
+```
+pip install platformio
+cd esp
+pio run                 # сборка
+pio run -t upload       # прошивка (плата по USB)
+pio device monitor      # лог, 115200
 ```
 
-Поля команды: `zone` (`GREEN`, `YELLOW`, `ORANGE`, `RED`, `ESCAPE`, `UNKNOWN`), `sound`, `toneFrequencyHz`, `vibrate`, `vibrateDurationMs`, `nextInterval` (секунды до следующего пинга; в зоне побега сервер сокращает его), необязательный `command` (`{id, type: "TEST_SOUND" | "TEST_VIBRATION"}`).
+## Прошивка: Arduino IDE
 
-**Правило приёма:** прошивка принимает ответ только если `code` в ответе равен её собственному коду. Иначе ответ отбрасывается целиком (звук и вибрация не включаются, `nextInterval` не применяется).
+1. Установите поддержку плат ESP32 (Boards Manager, пакет «esp32 by Espressif», версия 2.0.x; код использует API LEDC ядра 2.x).
+2. Library Manager: установите `TinyGPSPlus` (Mikal Hart) и `ArduinoJson` (версия 7.x).
+3. Создайте папку скетча `qamqor/` и положите в неё: `src/main.cpp` как `qamqor.ino`, а также `src/*.cpp`, `src/*.h`, `include/config.h`, `include/secrets.h` (все в одну папку).
+4. Плата: «ESP32 Dev Module», выберите порт, Upload; Serial Monitor 115200.
 
-## Ответ (ошибка)
+## Корневой сертификат (TLS)
 
-Тело ошибки тоже содержит `code` (код запроса, либо `null`, если в запросе нет корректного 8-значного кода); вид ошибки лежит в `error`:
+Сервер проверяется по корневому сертификату в `src/certs.h`. Цепочка `qamqor-api.onrender.com` (проверено 2026-11-09 командой `openssl s_client`): `onrender.com` ← Google Trust Services `WE1` ← **GTS Root R4** (самоподписанный, действует до **2036-06-22**). Проверка только по этому корню прошла (`openssl s_client -CAfile`, код 0).
 
-```json
-{ "statusCode": 401, "code": "12345678", "error": "UNAUTHENTICATED", "message": "Invalid device credentials" }
+Если связь падает с ошибкой сертификата (Render сменил цепочку):
+
+```
+openssl s_client -connect qamqor-api.onrender.com:443 -servername qamqor-api.onrender.com -showcerts
 ```
 
-| HTTP | Значение | Что делает прошивка |
-|---|---|---|
-| 401 | код не принят владельцем или некорректен | не повторять часто; повторить через `NORMAL_PING_INTERVAL` (300 с) |
-| 400 | неверное тело или `timestamp` | исправить данные; проверить время (NTP) |
-| 429 | слишком частые запросы (до 30 в минуту на код) | подождать `retryAfterSec` |
-| 5xx | сбой сервера | повторить с нарастающей паузой |
+Возьмите самоподписанный корень, под которым стоит цепочка (его можно скачать у издателя ЦС), и замените PEM в `src/certs.h`. Отключать проверку сертификата нельзя.
 
-При любой ошибке исполнительные устройства не включаются.
+## Что не проверено
+
+- Работа на реальной плате с GPS, зуммером и мотором.
+- Реальный обмен с сервером (код должен быть принят владельцем в кабинете).
+- Пины и схема питания приняты как допущение.
 
 ## Известный риск
 
 8-значный код не секрет: тот, кто знает принятый код, может отправлять ложные позиции этого ошейника. Перебор замедлен лимитом запросов (10^8 вариантов). Усиление позже без поломки прошивок: необязательный секрет или HMAC тела.
+
+### If the Windows user folder has Cyrillic in its name
+
+PlatformIO does not build from a path with non-Latin letters ("Arduino.h not found"). Point its folder at a Latin path:
+
+```bash
+set PLATFORMIO_CORE_DIR=C:\pio_core
+pio run -t upload
+```

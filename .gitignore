@@ -42,3 +42,7 @@ app/ios/
 app/.expo/
 *.apk
 *.tmp
+
+# ESP firmware secrets and build output
+esp/include/secrets.h
+esp/.pio/
