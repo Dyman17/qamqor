@@ -3,6 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { loadAppConfig } from '../config/config';
 
+/** An unclaimed device with no ping for this long is removed. */
+export const UNCLAIMED_TTL_DAYS = 7;
+
 /** Postgres advisory lock key: only one server instance runs a tick at a time. */
 export const OFFLINE_WATCHER_LOCK_KEY = 727301;
 
@@ -31,12 +34,26 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
     }
     this.timer = setInterval(() => {
       this.tick().catch((e) => this.logger.error(`offline watcher tick failed: ${e?.message}`));
+      this.purgeUnclaimed().catch((e) => this.logger.error(`unclaimed purge failed: ${e?.message}`));
     }, cfg.offlineCheckIntervalSec * 1000);
     this.timer.unref();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /** Deletes never-claimed devices (and, by cascade, their telemetry) silent for UNCLAIMED_TTL_DAYS. */
+  async purgeUnclaimed(now: Date = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - UNCLAIMED_TTL_DAYS * 24 * 3600_000);
+    const r = await this.prisma.device.deleteMany({
+      where: {
+        farmId: null,
+        isSimulated: false,
+        OR: [{ lastHeartbeatAt: { lt: cutoff } }, { lastHeartbeatAt: null, createdAt: { lt: cutoff } }],
+      },
+    });
+    return r.count;
   }
 
   /**

@@ -14,7 +14,9 @@ function makePrisma() {
     device: {
       findUnique: jest.fn(async ({ where }: any) => rows.find((r) => r.deviceId === where.deviceId) ?? null),
       findFirst: jest.fn(async ({ where }: any) =>
-        where.OR
+        where.id
+          ? rows.find((r) => r.id === where.id) ?? null
+          : where.OR
           ? rows.find((r) => where.OR.some((c: any) => Object.entries(c).every(([k, v]) => r[k] === v))) ?? null
           : rows.find((r) => r.deviceId === where.deviceId && r.farmId === where.farmId) ?? null,
       ),
@@ -25,6 +27,11 @@ function makePrisma() {
         return r;
       }),
       update: jest.fn(async ({ where, data }: any) => Object.assign(rows.find((r) => r.id === where.id), data)),
+      updateMany: jest.fn(async ({ where, data }: any) => {
+        const r = rows.find((x) => x.id === where.id && x.farmId === where.farmId);
+        if (r) Object.assign(r, data);
+        return { count: r ? 1 : 0 };
+      }),
     },
   };
 }
@@ -92,5 +99,16 @@ describe('DevicesService', () => {
     expect(toCollarDto({ deviceId: 'a', animal: null }).status).toBe('UNASSIGNED');
     expect(toCollarDto({ deviceId: 'a', animal: { id: 'x', name: 'n' }, lastHeartbeatAt: null }).status).toBe('OFFLINE');
     expect(toCollarDto({ deviceId: 'a', animal: { id: 'x', name: 'n' }, lastHeartbeatAt: new Date() }).status).toBe('ONLINE');
+  });
+
+  it('claiming a code that pinged before attaches the unclaimed device and keeps it (no 409)', async () => {
+    const prisma = makePrisma();
+    prisma.rows.push({ id: 'u1', deviceId: 'QAM-87654321', code: '87654321', farmId: null, animal: null, lastHeartbeatAt: new Date(), signal: null });
+    const svc = new DevicesService(prisma as any);
+    const res: any = await svc.registerDevice('u', 'f', { code: '87654321' } as any);
+    expect(res.collar.deviceId).toBe('QAM-87654321');
+    expect(prisma.rows).toHaveLength(1);
+    expect(prisma.rows[0].farmId).toBe('f');
+    await expect(svc.registerDevice('u', 'other', { code: '87654321' } as any)).rejects.toThrow(ConflictException);
   });
 });

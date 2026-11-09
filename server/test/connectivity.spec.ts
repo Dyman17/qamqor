@@ -275,3 +275,16 @@ describe('signal limits', () => {
     expect(calls.some((w: any) => 'status' in w)).toBe(false);
   });
 });
+
+describe('OfflineWatcherService.purgeUnclaimed', () => {
+  it('deletes only unclaimed, non-simulated devices silent for 7 days', async () => {
+    const deleteMany = jest.fn(async () => ({ count: 2 }));
+    const w = new OfflineWatcherService({ device: { deleteMany } } as any, {} as any);
+    const now = new Date('2026-11-20T00:00:00Z');
+    expect(await w.purgeUnclaimed(now)).toBe(2);
+    const where = (deleteMany.mock.calls[0] as any)[0].where;
+    expect(where).toMatchObject({ farmId: null, isSimulated: false });
+    expect(where.OR[0].lastHeartbeatAt.lt).toEqual(new Date('2026-11-13T00:00:00Z'));
+    expect(where.OR[1]).toMatchObject({ lastHeartbeatAt: null });
+  });
+});

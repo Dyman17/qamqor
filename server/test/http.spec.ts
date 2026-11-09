@@ -18,6 +18,8 @@ const device = { id: 'd1', deviceId: 'QAM-12345678', code: CODE, farmId: 'f1', f
 const fakePrisma = {
   device: {
     findUnique: jest.fn(async ({ where }: any) => (where.code === CODE ? device : null)),
+    count: jest.fn(async () => 0),
+    create: jest.fn(async ({ data }: any) => ({ id: 'n', farmId: null, farm: null, animal: null, ...data })),
   },
 };
 const telemetry = { processDeviceTelemetry: jest.fn(async () => ({ success: true, zone: 'GREEN', nextInterval: 300 })) };
@@ -99,28 +101,30 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
     expect(ok.headers.get('access-control-allow-origin')).toBe('https://ok.example');
   });
 
-  it('telemetry: no code + invalid body -> 401 (identification precedes validation, no schema leak)', async () => {
+  it('telemetry: no code + invalid body -> 400 with code null (identification precedes validation, no schema leak)', async () => {
     const r = await post({ junk: true });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(400);
     const body: any = await r.json();
-    expect(body).toMatchObject({ statusCode: 401, error: 'UNAUTHENTICATED', message: 'Invalid device credentials', code: null });
+    expect(body).toMatchObject({ statusCode: 400, error: 'VALIDATION', code: null });
     expect(JSON.stringify(body)).not.toMatch(/latitude|timestamp|must be|should not exist/i);
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
   });
 
-  it('telemetry: unknown code -> 401, the error JSON carries the request code, nothing is processed', async () => {
+  it('telemetry: unknown well-formed code is accepted (open acceptance) and echoed', async () => {
     const r = await post({ ...ping, code: '87654321' });
-    expect(r.status).toBe(401);
-    expect(await r.json()).toMatchObject({ statusCode: 401, code: '87654321', error: 'UNAUTHENTICATED' });
-    expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ success: true, code: '87654321' });
+    expect(fakePrisma.device.create).toHaveBeenCalledTimes(1);
   });
 
-  it('telemetry: a code that is not 8 digits is rejected like an unknown one', async () => {
+  it('telemetry: a code that is not 8 digits -> 400 with code null', async () => {
     for (const c of ['1234567', '123456789', 'abcdefgh', '1234 678']) {
       const r = await post({ ...ping, code: c });
-      expect(r.status).toBe(401);
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as any).code).toBeNull();
     }
     expect(telemetry.processDeviceTelemetry).not.toHaveBeenCalled();
+    expect(fakePrisma.device.create).not.toHaveBeenCalled();
   });
 
   it('telemetry: claimed code + invalid body -> 400 that still carries the code', async () => {
@@ -145,9 +149,9 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
     expect(((await r.json()) as any).code).toBe(CODE);
   });
 
-  it('telemetry: body code and header code that disagree -> 401', async () => {
+  it('telemetry: body code and header code that disagree -> 400', async () => {
     const r = await post(ping, { 'x-device-code': '87654321' });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(400);
   });
 
   it('telemetry: unknown extra field -> 400 (code still echoed)', async () => {

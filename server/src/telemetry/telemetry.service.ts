@@ -260,6 +260,8 @@ export class TelemetryService {
               : 'Zone UNKNOWN: no boundary is set for this animal. No signals.';
     }
 
+    if (!device.farmId) warningMessage = 'Device not claimed yet';
+
     if (suppressedBy) warningMessage += ' Some signals are suppressed by the daily limit.';
 
     // Deliver at most one queued test signal per ping (once only).

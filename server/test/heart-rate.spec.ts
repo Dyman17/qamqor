@@ -116,3 +116,15 @@ describe('heart rate and mode', () => {
     });
   });
 });
+
+describe('unclaimed device telemetry', () => {
+  it('stores the ping, replies UNKNOWN/REAL with the not-claimed message, no signals', async () => {
+    const { svc, prisma } = setup('REAL');
+    const un = { id: 'u1', deviceId: 'QAM-87654321', code: '87654321', farmId: null, farm: null, animal: null };
+    const res: any = await svc.processDeviceTelemetry(un, { ...dto({ heartRate: 70 }), deviceId: 'QAM-87654321' });
+    expect(res).toMatchObject({ success: true, mode: 'REAL', zone: 'UNKNOWN', sound: false, vibrate: false, nextInterval: 300, warningMessage: 'Device not claimed yet' });
+    expect(prisma.telemetry.create.mock.calls[0][0].data).toMatchObject({ deviceId: 'QAM-87654321', heartRate: 70 });
+    expect(prisma.device.update).toHaveBeenCalled();
+    expect(prisma.animal.update).not.toHaveBeenCalled();
+  });
+});

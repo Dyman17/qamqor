@@ -91,9 +91,11 @@ export class DevicesService {
     // Same answer whichever farm owns the code or id: do not reveal ownership.
     const existing = await this.prisma.device.findFirst({
       where: { OR: [{ deviceId }, ...(code ? [{ code }] : [])] },
-      select: { id: true },
+      select: { id: true, farmId: true, code: true },
     });
-    if (existing) throw new ConflictException('Устройство с таким кодом уже зарегистрировано');
+    // An unclaimed device (created by its first ping) is attached to this farm, history kept.
+    const claimable = !!(existing && code && existing.farmId === null && existing.code === code);
+    if (existing && !claimable) throw new ConflictException('Устройство с таким кодом уже зарегистрировано');
 
     if (dto.animalId) {
       const animal = await this.prisma.animal.findFirst({ where: { id: dto.animalId, farmId } });
@@ -105,7 +107,14 @@ export class DevicesService {
     const deviceSecret = generateDeviceSecret();
     let created: any;
     try {
-      created = await this.prisma.device.create({
+      if (claimable) {
+        const r = await this.prisma.device.updateMany({
+          where: { id: existing!.id, farmId: null },
+          data: { farmId, animalId: dto.animalId },
+        });
+        if (r.count !== 1) throw new ConflictException('Устройство с таким кодом уже зарегистрировано');
+        created = await this.prisma.device.findFirst({ where: { id: existing!.id }, select: COLLAR_SELECT });
+      } else created = await this.prisma.device.create({
         data: {
           deviceId,
           code,
