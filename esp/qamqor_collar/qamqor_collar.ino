@@ -81,6 +81,7 @@ struct ActuatorCommand {
   bool has;
   uint16_t speakerHz;
   uint16_t speakerMs;
+  uint16_t speakerVolume;
   uint16_t buzzerMs;
   uint16_t vibrateMs;
 };
@@ -88,11 +89,12 @@ struct ActuatorCommand {
 // ---------- Разделяемое состояние между ядрами FreeRTOS ----------
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static Snapshot g_snap = {false, false, 0, 0, ACCURACY_NO_FIX_M, 0, -1, -1, 0};
-static ActuatorCommand g_pending = {false, 0, 0, 0, 0};
+static ActuatorCommand g_pending = {false, 0, 0, 0, 0, 0};
 
 // Времена автоматического выключения каждого актуатора (мс)
 static uint32_t g_speakerOffMs = 0;
 static uint16_t g_speakerHz = 0;
+static uint16_t g_speakerVolume = AUDIO_AMPLITUDE;
 static uint32_t g_buzzerOffMs = 0;
 static uint32_t g_vibratorOffMs = 0;
 
@@ -200,7 +202,7 @@ static void audioPump() {
 
   float inc = 2.0f * PI * (float)g_speakerHz / AUDIO_RATE;
   for (int i = 0; i < 128; i++) {
-    g_abuf[i] = (int16_t)(sinf(g_aphase) * AUDIO_AMPLITUDE);
+    g_abuf[i] = (int16_t)(sinf(g_aphase) * (float)g_speakerVolume);
     g_aphase += inc;
     if (g_aphase > 2.0f * PI) g_aphase -= 2.0f * PI;
   }
@@ -222,8 +224,9 @@ static void applyActuators() {
   if (cmd.has) {
     if (cmd.speakerMs > 0 && cmd.speakerHz > 0) {
       g_speakerHz = cmd.speakerHz;
+      g_speakerVolume = cmd.speakerVolume > 0 ? cmd.speakerVolume : AUDIO_AMPLITUDE;
       g_speakerOffMs = now + cmd.speakerMs;
-      Serial.printf("[act] Левый динамик: %d Гц, %d мс\n", cmd.speakerHz, cmd.speakerMs);
+      Serial.printf("[act] Левый динамик: %d Гц, %d мс, громкость %u\n", cmd.speakerHz, cmd.speakerMs, g_speakerVolume);
     }
     if (cmd.buzzerMs > 0) {
       g_buzzerOffMs = now + cmd.buzzerMs;
@@ -339,7 +342,7 @@ static void sendTelemetry() {
   if (strcmp(rcode, DEVICE_CODE) != 0) return;
 
   // ---------- Разбор указаний сервера ----------
-  ActuatorCommand cmd = {false, 0, 0, 0, 0};
+  ActuatorCommand cmd = {false, 0, 0, 0, 0, 0};
 
   // 1. Команды тестирования
   const char *ctype = res["command"]["type"] | "";
@@ -347,6 +350,7 @@ static void sendTelemetry() {
     cmd.has = true;
     cmd.speakerHz = 1200;
     cmd.speakerMs = 800; // Левый динамик
+    cmd.speakerVolume = AUDIO_AMPLITUDE;
   } else if (!strcmp(ctype, "TEST_BUZZER")) {
     cmd.has = true;
     cmd.buzzerMs = 500;  // Правый зуммер
@@ -355,9 +359,10 @@ static void sendTelemetry() {
     cmd.vibrateMs = 1000; // Вибрация
   }
 
-  // 2. Прямые миллисекунды от сервера (если сервер передал)
+  // 2. Прямые параметры от сервера (громкость, длительности, частоты)
   int spkMs = res["speakerMs"] | 0;
   int spkHz = res["speakerHz"] | 0;
+  int spkVol = res["speakerVolume"] | 0;
   int buzMs = res["buzzerMs"] | 0;
   int vibMs = res["vibrateMs"] | 0;
 
@@ -365,6 +370,11 @@ static void sendTelemetry() {
     cmd.has = true;
     cmd.speakerHz = constrain(spkHz, 100, 3000);
     cmd.speakerMs = min(spkMs, 5000);
+    if (spkVol > 0) {
+      cmd.speakerVolume = (spkVol <= 100) ? (uint16_t)(spkVol * 300) : (uint16_t)constrain(spkVol, 500, 32000);
+    } else {
+      cmd.speakerVolume = AUDIO_AMPLITUDE;
+    }
   }
   if (buzMs > 0) {
     cmd.has = true;
