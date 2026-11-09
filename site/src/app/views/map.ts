@@ -293,6 +293,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   const panel = $('#panel', el)!;
   const toggle = $('#sheet-toggle', el)!;
   toggle.addEventListener('click', () => {
+    if ('vibrate' in navigator) { try { navigator.vibrate([15]); } catch {} }
     const order = ['peek', 'half', 'full'];
     const next = order[(order.indexOf(panel.dataset.sheet!) + 1) % 3];
     panel.dataset.sheet = next;
@@ -337,6 +338,33 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     void reload().catch(() => undefined);
   });
 
+  // Live SSE stream for instant sub-second animal movements and pulse on the tactical map
+  let mapEventSource: EventSource | null = null;
+  try {
+    mapEventSource = new EventSource('/api/v1/device/stream');
+    mapEventSource.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'telemetry' && (msg.animalId || msg.deviceId)) {
+          const target = animals.find((x) => (msg.animalId && x.id === msg.animalId) || (msg.deviceId && x.collarId === msg.deviceId));
+          if (target) {
+            if (msg.latitude != null && msg.longitude != null) {
+              target.lat = msg.latitude;
+              target.lng = msg.longitude;
+            }
+            if (msg.accuracyM != null) target.accuracyM = msg.accuracyM;
+            if (msg.heartRate != null) target.lastHeartRate = msg.heartRate;
+            if (msg.pulseThreat) target.pulseThreat = msg.pulseThreat;
+            if (msg.lastSeenAt) target.lastSeenAt = msg.lastSeenAt;
+
+            if (selected === target.id) drawPanel();
+            renderMarkers();
+          }
+        }
+      } catch {}
+    };
+  } catch {}
+
   // live positions: 3 s in REAL and demo modes for real-time tracking without manual refresh
   const tick = async () => {
     if (!document.hidden && !disposed) {
@@ -354,6 +382,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
 
   return () => {
     disposed = true;
+    if (mapEventSource) mapEventSource.close();
     demo.dispose();
     stopSim();
     timers.forEach((x) => { window.clearTimeout(x); window.clearInterval(x); });

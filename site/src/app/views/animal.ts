@@ -243,9 +243,10 @@ export const mount: AppView['mount'] = (el, ctx) => {
       } catch {}
     }, 1000);
 
-    // 3. Обработчики ручного управления ошейником (Оператор)
+    // 3. Обработчики ручного управления ошейником (Оператор) с тактильным виброоткликом (Haptic Feedback)
     const triggerSignal = async (signal: 'SPEAKER' | 'BUZZER' | 'VIBRATION', btn: HTMLButtonElement) => {
       if (!a.collarId) return;
+      if ('vibrate' in navigator) { try { navigator.vibrate([35]); } catch {} }
       const statusEl = $('#cmd-status', el);
       btn.disabled = true;
       if (statusEl) {
@@ -254,6 +255,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       }
       try {
         await post(`/devices/${encodeURIComponent(a.collarId)}/test-signal`, { signal });
+        if ('vibrate' in navigator) { try { navigator.vibrate([20, 60, 20]); } catch {} }
         if (statusEl) {
           statusEl.textContent = t('a.animal.cmdSent');
           statusEl.style.color = 'var(--ok, #16a34a)';

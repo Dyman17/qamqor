@@ -43,6 +43,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     $('#more', list)?.addEventListener('click', () => void load(false));
     $$('[data-set]', list).forEach((b) => b.addEventListener('click', async () => {
       const id = b.closest<HTMLElement>('[data-id]')!.dataset.id!;
+      if ('vibrate' in navigator) { try { navigator.vibrate([25]); } catch {} }
       b.setAttribute('aria-busy', 'true');
       try {
         await patch<AlertDto>(`/alerts/${id}/status`, { status: b.dataset.set });
