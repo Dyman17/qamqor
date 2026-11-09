@@ -128,35 +128,12 @@ export const mount: AppView['mount'] = (el, ctx) => {
             <h2 class="title-2" id="h-pulse" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('heartbeat', 20))} ${t('a.animal.pulse')}</h2>
             <div id="pulse-threat-wrap">${pulseThreatBadge(a.pulseThreat)}</div>
           </div>
-          <p class="num font-mono" id="pulse-val" style="font-size:2.4rem;font-weight:700;letter-spacing:-0.03em;margin:0.25rem 0;">${pi.val}</p>
+          <p class="num font-mono" id="pulse-val" style="font-size:2.8rem;font-weight:700;letter-spacing:-0.03em;margin:0.25rem 0;">${pi.val}</p>
           <p class="muted" id="pulse-sub">${pi.sub}</p>
           <div id="pulse-details">${threatDetails(a)}</div>
         </section>
 
-        <!-- 2. Автоматический контроль (Геозона · модель Halter) -->
-        <section class="panel-block" aria-labelledby="h-auto">
-          <h2 class="title-2" id="h-auto" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('map-trifold', 20))} ${t('a.animal.autoControl')}</h2>
-          <p class="caption muted">${t('a.animal.autoDesc')}</p>
-          <div style="margin:0.6rem 0;" id="zone-wrap">${zoneBadge(null, a.status !== 'danger')}</div>
-          <p style="margin-bottom:0.4rem;"><strong>${t('a.animal.pen')}:</strong> ${pen ? html`<a href="/app/map?pen=${pen.id}">${pen.name}</a>` : t('a.herd.noPen')}</p>
-          <div id="sig-limits" class="caption muted" style="padding-top:0.4rem;border-top:1px solid var(--border-subtle,#333);">
-            ${sig ? html`<span>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)}) · ${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</span>` : html`<span>${t('a.animal.signals')}: —</span>`}
-          </div>
-        </section>
-
-        <!-- 3. Ручное управление ошейником (Оператор) -->
-        <section class="panel-block" aria-labelledby="h-manual">
-          <h2 class="title-2" id="h-manual" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('gear-six', 20))} ${t('a.animal.manualControl')}</h2>
-          <p class="caption muted">${t('a.animal.manualDesc')}</p>
-          <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-spk" ${!a.collarId ? raw('disabled') : ''} data-write style="display:flex;align-items:center;gap:0.35rem;">${raw(icon('speaker-high', 16))} ${t('a.animal.spkBtn')}</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-buz" ${!a.collarId ? raw('disabled') : ''} data-write style="display:flex;align-items:center;gap:0.35rem;">${raw(icon('bell-ringing', 16))} ${t('a.animal.buzBtn')}</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-vib" ${!a.collarId ? raw('disabled') : ''} data-write style="display:flex;align-items:center;gap:0.35rem;">${raw(icon('vibrate', 16))} ${t('a.animal.vibBtn')}</button>
-          </div>
-          <p class="caption muted" id="cmd-status" role="status" style="margin-top:0.5rem;min-height:1.2rem;"></p>
-        </section>
-
-        <!-- 4. Положение и привязка ошейника (GPS & Device) -->
+        <!-- 2. Положение и привязка ошейника (GPS & Device) -->
         <section class="panel-block" aria-labelledby="h-pos">
           <h2 class="title-2" id="h-pos" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('crosshair-simple', 20))} ${t('a.animal.position')}</h2>
           <p class="num" id="pos-val">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
@@ -164,6 +141,45 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid var(--border-subtle,#333);display:flex;justify-content:space-between;align-items:center;">
             <span id="col-val"><strong>${t('a.animal.collar')}:</strong> ${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</span>
             ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}
+          </div>
+        </section>
+
+        <!-- 3. Единый блок управления: СМЕНА РЕЖИМОВ (Автоматический / Ручной) -->
+        <section class="panel-block" id="ctrl-mode-card" style="grid-column: 1 / -1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-2);">
+            <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
+            <!-- Переключатель режимов -->
+            <div class="tabs" role="tablist" style="margin:0;gap:4px;">
+              <button type="button" class="tab" id="mode-tab-auto" role="tab" aria-current="true" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+                ${raw(icon('map-trifold', 18))} ${t('a.animal.modeAuto')}
+              </button>
+              <button type="button" class="tab" id="mode-tab-manual" role="tab" aria-current="false" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+                ${raw(icon('speaker-high', 18))} ${t('a.animal.modeManual')}
+              </button>
+            </div>
+          </div>
+
+          <!-- Режим 1: Автоматический (Геозона) -->
+          <div id="mode-content-auto" style="display:block;">
+            <p class="caption muted">${t('a.animal.modeAutoHint')}</p>
+            <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin:0.75rem 0;">
+              <div id="zone-wrap">${zoneBadge(null, a.status !== 'danger')}</div>
+              <div><strong>${t('a.animal.pen')}:</strong> ${pen ? html`<a href="/app/map?pen=${pen.id}">${pen.name}</a>` : t('a.herd.noPen')}</div>
+            </div>
+            <div id="sig-limits" class="caption muted" style="padding-top:0.6rem;border-top:1px solid var(--border-subtle,#333);">
+              ${sig ? html`<span>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)}) · ${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</span>` : html`<span>${t('a.animal.signals')}: —</span>`}
+            </div>
+          </div>
+
+          <!-- Режим 2: Ручное управление (Оператор) -->
+          <div id="mode-content-manual" style="display:none;">
+            <p class="caption muted">${t('a.animal.modeManualHint')}</p>
+            <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-spk" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('speaker-high', 18))} ${t('a.animal.spkBtn')}</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-buz" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('bell-ringing', 18))} ${t('a.animal.buzBtn')}</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-vib" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('vibrate', 18))} ${t('a.animal.vibBtn')}</button>
+            </div>
+            <p class="caption muted font-mono" id="cmd-status" role="status" style="margin-top:0.5rem;min-height:1.2rem;"></p>
           </div>
         </section>
       </div>
@@ -282,6 +298,38 @@ export const mount: AppView['mount'] = (el, ctx) => {
     if (btnSpk) btnSpk.addEventListener('click', () => void triggerSignal('SPEAKER', btnSpk));
     if (btnBuz) btnBuz.addEventListener('click', () => void triggerSignal('BUZZER', btnBuz));
     if (btnVib) btnVib.addEventListener('click', () => void triggerSignal('VIBRATION', btnVib));
+
+    // 4. Переключатель режимов: Автоматический (Геозона) <-> Ручной (Оператор)
+    const tabAuto = $<HTMLButtonElement>('#mode-tab-auto', el);
+    const tabManual = $<HTMLButtonElement>('#mode-tab-manual', el);
+    const contentAuto = $('#mode-content-auto', el);
+    const contentManual = $('#mode-content-manual', el);
+
+    const setMode = (m: 'AUTO' | 'MANUAL') => {
+      if ('vibrate' in navigator) { try { navigator.vibrate([18]); } catch {} }
+      try { localStorage.setItem('qamqor_ctrl_mode_' + id, m); } catch {}
+      if (tabAuto && tabManual && contentAuto && contentManual) {
+        if (m === 'AUTO') {
+          tabAuto.setAttribute('aria-current', 'true');
+          tabManual.setAttribute('aria-current', 'false');
+          contentAuto.style.display = 'block';
+          contentManual.style.display = 'none';
+        } else {
+          tabAuto.setAttribute('aria-current', 'false');
+          tabManual.setAttribute('aria-current', 'true');
+          contentAuto.style.display = 'none';
+          contentManual.style.display = 'block';
+        }
+      }
+    };
+
+    try {
+      const saved = localStorage.getItem('qamqor_ctrl_mode_' + id);
+      if (saved === 'MANUAL') setMode('MANUAL');
+    } catch {}
+
+    tabAuto?.addEventListener('click', () => setMode('AUTO'));
+    tabManual?.addEventListener('click', () => setMode('MANUAL'));
 
     $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true })));
     $('#remove')!.addEventListener('click', async () => {
