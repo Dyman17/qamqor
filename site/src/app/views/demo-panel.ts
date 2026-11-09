@@ -15,8 +15,10 @@ export interface DemoHost {
   refresh(): Promise<void>;
   /** Next map click delivers [lng, lat]; `null` turns picking off. */
   setPick(handler: ((lng: number, lat: number) => void) | null): void;
-  /** The demo animal whose marker may be dragged (MANUAL only), or null. */
-  setDrag(id: string | null, onDrop: (lng: number, lat: number) => void): void;
+  /** Every demo marker may be dragged (MANUAL, owner). */
+  setDrag(on: boolean, onDrop: (id: string, lng: number, lat: number) => void): void;
+  /** Click on the empty map while a demo animal is selected on the map: place it there (null turns it off). */
+  setPlace(handler: ((id: string, lng: number, lat: number) => void) | null): void;
   select(id: string): void;
 }
 
@@ -26,7 +28,7 @@ const num = (v: string): number => Number(v.trim().replace(',', '.'));
 const fmt = (n: number): string => n.toFixed(6);
 
 /** Pilot-mode panel of the map: MANUAL (owner sets positions and events) and AUTO (server scenario). Owners only. */
-export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): void; dispose(): void } {
+export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): void; dispose(): void; select(id: string): void } {
   const farm = host.ctx.farm.id;
   let selectedId: string | null = null;
   let lat = '';
@@ -54,9 +56,25 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
     armDrag();
   }
 
+  function placeAt(id: string, x: number, y: number): void {
+    if (selectedId !== id) { selectedId = id; }
+    lat = fmt(y); lng = fmt(x);
+    void send(y, x, id);
+  }
+
   function armDrag(): void {
-    if (mode() === 'MANUAL' && selectedId) host.setDrag(selectedId, (x, y) => { lat = fmt(y); lng = fmt(x); void send(y, x); });
-    else host.setDrag(null, () => undefined);
+    const on = mode() === 'MANUAL' && host.ctx.isOwner;
+    host.setDrag(on, placeAt);
+    host.setPlace(on ? placeAt : null);
+  }
+
+  /** One click puts an animal that has no position yet into its pen (centre), from where it can be dragged. */
+  function placeOffMap(id: string): void {
+    const pen = penOf(id);
+    if (!pen) { error = t('a.demo.noPen'); render(true); return; }
+    const c = ringCentroid(pen);
+    placeAt(id, c[0], c[1]);
+    host.select(id);
   }
 
   async function guarded(fn: () => Promise<void>): Promise<void> {
@@ -68,9 +86,9 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
 
   const refreshAll = async (): Promise<void> => { await host.refresh(); host.ctx.refreshChrome(); };
 
-  async function send(la: number, lo: number): Promise<void> {
-    if (!selectedId) return;
-    const id = selectedId;
+  async function send(la: number, lo: number, animalId?: string): Promise<void> {
+    const id = animalId ?? selectedId;
+    if (!id) return;
     await guarded(async () => {
       const r = await simApi.telemetry(farm, { animalId: id, lat: la, lng: lo });
       result = collarResponseText(r);
@@ -123,7 +141,10 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
 
   function manualHtml(): Safe {
     const list = demoAnimals();
+    const off = list.filter((a) => a.lat == null || a.lng == null);
     return html`
+      <p class="demo-hint">${t('a.demo.hint')}</p>
+      ${off.length ? html`<fieldset class="demo-set"><legend>${t('a.demo.offMap')}</legend><ul class="off-list">${off.map((a) => html`<li><span>${a.name} · ${a.tag}</span><button type="button" class="btn btn-secondary btn-sm" data-place="${a.id}">${t('a.demo.placeOne')}</button></li>`)}</ul></fieldset>` : ''}
       <div class="field"><label for="d-an">${t('a.demo.animal')}</label>
         <select class="select" id="d-an">${list.length ? '' : html`<option value="">${t('a.demo.noAnimals')}</option>`}${list.map((a) => html`<option value="${a.id}" ${a.id === selectedId ? raw('selected') : ''}>${a.name} · ${a.tag}</option>`)}</select></div>
       <fieldset class="demo-set"><legend>${t('a.demo.pos')}</legend>
@@ -173,7 +194,7 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
     const s = sim();
     const show = host.ctx.isOwner && !!s && s.dataMode !== 'REAL';
     box.hidden = !show;
-    if (!show) { box.innerHTML = ''; stopPick(); host.setDrag(null, () => undefined); lastKey = ''; return; }
+    if (!show) { box.innerHTML = ''; stopPick(); host.setDrag(false, () => undefined); host.setPlace(null); lastKey = ''; return; }
     if (!selectedId || !demoAnimals().some((a) => a.id === selectedId)) selectAnimal(demoAnimals()[0]?.id ?? null);
     const prevFocus = keepFocus ? (document.activeElement as HTMLElement | null)?.id : '';
     const manual = s!.dataMode === 'MANUAL';
@@ -213,6 +234,7 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
       });
       $('#d-border', box)?.addEventListener('click', () => step('border'));
       $('#d-out', box)?.addEventListener('click', () => step('out'));
+      $$('[data-place]', box).forEach((b) => b.addEventListener('click', () => placeOffMap(b.dataset.place!)));
       $$('[data-ev]', box).forEach((b) => b.addEventListener('click', () => void fire(b.dataset.ev as SimEvent)));
       $('#d-add', box)?.addEventListener('click', () => void guarded(async () => {
         const name = $<HTMLInputElement>('#d-name', box)!.value.trim();
@@ -266,7 +288,14 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
       window.clearInterval(countdown);
       stopSim();
       stopPick();
-      host.setDrag(null, () => undefined);
+      host.setDrag(false, () => undefined);
+      host.setPlace(null);
+    },
+    /** The map selected an animal: follow it in the panel. */
+    select(id: string): void {
+      if (id === selectedId || !demoAnimals().some((a) => a.id === id)) return;
+      selectAnimal(id);
+      if (!box.hidden && !box.contains(document.activeElement)) render();
     },
   };
 }

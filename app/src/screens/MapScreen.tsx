@@ -1,25 +1,121 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, LayoutChangeEvent } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutChangeEvent, PanResponder, Pressable, ScrollView } from 'react-native';
 import Svg, { Polygon, Text as SvgText } from 'react-native-svg';
 import { Settings as SettingsIcon } from 'lucide-react-native';
 import { useTheme, Theme } from '../theme/scale';
-import { api } from '../services/api';
+import { api, errorText } from '../services/api';
 import { useLoad } from '../state/useLoad';
 import { useSession } from '../state/session';
 import { StateBox } from '../components';
+import { Animal } from '../types';
 
 const PAD = 36;
+// default view when the farm has no pen and no positions: Aktau (assumption from the contract), ~600 x 400 m
+const DEFAULT_CENTER = { lat: 43.65, lng: 51.157 };
+const DEFAULT_HALF_LAT = 0.0018; // ~200 m
+const DEFAULT_HALF_LNG = 0.0037; // ~300 m at this latitude
 
-// NOTE: no tile/satellite map SDK is installed. Pens (GeoJSON polygons) and animals are drawn on a
-// plain canvas with an equirectangular projection fitted to their combined lat/lng bounds.
+interface Proj {
+  minLng: number;
+  maxLat: number;
+  kx: number;
+  k: number;
+  offX: number;
+  offY: number;
+}
+const project = (p: Proj, lat: number, lng: number) => ({
+  x: p.offX + (lng - p.minLng) * p.kx * p.k,
+  y: p.offY + (p.maxLat - lat) * p.k,
+});
+const unproject = (p: Proj, x: number, y: number) => ({
+  lat: p.maxLat - (y - p.offY) / p.k,
+  lng: p.minLng + (x - p.offX) / (p.kx * p.k),
+});
+
+interface MarkerProps {
+  x: number;
+  y: number;
+  label: string;
+  fill: string;
+  selected: boolean;
+  draggable: boolean;
+  maxX: number;
+  maxY: number;
+  onTap: () => void;
+  onDrop: (x: number, y: number) => void;
+  styles: ReturnType<typeof createStyles>;
+  selectedColor: string;
+  accessibilityLabel: string;
+}
+
+// A marker that follows the finger while dragged (PanResponder); a short touch is a tap.
+const DraggableMarker: React.FC<MarkerProps> = (props) => {
+  const { x, y, label, fill, selected, draggable, styles, selectedColor } = props;
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const live = useRef(props);
+  live.current = props;
+  const start = useRef({ x: 0, y: 0 });
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        start.current = { x: live.current.x, y: live.current.y };
+      },
+      onPanResponderMove: (_, g) => {
+        if (live.current.draggable) setDrag({ x: start.current.x + g.dx, y: start.current.y + g.dy });
+      },
+      onPanResponderRelease: (_, g) => {
+        const moved = Math.hypot(g.dx, g.dy) > 6;
+        setDrag(null);
+        if (live.current.draggable && moved) {
+          const nx = Math.max(0, Math.min(live.current.maxX, start.current.x + g.dx));
+          const ny = Math.max(0, Math.min(live.current.maxY, start.current.y + g.dy));
+          live.current.onDrop(nx, ny);
+        } else {
+          live.current.onTap();
+        }
+      },
+      onPanResponderTerminate: () => setDrag(null),
+    }),
+  ).current;
+
+  const px = drag ? drag.x : x;
+  const py = drag ? drag.y : y;
+  return (
+    <View
+      {...pan.panHandlers}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={props.accessibilityLabel}
+      style={[styles.marker, { left: px - 22, top: py - 22 }, drag ? { zIndex: 5 } : null]}
+    >
+      <View
+        style={[
+          styles.markerInnerOut,
+          { backgroundColor: fill },
+          selected && { borderColor: selectedColor, borderWidth: 4 },
+          draggable && drag && { transform: [{ scale: 1.4 }] },
+        ]}
+      />
+      <Text style={styles.markerText} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+};
+
 export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const t = useTheme();
-  const { colors, typography, hit, fs } = t;
+  const { colors, typography, hit, fs, spacing } = t;
   const styles = useMemo(() => createStyles(t), [t]);
-  const { farm, memberships, changeFarm } = useSession();
+  const { farm, farmId, memberships, changeFarm, dataMode, isOwner } = useSession();
   const animals = useLoad(() => api.getAnimals(), navigation);
   const pens = useLoad(() => api.getGeofences(), navigation);
   const [box, setBox] = useState({ w: 0, h: 0 });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [override, setOverride] = useState<Record<string, { x: number; y: number }>>({});
+  const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
 
   const list = animals.data ?? [];
   const counts = {
@@ -28,40 +124,82 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     offline: list.filter((a) => a.status === 'offline').length,
   };
   const online = list.length - counts.offline;
+  const pilot = dataMode === 'MANUAL' && isOwner;
+  const unplaced = pilot ? list.filter((a) => a.isDemo && (a.lat == null || a.lng == null)) : [];
+  const selected: Animal | undefined = list.find((a) => a.id === selectedId);
 
   const scene = useMemo(() => {
-    const pts: { lat: number; lng: number }[] = [];
-    const penRings = (pens.data ?? []).map((p) => {
+    if (box.w === 0 || !pens.data || !animals.data) return null;
+    const penRings = pens.data.map((p) => {
       const ring = (p.polygon?.coordinates?.[0] ?? []).map(([lng, lat]) => ({ lat, lng }));
-      pts.push(...ring);
       return { id: p.id, name: p.name, isDemo: p.isDemo, ring };
     });
     const located = list.filter((a) => a.lat != null && a.lng != null);
-    located.forEach((a) => pts.push({ lat: a.lat as number, lng: a.lng as number }));
-    if (pts.length === 0 || box.w === 0) return { pens: [], animals: [] as any[], empty: pts.length === 0 };
+    const penPts = penRings.flatMap((r) => r.ring);
 
-    const lats = pts.map((p) => p.lat);
-    const lngs = pts.map((p) => p.lng);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    // In pilot mode the view is fixed to the pens (plus a margin) so markers do not jump after a drop.
+    const pts: { lat: number; lng: number }[] = pilot && penPts.length > 0 ? [...penPts] : [...penPts];
+    if (!(pilot && penPts.length > 0)) located.forEach((a) => pts.push({ lat: a.lat as number, lng: a.lng as number }));
+    if (pts.length === 0) {
+      pts.push(
+        { lat: DEFAULT_CENTER.lat - DEFAULT_HALF_LAT, lng: DEFAULT_CENTER.lng - DEFAULT_HALF_LNG },
+        { lat: DEFAULT_CENTER.lat + DEFAULT_HALF_LAT, lng: DEFAULT_CENTER.lng + DEFAULT_HALF_LNG },
+      );
+    }
+
+    let minLat = Math.min(...pts.map((p) => p.lat));
+    let maxLat = Math.max(...pts.map((p) => p.lat));
+    let minLng = Math.min(...pts.map((p) => p.lng));
+    let maxLng = Math.max(...pts.map((p) => p.lng));
+    if (pilot) {
+      // 35 % margin on every side: room to drag an animal outside the border
+      const mLat = (maxLat - minLat || 1e-4) * 0.35;
+      const mLng = (maxLng - minLng || 1e-4) * 0.35;
+      minLat -= mLat; maxLat += mLat; minLng -= mLng; maxLng += mLng;
+    }
     const kx = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
     const spanX = Math.max((maxLng - minLng) * kx, 1e-5);
     const spanY = Math.max(maxLat - minLat, 1e-5);
     const k = Math.min((box.w - 2 * PAD) / spanX, (box.h - 2 * PAD) / spanY);
-    const offX = (box.w - spanX * k) / 2;
-    const offY = (box.h - spanY * k) / 2;
-    const proj = (p: { lat: number; lng: number }) => ({
-      x: offX + (p.lng - minLng) * kx * k,
-      y: offY + (maxLat - p.lat) * k,
-    });
+    const proj: Proj = { minLng, maxLat, kx, k, offX: (box.w - spanX * k) / 2, offY: (box.h - spanY * k) / 2 };
+
     return {
-      empty: false,
-      pens: penRings.map((r) => ({ ...r, xy: r.ring.map(proj) })),
-      animals: located.map((a) => ({ a, ...proj({ lat: a.lat as number, lng: a.lng as number }) })),
+      proj,
+      pens: penRings.map((r) => ({ ...r, xy: r.ring.map((q) => project(proj, q.lat, q.lng)) })),
+      animals: located.map((a) => ({ a, ...project(proj, a.lat as number, a.lng as number) })),
+      empty: penPts.length === 0 && located.length === 0,
     };
-  }, [pens.data, list, box.w, box.h]);
+  }, [pens.data, animals.data, list, box.w, box.h, pilot]);
 
   const onLayout = (e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
+
+  // convert a screen point to lat/lng and send it as a demo telemetry ping
+  const place = async (animalId: string, x: number, y: number) => {
+    if (!scene || !farmId) return;
+    const { lat, lng } = unproject(scene.proj, x, y);
+    setOverride((o) => ({ ...o, [animalId]: { x, y } }));
+    setNote(null);
+    try {
+      const r = await api.simTelemetry(farmId, { animalId, lat, lng });
+      setNote({ text: `Позиция отправлена: зона ${r.zone}${r.sound ? ', звук' : ''}${r.vibrate ? ', вибрация' : ''}` });
+      await animals.reload();
+    } catch (e) {
+      setNote({ text: errorText(e), error: true });
+    } finally {
+      setOverride((o) => {
+        const { [animalId]: _drop, ...rest } = o;
+        return rest;
+      });
+    }
+  };
+
+  const onCanvasPress = (e: any) => {
+    if (!pilot || !selectedId) return;
+    place(selectedId, e.nativeEvent.locationX, e.nativeEvent.locationY);
+  };
+
+  const markerFill = (a: Animal) =>
+    a.status === 'danger' ? colors.signalMap : a.status === 'offline' ? colors.offline : a.status === 'warning' ? colors.warning : colors.okDot;
 
   return (
     <View style={styles.container}>
@@ -85,8 +223,9 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       </View>
 
       <View style={styles.mapCanvas} onLayout={onLayout}>
-        <Svg width={box.w} height={box.h} style={StyleSheet.absoluteFill}>
-          {scene.pens.map((p) => (
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCanvasPress} accessibilityLabel="Карта" />
+        <Svg width={box.w} height={box.h} style={StyleSheet.absoluteFill} pointerEvents="none">
+          {(scene?.pens ?? []).map((p) => (
             <React.Fragment key={p.id}>
               <Polygon
                 points={p.xy.map((q) => `${q.x},${q.y}`).join(' ')}
@@ -103,33 +242,82 @@ export const MapScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           ))}
         </Svg>
 
-        {scene.animals.map(({ a, x, y }: any) => (
-          <TouchableOpacity
-            key={a.id}
-            style={[styles.marker, { left: x - 22, top: y - 22 }]}
-            hitSlop={hit(44)}
-            accessibilityLabel={`${a.name}`}
-            onPress={() => navigation.navigate('Profile', { animalId: a.id })}
-          >
-            <View
-              style={[
-                styles.markerInnerOut,
-                a.status === 'ok' && { backgroundColor: colors.okDot },
-                a.status === 'offline' && { backgroundColor: colors.offline },
-              ]}
+        {(scene?.animals ?? []).map(({ a, x, y }) => {
+          const o = override[a.id];
+          const canDrag = pilot && a.isDemo;
+          return (
+            <DraggableMarker
+              key={a.id}
+              x={o ? o.x : x}
+              y={o ? o.y : y}
+              label={a.isDemo ? `${a.name} (демо)` : a.name}
+              fill={markerFill(a)}
+              selected={a.id === selectedId}
+              draggable={canDrag}
+              maxX={box.w}
+              maxY={box.h}
+              styles={styles}
+              selectedColor={colors.signalMap}
+              accessibilityLabel={canDrag ? `${a.name}, перетащите, чтобы переместить` : a.name}
+              onTap={() => (canDrag ? setSelectedId(a.id === selectedId ? null : a.id) : navigation.navigate('Profile', { animalId: a.id }))}
+              onDrop={(nx, ny) => {
+                setSelectedId(a.id);
+                place(a.id, nx, ny);
+              }}
             />
-            <Text style={styles.markerText} numberOfLines={1}>{a.isDemo ? `${a.name} (демо)` : a.name}</Text>
-          </TouchableOpacity>
-        ))}
+          );
+        })}
 
-        <StateBox loading={(animals.loading && !animals.data) || (pens.loading && !pens.data)} error={animals.error || pens.error} onRetry={() => { animals.reload(); pens.reload(); }} />
-        {!animals.loading && !animals.error && scene.empty && (
+        <StateBox
+          loading={(animals.loading && !animals.data) || (pens.loading && !pens.data)}
+          error={animals.error || pens.error}
+          onRetry={() => { animals.reload(); pens.reload(); }}
+        />
+        {!animals.loading && !animals.error && scene?.empty && !pilot && (
           <Text style={[typography.caption, { color: colors.mapLine }]}>Нет загонов и животных с координатами</Text>
+        )}
+        {pilot && (
+          <Text style={[typography.caption, styles.hint]}>
+            {selected ? `Выбрано: ${selected.name}. Коснитесь карты, чтобы поставить, или перетащите` : 'Перетащите животное'}
+          </Text>
         )}
       </View>
 
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
+        {pilot && (
+          <View style={{ gap: spacing.sm }}>
+            {unplaced.length > 0 && (
+              <>
+                <Text style={[typography.caption, { color: colors.ink2 }]}>Не на карте (коснитесь, затем коснитесь карты)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                  {unplaced.map((a) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[styles.chip, a.id === selectedId && styles.chipActive]}
+                      hitSlop={hit(36)}
+                      onPress={() => setSelectedId(a.id === selectedId ? null : a.id)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.chipText, a.id === selectedId && styles.chipTextActive]}>{a.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+            <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+              <TouchableOpacity style={styles.btnSmall} hitSlop={hit(36)} onPress={() => navigation.navigate('AddAnimal')} accessibilityRole="button">
+                <Text style={styles.btnSmallText}>+ Животное</Text>
+              </TouchableOpacity>
+              {selected && (
+                <TouchableOpacity style={[styles.btnSmall, styles.btnSmallSecondary]} hitSlop={hit(36)} onPress={() => navigation.navigate('Profile', { animalId: selected.id })} accessibilityRole="button">
+                  <Text style={[styles.btnSmallText, { color: colors.ink }]}>Профиль</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {note && <Text style={[typography.caption, { color: note.error ? colors.signal : colors.ok }]}>{note.text}</Text>}
+          </View>
+        )}
         <View style={styles.summaryRow}>
           <TouchableOpacity style={[styles.sumTile, styles.sumTileDanger]} onPress={() => navigation.navigate('Herd')}>
             <Text style={styles.tileNumber}>{counts.danger}</Text>
@@ -244,6 +432,14 @@ const createStyles = ({ colors, spacing, radius, typography, sizes, sz, fs, lh, 
     color: colors.mapLine,
   },
   penLegend: { position: 'absolute', top: 100, left: spacing.lg, right: spacing.lg, color: colors.mapLine },
+  hint: { position: 'absolute', bottom: spacing.sm, left: spacing.lg, right: spacing.lg, color: colors.mapLine, textAlign: 'center' },
+  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface2 },
+  chipActive: { backgroundColor: colors.primary },
+  chipText: { ...typography.caption, color: colors.ink },
+  chipTextActive: { color: colors.onPrimary, fontWeight: '700' },
+  btnSmall: { minHeight: sizes.btnCompact, paddingHorizontal: spacing.md, backgroundColor: colors.primary, borderRadius: radius.sm, justifyContent: 'center' },
+  btnSmallSecondary: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.borderSubtle },
+  btnSmallText: { ...typography.caption, color: colors.onPrimary, fontWeight: '600' },
   marker: {
     position: 'absolute',
     width: 44,

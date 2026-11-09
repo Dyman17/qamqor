@@ -25,7 +25,7 @@ export function mockSource() {
   ];
   const simDto = () => ({ dataMode: M.mode, running: M.mode === 'AUTO', speed: M.speed, herd: M.herd, until: M.mode === 'AUTO' ? new Date(Date.now() + 7200000).toISOString() : null, demo: { animals: M.demo.length, alerts: M.demo.length }, enabled: true });
   const zoneOf = (lat, lng) => (lng >= 51.147 && lng <= 51.156 && lat >= 43.648 && lat <= 43.653) ? 'GREEN' : 'RED';
-  const addDemo = (name) => { const n = M.demo.length + 1; const a = { id: 'd' + n, farmId: 'farm1', name: name || ('Демо ' + n), tag: 'D-00' + n, species: 'CATTLE', penId: 'p1', collarId: 'QAM-DEMO-000' + n, lat: 43.6505, lng: 51.1515, accuracyM: 5, lastSeenAt: new Date().toISOString(), status: 'ok', isDemo: true }; M.demo.push(a); return a; };
+  const addDemo = (name, withPos) => { const n = M.demo.length + 1; const a = { id: 'd' + n, farmId: 'farm1', name: name || ('Демо ' + n), tag: 'D-00' + n, species: 'CATTLE', penId: 'p1', collarId: 'QAM-DEMO-000' + n, lat: 43.6505, lng: 51.1515, accuracyM: 5, lastSeenAt: new Date().toISOString(), status: 'ok', isDemo: true }; if (withPos === false) { a.lat = null; a.lng = null; a.lastSeenAt = null; } M.demo.push(a); return a; };
   M.addDemo = addDemo;
   const me = () => ({ user: { id: 'u1', email: 'qa@example.test', fullName: 'QA Тест' }, memberships: [{ farmId: 'farm1', farmName: 'Ферма Демо', role: M.role }] });
   let polls = 0;

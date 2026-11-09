@@ -753,3 +753,49 @@ describe('review fixes', () => {
     expect(c.prisma.tables.device.map((d) => d.deviceId)).toEqual(['QAM-MOCK-T2']);
   });
 });
+
+describe('POST /animals in pilot modes', () => {
+  const form = { name: 'Моя корова', tag: 'MY-1', species: 'CATTLE' } as any;
+
+  it('MANUAL: the form makes a demo animal with a simulated collar in the demo pen, and manual telemetry moves it', async () => {
+    useFakeClock();
+    const c = await build();
+    const real = await addReal(c);
+    await c.sim.setMode(OWNER, c.farm.id, 'MANUAL');
+    const animals = new AnimalsService(c.prisma as any);
+    const res: any = await animals.createAnimal(OWNER, c.farm.id, { ...form, penId: real.pen.id });
+    expect(res.isDemo).toBe(true);
+    const row = c.prisma.tables.animal.find((a) => a.id === res.id);
+    const pen = c.prisma.tables.geofence.find((g) => g.id === row.activeGeofenceId);
+    expect(pen.isDemo).toBe(true); // the real pen is replaced by the demo pen
+    expect(real.pen.isDemo).toBeFalsy();
+    const dev = c.prisma.tables.device.find((d) => d.animalId === res.id);
+    expect(dev).toMatchObject({ isSimulated: true, farmId: c.farm.id });
+    const r = await c.sim.simulateTelemetry(OWNER, c.farm.id, { animalId: res.id, lat: DEMO_PEN.lat, lng: DEMO_PEN.lng });
+    expect(r.zone).toBeDefined();
+    expect(c.prisma.tables.animal.find((a) => a.id === res.id).lastLatitude).toBeCloseTo(DEMO_PEN.lat, 5);
+  });
+
+  it('AUTO also makes a demo animal; a given demo pen is kept; a collarId is refused; duplicates 409', async () => {
+    useFakeClock();
+    const c = await build();
+    await c.sim.start(OWNER, c.farm.id, { herd: 2 });
+    const demoPen = c.prisma.tables.geofence.find((g) => g.isDemo);
+    const animals = new AnimalsService(c.prisma as any);
+    const res: any = await animals.createAnimal(OWNER, c.farm.id, { ...form, penId: demoPen.id });
+    expect(res.isDemo).toBe(true);
+    expect(c.prisma.tables.animal.find((a) => a.id === res.id).activeGeofenceId).toBe(demoPen.id);
+    await c.prisma.device.create({ data: { deviceId: 'QAM-FREE', secretHash: 'f', farmId: c.farm.id } });
+    await expect(animals.createAnimal(OWNER, c.farm.id, { ...form, tag: 'X', collarId: 'QAM-FREE' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(animals.createAnimal(OWNER, c.farm.id, form)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('REAL: the form still makes a real animal (isDemo false, no collar)', async () => {
+    useFakeClock();
+    const c = await build();
+    const animals = new AnimalsService(c.prisma as any);
+    const res: any = await animals.createAnimal(OWNER, c.farm.id, form);
+    expect(res.isDemo).toBe(false);
+    expect(c.prisma.tables.device).toHaveLength(0);
+  });
+});

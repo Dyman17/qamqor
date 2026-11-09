@@ -13,6 +13,11 @@ import { ALERT_INCLUDE, AlertDto, toAlertDto } from '../alerts/mappers';
 import { Page, pageOf } from '../common/pagination';
 import { computeConnState } from '../devices/connectivity';
 import { resolveCollarAlerts } from '../alerts/alerts.service';
+import { DemoDataService, MAX_DEMO_ANIMALS } from '../simulation/demo-data.service';
+import { penGeometryOf } from '../simulation/pen-cache';
+import { mulberry32 } from '../simulation/scenario';
+import { generateDeviceSecret, hashDeviceSecret } from '../devices/device-secret';
+import { randomBytes } from 'crypto';
 
 const NO_BOUNDARY_RIGHTS = 'Назначать загон может владелец или работник при включённом праве';
 
@@ -22,7 +27,11 @@ function isUnique(e: any): boolean {
 
 @Injectable()
 export class AnimalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly demo: DemoDataService;
+
+  constructor(private readonly prisma: PrismaService) {
+    this.demo = new DemoDataService(prisma); // stateless: only needs the same database handle
+  }
 
   /** 404 unless the animal belongs to the farm. */
   async ensureInFarm(farmId: string, animalId: string): Promise<void> {
@@ -127,6 +136,10 @@ export class AnimalsService {
     await assertSameFarm(this.prisma, farmId, { geofenceId: dto.penId, deviceId: dto.collarId });
 
     const tagNumber = dto.tag.trim();
+    const farm = await this.prisma.farm.findUnique({ where: { id: farmId }, select: { dataMode: true } });
+    if (farm && (farm.dataMode === 'MANUAL' || farm.dataMode === 'AUTO')) {
+      return this.createDemoAnimal(userId, farmId, dto, tagNumber);
+    }
     const existingTag = await this.prisma.animal.findUnique({
       where: { farmId_tagNumber: { farmId, tagNumber } },
     });
@@ -156,6 +169,70 @@ export class AnimalsService {
           });
           if (res.count !== 1) throw new ConflictException('Ошейник уже привязан к другому животному или демо-ошейник');
         }
+        return animal;
+      });
+    } catch (e) {
+      if (isUnique(e)) throw new ConflictException(`Животное с биркой "${tagNumber}" уже зарегистрировано`);
+      throw e;
+    }
+    return this.getAnimalById(userId, farmId, created.id);
+  }
+
+  /**
+   * MANUAL / AUTO farms: an animal made through the normal form is a demo animal (isDemo) with an
+   * auto-created simulated collar, so the owner can place and drag it on the map. A real pen is
+   * never used: it is replaced by the farm's demo pen; a given demo pen is kept.
+   */
+  private async createDemoAnimal(
+    userId: string,
+    farmId: string,
+    dto: CreateAnimalInputDto,
+    tagNumber: string,
+  ): Promise<AnimalDto> {
+    if (dto.collarId) throw new ConflictException('В демо-режиме ошейник создаётся автоматически: не указывайте collarId');
+    if (await this.prisma.animal.findUnique({ where: { farmId_tagNumber: { farmId, tagNumber } } })) {
+      throw new ConflictException(`Животное с биркой "${tagNumber}" уже зарегистрировано`);
+    }
+    const count = await this.prisma.animal.count({ where: { farmId, isDemo: true } });
+    if (count >= MAX_DEMO_ANIMALS) throw new ConflictException(`Не больше ${MAX_DEMO_ANIMALS} демо-животных на ферму`);
+
+    let pen: any = null;
+    if (dto.penId) pen = await this.prisma.geofence.findFirst({ where: { id: dto.penId, farmId, isDemo: true } });
+    if (!pen) pen = await this.demo.ensurePen(farmId);
+    const geom = penGeometryOf(pen);
+    const start = geom ? geom.toGeo(geom.interiorPoint(mulberry32(Date.now() ^ count), 25)) : null;
+    const now = new Date();
+
+    let created: { id: string };
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const animal = await tx.animal.create({
+          data: {
+            farmId,
+            name: dto.name.trim(),
+            tagNumber,
+            species: dto.species,
+            gender: dto.gender,
+            breed: dto.breed?.trim(),
+            birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+            photoUrl: dto.photoUrl,
+            isDemo: true,
+            activeGeofenceId: pen.id,
+            ...(start && { lastLatitude: start.latitude, lastLongitude: start.longitude, lastAccuracy: 5, lastSeenAt: now }),
+          },
+        });
+        await tx.device.create({
+          data: {
+            deviceId: `QAM-DEMO-${randomBytes(3).toString('hex').toUpperCase()}`,
+            secretHash: hashDeviceSecret(generateDeviceSecret()),
+            isSimulated: true,
+            farmId,
+            animalId: animal.id,
+            status: 'ONLINE',
+            signal: -70,
+            lastHeartbeatAt: now,
+          },
+        });
         return animal;
       });
     } catch (e) {

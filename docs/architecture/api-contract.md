@@ -233,6 +233,8 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 | `POST /farms/:id/simulate/telemetry` | O, MANUAL | `{animalId, lat, lng, accuracyM?(по умолчанию 5), speedKmh?}` | `200 CollarResponseDto` |
 | `POST /farms/:id/simulate/events` | O, MANUAL | `{animalId, event}` | `200 CollarResponseDto` или `{ok: true}` (`COLLAR_OFFLINE`) |
 
+**`POST /animals` в режимах `MANUAL` и `AUTO`.** Обычная форма создаёт демо-животное: `isDemo: true` в ответе (форма ответа прежняя) и автоматически привязанный симулированный ошейник `QAM-DEMO-xxxxxx`. Загон: переданный `penId` сохраняется только если это демо-загон фермы, иначе (в том числе реальный загон, он не трогается) берётся демо-загон фермы (создаётся при необходимости); животное появляется внутри загона. `collarId` в этих режимах -> `409`; не больше 20 демо-животных на ферму -> `409`; повтор бирки -> `409`. В `REAL` форма работает как раньше (реальное животное). Такое животное принимает `POST /farms/:id/simulate/telemetry` `{animalId, lat, lng}` (подтверждено: поля `accuracyM`, `speedKmh` необязательны) в `MANUAL`, чтобы перетаскивать его по карте; в `AUTO` ручной ввод по-прежнему `409` (сценарий двигает животных сам).
+
 События `event` (все идут через тот же `TelemetryService.processDeviceTelemetry`, то есть через настоящую логику зон, суточных лимитов и оповещений):
 
 - `BREACH`: точка около 30 м снаружи ближайшей границы (зона RED, звук и вибрация, `GEOFENCE_BREACH`);

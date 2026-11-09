@@ -170,6 +170,59 @@ try {
     p.close();
   }
 
+
+  // ---- pilot mode: drag / click-to-place on the map (real pointer input through CDP) ----
+  for (const touch of [false, true]) {
+    const w = touch ? 375 : 1280, h = touch ? 812 : 800;
+    p = await open(w, h, `window.__mock.mode = 'MANUAL'; window.__mock.addDemo('Демо А'); ${touch ? "window.__mock.demo[0].lat = 43.6525; window.__mock.demo[0].lng = 51.1495;" : "window.__mock.demo[0].lat = 43.6483; window.__mock.demo[0].lng = 51.1500;"} window.__mock.addDemo('Без позиции', false);`);
+    await login(p); await sleep(4500);
+    await p.send('Emulation.setTouchEmulationEnabled', { enabled: touch, maxTouchPoints: 5 });
+    const tag = touch ? 'touch' : 'mouse';
+    check(`place ${tag}: manual-edit map + hint`, await p.eval(`document.querySelector('.map-area').classList.contains('manual-edit') && !document.getElementById('map-hint').hidden && document.getElementById('map-hint').textContent.includes('Перетащите животное на карте')`));
+    check(`place ${tag}: animal without position is listed as "Не на карте"`, await p.eval(`document.querySelectorAll('[data-place]').length === 1`));
+    if (touch) await p.eval(`document.getElementById('panel').dataset.sheet = 'peek'`);
+    const center = () => p.eval(`(() => { const e = document.querySelector('.amark.demo'); if (!e) return null; const b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+    const demoPos = () => p.eval(`(() => { const a = window.__mock.demo[0]; return [a.lat, a.lng]; })()`);
+    const calls = () => p.eval(`window.__mock.calls.filter((c) => c === 'POST /farms/farm1/simulate/telemetry').length`);
+    const move = async (type, x, y) => {
+      if (touch) await p.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+      else await p.send('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+    };
+    const drag = async (from, to) => {
+      const [s, m, e] = touch ? ['touchStart', 'touchMove', 'touchEnd'] : ['mousePressed', 'mouseMoved', 'mouseReleased'];
+      await move(s, from[0], from[1]);
+      for (let i = 1; i <= 8; i++) { await move(m, from[0] + ((to[0] - from[0]) * i) / 8, from[1] + ((to[1] - from[1]) * i) / 8); await sleep(40); }
+      await move(e, to[0], to[1]);
+      await sleep(1800);
+    };
+    const c0 = await center();
+    const before = await demoPos();
+    const n0 = await calls();
+    const target = touch ? [c0[0] + 50, c0[1] + 40] : [c0[0] + 70, c0[1] - 50];
+    await drag(c0, target);
+    const after = await demoPos();
+    const c1 = await center();
+    check(`place ${tag}: drag sent telemetry`, (await calls()) === n0 + 1);
+    check(`place ${tag}: drag changed the coordinates`, after[0] !== before[0] && after[1] !== before[1]);
+    check(`place ${tag}: marker is where it was dropped (+-8 px)`, c1 && Math.abs(c1[0] - target[0]) <= 8 && Math.abs(c1[1] - target[1]) <= 8, JSON.stringify({ c1, target }));
+    await shot(p, `map-drag-${tag}-${w}`);
+    // click-to-place: select the animal (click its marker), then click an empty spot of the map
+    await p.eval(`document.querySelector('.amark.demo').click()`); await sleep(500);
+    await p.eval(`document.getElementById('panel').dataset.sheet = 'peek'`);
+    const n1 = await calls();
+    const spot = touch ? [target[0] - 40, target[1] - 80] : [target[0] - 60, target[1] + 90];
+    if (touch) await p.send('Input.synthesizeTapGesture', { x: spot[0], y: spot[1] });
+    else { await move('mousePressed', spot[0], spot[1]); await move('mouseReleased', spot[0], spot[1]); }
+    await sleep(1800);
+    const c2 = await center();
+    check(`place ${tag}: click on the map places the selected animal`, (await calls()) === n1 + 1 && c2 && Math.abs(c2[0] - spot[0]) <= 8 && Math.abs(c2[1] - spot[1]) <= 8, JSON.stringify({ c2, spot }));
+    // one click for an animal that is not on the map
+    await p.eval(`document.querySelector('[data-place]').click()`); await sleep(1800);
+    check(`place ${tag}: one-click placement of an off-map animal`, await p.eval(`window.__mock.demo[1].lat != null && document.querySelectorAll('[data-place]').length === 0`));
+    check(`place ${tag}: no overflow`, !(await overflow(p)));
+    p.close();
+  }
+
   // worker sees the mode and the Демо marks, but no panel and no switch
   p = await open(1280, 800, `window.__mock.role = 'WORKER'; window.__mock.mode = 'AUTO'; window.__mock.addDemo();`);
   await login(p); await sleep(3000);

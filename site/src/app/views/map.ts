@@ -67,14 +67,17 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   let disposed = false;
   const timers: number[] = [];
   let pickHandler: ((lng: number, lat: number) => void) | null = null;
-  let dragId: string | null = null;
-  let dragDrop: (lng: number, lat: number) => void = () => undefined;
+  let demoRef: { select(id: string): void } | null = null;
+  let dragOn = false;
+  let dragDrop: (id: string, lng: number, lat: number) => void = () => undefined;
+  let placeHandler: ((id: string, lng: number, lat: number) => void) | null = null;
   let dragging = false;
 
   setHtml(el, html`
     <div class="map-wrap">
       <div class="map-area">
         <div class="map" id="map" role="region" aria-label="${t('a.map.container')}"></div>
+        <p class="map-hint" id="map-hint" hidden>${t('a.demo.hint')}</p>
         <p class="map-notice glass-light" id="map-notice" role="status" hidden>${t('a.map.mapFail')}</p>
         <div class="map-controls">
           <button type="button" class="map-btn glass-light" id="m-in" aria-label="${t('a.map.zoomIn')}">${raw(icon('plus', 22))}</button>
@@ -136,6 +139,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     selected = id;
     drawPanel();
     renderMarkers();
+    demoRef?.select(id);
     const a = animals.find((x) => x.id === id);
     if (fly && a && a.lat != null && a.lng != null && map) map.flyTo({ center: [a.lng, a.lat], zoom: Math.max(map.getZoom(), 15), essential: false });
     if (window.matchMedia('(max-width: 767px)').matches) $('#panel', el)!.dataset.sheet = 'half';
@@ -157,11 +161,11 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     const pos = animals.filter((a) => a.lat != null && a.lng != null);
     const cluster = pos.length > CLUSTER_MIN && map.getZoom() < 16;
     const add = (lng: number, lat: number, node: HTMLElement, id?: string) => {
-      const canDrag = !!id && id === dragId;
+      const canDrag = dragOn && !!id && !!animals.find((x) => x.id === id)?.isDemo;
       const mk = new ML!.Marker({ element: node, draggable: canDrag }).setLngLat([lng, lat]).addTo(map!);
       if (canDrag) {
         mk.on('dragstart', () => { dragging = true; });
-        mk.on('dragend', () => { dragging = false; const p = mk.getLngLat(); dragDrop(p.lng, p.lat); });
+        mk.on('dragend', () => { dragging = false; const p = mk.getLngLat(); dragDrop(id!, p.lng, p.lat); });
       }
       markers.push(mk);
     };
@@ -242,7 +246,27 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         else fitAll();
       });
       map.on('zoomend', renderMarkers);
-      map.on('click', (e) => { if (pickHandler) pickHandler(e.lngLat.lng, e.lngLat.lat); });
+      // click-to-place: "Поставить на карте" picks for the panel's animal, otherwise the animal selected on the map is placed (pilot mode)
+      const placeAtPoint = (lng: number, lat: number): void => {
+        if (pickHandler) { pickHandler(lng, lat); return; }
+        const a = placeHandler && selected ? animals.find((x) => x.id === selected) : undefined;
+        if (placeHandler && a?.isDemo) placeHandler(a.id, lng, lat);
+      };
+      let lastTouchPlace = 0;
+      map.on('click', (e) => { if (Date.now() - lastTouchPlace > 700) placeAtPoint(e.lngLat.lng, e.lngLat.lat); });
+      // touch taps: not every touch browser delivers a click after MapLibre's touch handling, so a short, still pointer tap is handled here too
+      const cv = map.getCanvasContainer();
+      let down: { x: number; y: number; t: number } | null = null;
+      cv.addEventListener('pointerdown', (e) => { down = e.pointerType === 'touch' && e.isPrimary ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; });
+      cv.addEventListener('pointerup', (e) => {
+        const d = down; down = null;
+        if (!d || e.pointerType !== 'touch' || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || Date.now() - d.t > 600) return;
+        if (!(e.target as HTMLElement).classList.contains('maplibregl-canvas') || !map) return;
+        const r = cv.getBoundingClientRect();
+        const ll = map.unproject([e.clientX - r.left, e.clientY - r.top]);
+        lastTouchPlace = Date.now();
+        placeAtPoint(ll.lng, ll.lat);
+      });
       map.on('moveend', () => { if (animals.length > CLUSTER_MIN) renderMarkers(); });
     } catch (e) {
       console.warn('[site] map unavailable:', e);
@@ -286,15 +310,24 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     demo.update();
   }
   const demoBox = $('#demo-box', el)!;
+  demoRef = null;
   const demo = mountDemoPanel(demoBox, {
     ctx,
     animals: () => animals,
     pens: () => pens,
     refresh: reload,
     setPick: (h) => { pickHandler = h; if (map) map.getCanvas().style.cursor = h ? 'crosshair' : ''; },
-    setDrag: (id, onDrop) => { const changed = id !== dragId; dragId = id; dragDrop = onDrop; if (changed) renderMarkers(); },
+    setDrag: (on, onDrop) => {
+      const changed = on !== dragOn;
+      dragOn = on; dragDrop = onDrop;
+      $('.map-area', el)?.classList.toggle('manual-edit', on);
+      const hint = $('#map-hint', el); if (hint) hint.hidden = !on;
+      if (changed) renderMarkers();
+    },
+    setPlace: (h) => { placeHandler = h; },
     select: (id) => select(id, true),
   });
+  demoRef = demo;
   // a mode change made elsewhere (settings in another tab, auto-stop) is picked up by the shell's /simulation poll
   let lastMode = getSim()?.dataMode ?? 'REAL';
   const stopSim = onSim((s) => {

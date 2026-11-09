@@ -83,6 +83,7 @@ describe('AnimalsService / GeofenceService tenancy', () => {
 
   it('tag uniqueness is per farm', async () => {
     const prisma: any = {
+      farm: { findUnique: jest.fn(async () => ({ dataMode: 'REAL' })) },
       animal: { count: jest.fn(), findUnique: jest.fn(async () => ({ id: 'x' })), create: jest.fn() },
       device: { count: jest.fn() },
       geofence: { count: jest.fn() },
