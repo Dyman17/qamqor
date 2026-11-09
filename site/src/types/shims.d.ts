@@ -3,3 +3,4 @@
 declare module 'three';
 declare module 'three/examples/jsm/*';
 declare module 'three/addons/*';
+declare module '*.svg?raw' { const s: string; export default s; }

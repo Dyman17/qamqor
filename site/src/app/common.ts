@@ -34,7 +34,7 @@ export function errText(e: unknown): string {
 export const skeleton = (rows = 4): Safe => html`<div class="skeleton-list" role="status" aria-label="${t('a.state.loading')}">${Array.from({ length: rows }, () => html`<div class="skeleton-row"></div>`)}</div>`;
 
 export function emptyState(title: string, text?: string, action?: Safe): Safe {
-  return html`<div class="state-block empty"><svg class="grass" width="120" height="72" viewBox="0 0 120 72" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M14 68C14 44 18 28 24 12M24 68C26 46 34 34 46 22M36 68C38 52 46 44 58 40M60 68V10M72 68C74 44 70 28 66 14M84 68C82 50 90 38 100 30M98 68C98 54 104 46 108 40"/></svg><h2 class="title-2">${title}</h2>${text ? html`<p>${text}</p>` : ''}${action ?? ''}</div>`;
+  return html`<div class="state-block empty">${raw(icon('plant', 72, 'grass'))}<h2 class="title-2">${title}</h2>${text ? html`<p>${text}</p>` : ''}${action ?? ''}</div>`;
 }
 
 export function errorState(e: unknown, retryId = 'retry'): Safe {

@@ -9,6 +9,7 @@ import { CALLOUTS, SCENES, beamAt, clamp, dimProgress, sceneAt, textOpacity } fr
 import type { StageApi } from './stage';
 import { stats } from './stats';
 import { APP_LINKS } from './app-links';
+import { icon as phIcon } from '../ui/icons';
 import { initFx, countUp } from './fx';
 import { bgfx, initBgFx } from './bgfx';
 import '../styles/landing-fx.css';
@@ -33,13 +34,9 @@ function photo(name: string, altKey: string, cls: string, eager = false) {
 }
 const SPECS = Array.from({ length: 12 }, (_, i) => i + 1);
 
+/** Landing icons are Phosphor regular too (src/ui/icons.ts): chev = caret-down, arrow = arrow-down. */
 function icon(name: 'chev' | 'arrow' | 'plus'): string {
-  const p = {
-    chev: '<path d="M6 9l6 6 6-6"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    arrow: '<path d="M12 5v14m0 0l-6-6m6 6l6-6"/>',
-  }[name];
-  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+  return phIcon({ chev: 'caret-down', arrow: 'arrow-down', plus: 'plus' }[name], 24);
 }
 
 const motionSwitch = html`
