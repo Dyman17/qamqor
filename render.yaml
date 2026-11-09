@@ -11,6 +11,12 @@ services:
     startCommand: npx prisma migrate deploy && npm run start:prod
     healthCheckPath: /health
     autoDeploy: true
+    # rootDir alone only deploys on server/ changes; the site is built into the same service
+    buildFilter:
+      paths:
+        - server/**
+        - site/**
+        - render.yaml
     envVars:
       - key: SITE_DIST_DIR
         value: site-dist
