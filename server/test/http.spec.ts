@@ -169,7 +169,7 @@ describe('HTTP layer (real Nest app, production config, fake database)', () => {
 
   it('telemetry: rate limited per code (429 carries the code), other codes are unaffected', async () => {
     let last: Response | undefined;
-    for (let i = 0; i < 40; i++) last = await post({ ...ping, code: '11112222' });
+    for (let i = 0; i < 130; i++) last = await post({ ...ping, code: '11112222' });
     expect(last!.status).toBe(429);
     expect(await last!.json()).toMatchObject({ statusCode: 429, error: 'RATE_LIMITED', code: '11112222' });
   });

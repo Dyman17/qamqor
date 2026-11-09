@@ -35,7 +35,7 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
     }
   };
 
-  const sendTest = (signal: 'SOUND' | 'VIBRATION') =>
+  const sendTest = (signal: 'SOUND' | 'SPEAKER' | 'BUZZER' | 'VIBRATION') =>
     run(async () => {
       await api.testSignal(a!.collarId!, signal);
       return 'Команда поставлена в очередь. Ошейник выполнит её при следующем выходе на связь.';
@@ -143,10 +143,18 @@ export const AnimalProfileScreen: React.FC<{ route: any; navigation: any }> = ({
               <View style={styles.triggerList}>
                 <View style={styles.triggerItem}>
                   <View style={styles.triggerInfo}>
-                    <Text style={styles.triggerTitle}>Звуковой сигнал</Text>
+                    <Text style={styles.triggerTitle}>Левый динамик</Text>
                   </View>
-                  <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => sendTest('SOUND')}>
-                    <Text style={styles.triggerActionText}>Тест звука</Text>
+                  <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => sendTest('SPEAKER')}>
+                    <Text style={styles.triggerActionText}>Тест динамика</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.triggerItem}>
+                  <View style={styles.triggerInfo}>
+                    <Text style={styles.triggerTitle}>Правый зуммер</Text>
+                  </View>
+                  <TouchableOpacity style={styles.triggerActionBtn} hitSlop={hit(36)} disabled={busy} onPress={() => sendTest('BUZZER')}>
+                    <Text style={styles.triggerActionText}>Тест зуммера</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.triggerItem}>

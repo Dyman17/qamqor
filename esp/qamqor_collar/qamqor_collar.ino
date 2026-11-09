@@ -1,36 +1,14 @@
 // =====================================================================================
-// Qamqor smart collar firmware, ONE FILE. Flash this sketch with the Arduino IDE
-// (or build it with PlatformIO: esp/platformio.ini points src_dir at this folder).
-//
-// Board:    "ESP32 Dev Module"
-// Core:     Arduino-ESP32 2.x (tested with 2.0.17; the legacy driver/i2s.h API is used,
-//           it is NOT available in the same form in core 3.x)
-// Libraries (Library Manager):
-//   - SparkFun MAX3010x Pulse and Proximity Sensor Library   (MAX30105.h, heartRate.h)
-//   - TinyGPSPlus                (Mikal Hart)
-//   - ArduinoJson                (version 7.x)
-//
-// Wiring (owner's tested hardware):
-//   Vibration motor module : GPIO18 (HIGH = on)
-//   Active buzzer module   : GPIO19 (HIGH = on, no tone control)
-//   GPS NEO-6M             : module TX -> GPIO16 (RX2), module RX -> GPIO17 (TX2), 9600 baud
-//   MAX30102 pulse sensor  : SDA -> GPIO21, SCL -> GPIO22 (I2C)
-//   Speaker MAX98357A      : BCLK -> GPIO26, LRC -> GPIO25, DIN -> GPIO27 (I2S, 16 kHz, 16 bit, mono left)
-//
-// Protocol: docs/architecture/api-contract.md and device-code-protocol.md.
-// Telemetry always carries the code, GPS (if there is a fix), satellites, speed and heartRate.
-// The server reply is accepted only if reply.code == DEVICE_CODE. Reply field "mode":
-//   REAL / AUTO -> run the server's commands (sound + buzzer, then vibration)
-//   PILOT       -> ignore the server's zone/signal data, run the built-in demo scenario
-//
-// The password is never printed to the Serial log.
+// Qamqor smart collar firmware (ESP32)
+// Архитектура: ESP32 — исполнитель датчиков и актуаторов.
+// Вся бизнес-логика, геозоны и сценарии находятся на сервере.
 // =====================================================================================
 
-// ---------- USER SETTINGS ----------
-#define WIFI_SSID "YOUR_WIFI"
-#define WIFI_PASS "YOUR_PASSWORD"
-#define DEVICE_CODE "12345678"  // replace with this collar's own 8 digits (the owner claims the same code in the app)
-// -----------------------------------
+// ---------- НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ ----------
+#define WIFI_SSID "DD"
+#define WIFI_PASS "dddddddd"
+#define DEVICE_CODE "12345678"
+// -------------------------------------------
 
 #define TELEMETRY_URL "https://qamqor-api.onrender.com/api/v1/device/telemetry"
 
@@ -46,45 +24,30 @@
 #include "heartRate.h"
 #include "driver/i2s.h"
 
-// ---------- Pins ----------
-#define PIN_VIBRATION 18
-#define PIN_BUZZER 19
-#define PIN_GPS_RX 16
-#define PIN_GPS_TX 17
+// ---------- Пины оборудования ----------
+#define PIN_VIBRATION 18      // Вибромотор (HIGH = вкл)
+#define PIN_BUZZER 19         // ПРАВЫЙ звук: активный зуммер (HIGH = вкл)
+#define PIN_GPS_RX 16         // GPS NEO-6M TX -> ESP RX2
+#define PIN_GPS_TX 17         // GPS NEO-6M RX <- ESP TX2
 #define GPS_BAUD 9600
-#define PIN_SDA 21
+#define PIN_SDA 21            // Пульсометр MAX30102 I2C
 #define PIN_SCL 22
-#define PIN_I2S_BCLK 26
+#define PIN_I2S_BCLK 26       // ЛЕВЫЙ звук: динамик с усилителем MAX98357A (I2S)
 #define PIN_I2S_LRC 25
 #define PIN_I2S_DIN 27
 
-// ---------- Timing and limits ----------
-#define DEFAULT_INTERVAL_SEC 300
-#define MIN_INTERVAL_SEC 5
-#define MAX_INTERVAL_SEC 3600
-#define PILOT_INTERVAL_SEC 15        // in PILOT mode report more often so the demo shows live data
-#define NO_FIX_RETRY_SEC 30
+// ---------- Тайминги ----------
+#define SEND_INTERVAL_SEC 1          // Опрос строго каждую секунду
 #define GPS_MAX_AGE_MS 10000
-#define HTTP_TIMEOUT_MS 30000        // Render free plan cold start can take ~30 s
+#define HTTP_TIMEOUT_MS 15000
 #define WIFI_CONNECT_TIMEOUT_MS 20000
 #define NTP_WAIT_MS 15000
-#define BACKOFF_MIN_SEC 10
-#define BACKOFF_MAX_SEC 300
-#define ACCURACY_PER_HDOP_M 5.0      // assumption: accuracy (m) ~ HDOP * 5
-#define ACCURACY_NO_FIX_M 999.0      // last known position with lost fix -> server zone UNKNOWN / GPS_LOST
-#define VIBRATION_MAX_MS 5000
-#define TEST_VIBRATION_MS 1000
-#define TEST_SOUND_HZ 1000
-#define TONE_MIN_HZ 100
-#define TONE_MAX_HZ 3000
+#define ACCURACY_PER_HDOP_M 5.0
+#define ACCURACY_NO_FIX_M 999.0
 #define AUDIO_RATE 16000
-#define AUDIO_AMPLITUDE 9000         // 0..32767
+#define AUDIO_AMPLITUDE 9000
 
-// ---------- Root CA (GTS Root R4) ----------
-// Chain checked 2026-11-09: onrender.com <- Google Trust Services WE1 <- GTS Root R4. R4 is valid until 2036-06-22.
-// SHA-256: 34:9D:FA:40:58:C5:E2:63:12:3B:39:8A:E7:95:57:3C:4E:13:13:C8:3F:E6:8F:93:55:6C:D5:E8:03:1B:3C:7D
-// If TLS fails: openssl s_client -connect qamqor-api.onrender.com:443 -servername qamqor-api.onrender.com -showcerts
-// and replace this PEM with the new self-signed root.
+// ---------- Корневой сертификат GTS Root R4 ----------
 static const char ROOT_CA_PEM[] = R"PEM(
 -----BEGIN CERTIFICATE-----
 MIICCTCCAY6gAwIBAgINAgPlwGjvYxqccpBQUjAKBggqhkjOPQQDAzBHMQswCQYD
@@ -101,45 +64,39 @@ p/SgguMh1YQdc4acLa/KNJvxn7kjNuK8YAOdgLOaVsjh4rsUecrNIdSUtUlD
 -----END CERTIFICATE-----
 )PEM";
 
-// ---------- Types ----------
-enum Mode : uint8_t { MODE_REAL = 0, MODE_PILOT = 1, MODE_AUTO = 2 };
-
-// One step of a sound/vibration pattern. hz0 -> hz1 is a linear glide (rising tone when hz1 > hz0).
-struct Step {
-  uint16_t hz0, hz1;
-  uint16_t ms;
-  bool spk, buz, vib;
-};
-
-// Latest sensor values, written by loop() (core 1), read by the network task (core 0).
+// ---------- Структуры данных ----------
 struct Snapshot {
-  bool fixValid;     // fresh GPS fix
-  bool haveLast;     // some position was valid at some time
-  double lat, lng;   // current or last known
+  bool fixValid;
+  bool haveLast;
+  double lat, lng;
   double accuracy;
   double speedKmh;
-  double hdop;       // < 0 unknown
-  int satellites;    // < 0 unknown
-  int heartRate;     // 0 = no valid pulse
+  double hdop;
+  int satellites;
+  int heartRate;
 };
 
-// Command from the server reply, written by the network task, executed by loop().
-struct Pending {
+// Пакет прямого управления актуаторами с сервера
+struct ActuatorCommand {
   bool has;
-  bool sound;
-  int hz;
-  bool vib;
-  int vibMs;
-  int test;  // 0 none, 1 TEST_SOUND, 2 TEST_VIBRATION
+  uint16_t speakerHz;
+  uint16_t speakerMs;
+  uint16_t buzzerMs;
+  uint16_t vibrateMs;
 };
 
-// ---------- Shared state ----------
+// ---------- Разделяемое состояние между ядрами FreeRTOS ----------
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static Snapshot g_snap = {false, false, 0, 0, ACCURACY_NO_FIX_M, 0, -1, -1, 0};
-static Pending g_pending = {false, false, 0, false, 0, 0};
-static volatile uint8_t g_mode = MODE_REAL;  // last known mode; REAL until the first valid reply
+static ActuatorCommand g_pending = {false, 0, 0, 0, 0};
 
-// ---------- Sensors ----------
+// Времена автоматического выключения каждого актуатора (мс)
+static uint32_t g_speakerOffMs = 0;
+static uint16_t g_speakerHz = 0;
+static uint32_t g_buzzerOffMs = 0;
+static uint32_t g_vibratorOffMs = 0;
+
+// ---------- Датчики (Core 1) ----------
 static TinyGPSPlus gps;
 static HardwareSerial gpsSerial(2);
 static MAX30105 particleSensor;
@@ -154,7 +111,7 @@ static void pulseTick() {
     long ir = particleSensor.getFIFOIR();
     particleSensor.nextSample();
     uint32_t now = millis();
-    if (ir < 50000) {  // no finger/skin contact
+    if (ir < 50000) {
       beatAvg = 0;
       lastBeatMs = 0;
       continue;
@@ -169,7 +126,7 @@ static void pulseTick() {
       }
       lastBeatMs = now;
     }
-    if (beatAvg > 0 && now - lastGoodBeatMs > 10000) beatAvg = 0;  // stale
+    if (beatAvg > 0 && now - lastGoodBeatMs > 10000) beatAvg = 0;
   }
 }
 
@@ -201,47 +158,7 @@ static void snapshotUpdate() {
   portEXIT_CRITICAL(&g_mux);
 }
 
-// ---------- Actuators: non-blocking pattern player ----------
-static Step g_steps[16];
-static uint8_t g_n = 0, g_i = 0;
-static bool g_playing = false;
-static uint32_t g_stepStart = 0;
-
-static void outputsApply() {
-  bool buz = g_playing && g_steps[g_i].buz;
-  bool vib = g_playing && g_steps[g_i].vib;
-  digitalWrite(PIN_BUZZER, buz ? HIGH : LOW);
-  digitalWrite(PIN_VIBRATION, vib ? HIGH : LOW);
-}
-
-static void playStop() {
-  g_playing = false;
-  outputsApply();
-}
-
-static void playStart(const Step *steps, uint8_t n) {
-  if (n == 0 || n > 16) return;
-  memcpy(g_steps, steps, n * sizeof(Step));
-  g_n = n;
-  g_i = 0;
-  g_stepStart = millis();
-  g_playing = true;
-  outputsApply();
-}
-
-static void playTick() {
-  if (!g_playing) return;
-  if (millis() - g_stepStart < g_steps[g_i].ms) return;
-  g_i++;
-  if (g_i >= g_n) {
-    playStop();
-    return;
-  }
-  g_stepStart = millis();
-  outputsApply();
-}
-
-// ---------- Speaker: MAX98357A over I2S (legacy driver) ----------
+// ---------- Левый динамик: MAX98357A через I2S ----------
 static void setupAudio() {
   i2s_config_t cfg = {};
   cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -253,7 +170,7 @@ static void setupAudio() {
   cfg.dma_buf_count = 4;
   cfg.dma_buf_len = 128;
   cfg.use_apll = false;
-  cfg.tx_desc_auto_clear = true;  // silence when we stop writing
+  cfg.tx_desc_auto_clear = true;
   i2s_pin_config_t pins = {};
   pins.mck_io_num = I2S_PIN_NO_CHANGE;
   pins.bck_io_num = PIN_I2S_BCLK;
@@ -267,9 +184,8 @@ static void setupAudio() {
   i2s_zero_dma_buffer(I2S_NUM_0);
 }
 
-// Sine generator, one small chunk per call so loop() never blocks. Frequency follows the current step's glide.
 static int16_t g_abuf[128];
-static size_t g_alen = 0, g_aoff = 0;  // bytes
+static size_t g_alen = 0, g_aoff = 0;
 static float g_aphase = 0;
 
 static void audioPump() {
@@ -277,15 +193,12 @@ static void audioPump() {
     size_t w = 0;
     i2s_write(I2S_NUM_0, (uint8_t *)g_abuf + g_aoff, g_alen - g_aoff, &w, 0);
     g_aoff += w;
-    if (g_aoff < g_alen) return;  // DMA full, try again next loop
+    if (g_aoff < g_alen) return;
   }
   g_alen = g_aoff = 0;
-  if (!g_playing || !g_steps[g_i].spk) return;
-  const Step &s = g_steps[g_i];
-  float prog = s.ms ? (float)(millis() - g_stepStart) / (float)s.ms : 0;
-  if (prog > 1) prog = 1;
-  float f = s.hz0 + ((float)s.hz1 - (float)s.hz0) * prog;
-  float inc = 2.0f * PI * f / AUDIO_RATE;
+  if (millis() >= g_speakerOffMs || g_speakerHz <= 0) return;
+
+  float inc = 2.0f * PI * (float)g_speakerHz / AUDIO_RATE;
   for (int i = 0; i < 128; i++) {
     g_abuf[i] = (int16_t)(sinf(g_aphase) * AUDIO_AMPLITUDE);
     g_aphase += inc;
@@ -297,84 +210,40 @@ static void audioPump() {
   g_aoff = w;
 }
 
-// ---------- Server-driven effects (REAL / AUTO) ----------
-static void startBeeps(int hz, bool vib, int vibMs) {
-  hz = constrain(hz, TONE_MIN_HZ, TONE_MAX_HZ);
-  Step st[8];
-  uint8_t n = 0;
-  if (hz > 0) {
-    for (int k = 0; k < 3; k++) {
-      st[n++] = {(uint16_t)hz, (uint16_t)min(hz * 3 / 2, 5000), 250, true, true, false};  // rising tone + buzzer
-      st[n++] = {0, 0, 150, false, false, false};
-    }
-  }
-  if (vib) st[n++] = {0, 0, (uint16_t)constrain(vibMs, 0, VIBRATION_MAX_MS), false, false, true};
-  Serial.printf("[act] server effect: tone %d Hz, vibration %d ms\n", hz, vib ? vibMs : 0);
-  playStart(st, n);
-}
-
-static void applyPending() {
-  Pending p;
+// ---------- Применение команд сервера (Core 1) ----------
+static void applyActuators() {
+  ActuatorCommand cmd;
   portENTER_CRITICAL(&g_mux);
-  p = g_pending;
+  cmd = g_pending;
   g_pending.has = false;
   portEXIT_CRITICAL(&g_mux);
-  if (!p.has || g_mode == MODE_PILOT) return;  // PILOT ignores the server's signals
-  if (p.test == 1) {
-    Serial.println("[cmd] TEST_SOUND");
-    startBeeps(TEST_SOUND_HZ, false, 0);
-  } else if (p.test == 2) {
-    Serial.println("[cmd] TEST_VIBRATION");
-    startBeeps(0, true, TEST_VIBRATION_MS);
-  } else {
-    startBeeps(p.sound ? p.hz : 0, p.vib, p.vibMs);
+
+  uint32_t now = millis();
+  if (cmd.has) {
+    if (cmd.speakerMs > 0 && cmd.speakerHz > 0) {
+      g_speakerHz = cmd.speakerHz;
+      g_speakerOffMs = now + cmd.speakerMs;
+      Serial.printf("[act] Левый динамик: %d Гц, %d мс\n", cmd.speakerHz, cmd.speakerMs);
+    }
+    if (cmd.buzzerMs > 0) {
+      g_buzzerOffMs = now + cmd.buzzerMs;
+      Serial.printf("[act] Правый зуммер: %d мс\n", cmd.buzzerMs);
+    }
+    if (cmd.vibrateMs > 0) {
+      g_vibratorOffMs = now + cmd.vibrateMs;
+      Serial.printf("[act] Вибрация: %d мс\n", cmd.vibrateMs);
+    }
+  }
+
+  // Обновление состояния пинов
+  digitalWrite(PIN_BUZZER, (millis() < g_buzzerOffMs) ? HIGH : LOW);
+  digitalWrite(PIN_VIBRATION, (millis() < g_vibratorOffMs) ? HIGH : LOW);
+  if (millis() >= g_speakerOffMs) {
+    g_speakerHz = 0;
   }
 }
 
-// ---------- PILOT demo scenario (built in, loops) ----------
-// green (quiet) -> yellow -> orange -> escape -> return (quiet) -> green ...
-static const Step PAT_YELLOW[] = {  // rising-tone speaker beeps + buzzer chirps
-    {500, 1100, 150, true, true, false}, {700, 1300, 150, true, false, false}, {0, 0, 400, false, false, false}};
-static const Step PAT_ORANGE[] = {  // vibration pulses with sound
-    {900, 900, 300, true, true, true}, {0, 0, 300, false, false, false}};
-static const Step PAT_ESCAPE[] = {  // strong alternating sound + vibration
-    {1600, 1600, 200, true, true, true}, {800, 800, 200, true, false, false}};
-
-struct Phase {
-  const char *name;
-  uint32_t ms;
-  const Step *pat;
-  uint8_t n;
-};
-static const Phase PHASES[] = {
-    {"GREEN (quiet)", 10000, nullptr, 0},
-    {"YELLOW", 6000, PAT_YELLOW, 3},
-    {"ORANGE", 6000, PAT_ORANGE, 2},
-    {"ESCAPE", 4000, PAT_ESCAPE, 2},
-    {"RETURN (quiet)", 10000, nullptr, 0},
-};
-static uint8_t g_phase = 0;
-static uint32_t g_phaseStart = 0;
-static bool g_pilotRunning = false;
-
-static void pilotEnter(uint8_t i) {
-  g_phase = i % (sizeof PHASES / sizeof PHASES[0]);
-  g_phaseStart = millis();
-  playStop();
-  Serial.printf("[pilot] phase %s\n", PHASES[g_phase].name);
-}
-
-static void pilotTick() {
-  if (!g_pilotRunning) {
-    g_pilotRunning = true;
-    pilotEnter(0);
-  }
-  if (millis() - g_phaseStart >= PHASES[g_phase].ms) pilotEnter(g_phase + 1);
-  const Phase &p = PHASES[g_phase];
-  if (p.pat && !g_playing) playStart(p.pat, p.n);  // repeat the pattern for the whole phase
-}
-
-// ---------- Network (runs in its own task on core 0, so sensors and sound never wait for HTTP) ----------
+// ---------- Сетевая задача (Core 0) ----------
 static bool timeValid() { return time(nullptr) > 1700000000; }
 
 static bool wifiEnsure() {
@@ -403,17 +272,7 @@ static bool timeSync() {
   return timeValid();
 }
 
-static int clampInterval(long sec) { return (int)constrain(sec, (long)MIN_INTERVAL_SEC, (long)MAX_INTERVAL_SEC); }
-
-static int g_failures = 0;  // consecutive network / 5xx failures -> backoff 10, 20, 40 ... 300 s
-static int nextBackoff() {
-  long v = (long)BACKOFF_MIN_SEC << min(g_failures, 5);
-  g_failures++;
-  return (int)min(v, (long)BACKOFF_MAX_SEC);
-}
-
-// Sends one ping and processes the reply. Returns seconds until the next attempt.
-static int sendTelemetry() {
+static void sendTelemetry() {
   Snapshot s;
   portENTER_CRITICAL(&g_mux);
   s = g_snap;
@@ -428,14 +287,10 @@ static int sendTelemetry() {
   JsonDocument req;
   req["code"] = DEVICE_CODE;
   req["timestamp"] = ts;
-  bool withCoords = s.haveLast;
-  if (withCoords) {
-    // Lost fix: the last known point goes out with accuracy 999 m (server: zone UNKNOWN, GPS_LOST).
+  if (s.haveLast) {
     req["latitude"] = serialized(String(s.lat, 6));
     req["longitude"] = serialized(String(s.lng, 6));
     req["accuracy"] = serialized(String(s.fixValid ? s.accuracy : ACCURACY_NO_FIX_M, 1));
-  } else {
-    Serial.println("[gps] no fix yet: sending pulse/status without coordinates");
   }
   int rssi = WiFi.RSSI();
   if (rssi >= -130 && rssi <= 0) req["signal"] = rssi;
@@ -454,107 +309,107 @@ static int sendTelemetry() {
   http.setTimeout(HTTP_TIMEOUT_MS);
   if (!http.begin(client, TELEMETRY_URL)) {
     Serial.println("[http] begin failed");
-    return nextBackoff();
+    return;
   }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Code", DEVICE_CODE);
-  const char *hdrs[] = {"Retry-After"};
-  http.collectHeaders(hdrs, 1);
 
-  Serial.printf("[http] POST %s\n[http] body: %s\n", TELEMETRY_URL, body.c_str());
   int status = http.POST(body);
   if (status <= 0) {
     Serial.printf("[http] request failed: %s\n", HTTPClient::errorToString(status).c_str());
     http.end();
-    return nextBackoff();
+    return;
   }
   String payload = http.getString();
-  String retryAfter = http.header("Retry-After");
   http.end();
-  Serial.printf("[http] status %d, %u bytes\n", status, (unsigned)payload.length());
+
+  if (status != 200) {
+    Serial.printf("[http] status %d: %s\n", status, payload.c_str());
+    return;
+  }
 
   JsonDocument res;
   DeserializationError err = deserializeJson(res, payload);
-  if (err) Serial.printf("[http] response is not JSON: %s\n", err.c_str());
-
-  if (status != 200) {  // errors never start the actuators
-    const char *eKind = res["error"] | "?";
-    const char *eMsg = res["message"] | "";
-    Serial.printf("[http] error %s: %s\n", eKind, eMsg);
-    if (status >= 500) return nextBackoff();
-    g_failures = 0;
-    if (status == 401) return DEFAULT_INTERVAL_SEC;
-    if (status == 429) {
-      long ra = res["retryAfterSec"] | (retryAfter.length() ? retryAfter.toInt() : 60L);
-      return clampInterval(ra);
-    }
-    return withCoords ? 60 : NO_FIX_RETRY_SEC;  // 400
+  if (err || !res["success"].as<bool>()) {
+    Serial.println("[http] response invalid JSON or not success");
+    return;
   }
 
-  // Accept only if the reply carries our own code.
   const char *rcode = res["code"] | "";
-  bool okFlag = res["success"].as<bool>();
-  if (err || !okFlag || strcmp(rcode, DEVICE_CODE) != 0) {
-    Serial.printf("[http] reply REJECTED (code \"%s\" does not match, or not a success reply)\n", rcode);
-    g_failures = 0;
-    return DEFAULT_INTERVAL_SEC;
-  }
-  g_failures = 0;
+  if (strcmp(rcode, DEVICE_CODE) != 0) return;
 
-  // Mode (default stays as is when the field is absent or unknown).
-  const char *m = res["mode"] | "";
-  uint8_t newMode = g_mode;
-  if (!strcmp(m, "REAL")) newMode = MODE_REAL;
-  else if (!strcmp(m, "PILOT")) newMode = MODE_PILOT;
-  else if (!strcmp(m, "AUTO")) newMode = MODE_AUTO;
-  if (newMode != g_mode) Serial.printf("[srv] mode -> %s\n", m);
-  g_mode = newMode;
+  // ---------- Разбор указаний сервера ----------
+  ActuatorCommand cmd = {false, 0, 0, 0, 0};
 
-  const char *zone = res["zone"] | "UNKNOWN";
-  bool sound = res["sound"] | false;
-  bool vibrate = res["vibrate"] | false;
-  int tone = res["toneFrequencyHz"] | 0;
-  int vibMs = res["vibrateDurationMs"] | 0;
-  long next = res["nextInterval"] | (long)DEFAULT_INTERVAL_SEC;
-  Serial.printf("[srv] mode=%s zone=%s sound=%d (%d Hz) vibrate=%d (%d ms) next=%ld s\n", m, zone, sound, tone, vibrate, vibMs, next);
-  const char *msg = res["warningMessage"] | "";
-  if (msg[0]) Serial.printf("[srv] %s\n", msg);
-
-  Pending p = {false, false, 0, false, 0, 0};
+  // 1. Команды тестирования
   const char *ctype = res["command"]["type"] | "";
-  if (!strcmp(ctype, "TEST_SOUND")) { p.has = true; p.test = 1; }
-  else if (!strcmp(ctype, "TEST_VIBRATION")) { p.has = true; p.test = 2; }
-  else if ((sound && tone > 0) || (vibrate && vibMs > 0)) {
-    p.has = true;
-    p.sound = sound && tone > 0;
-    p.hz = tone;
-    p.vib = vibrate && vibMs > 0;
-    p.vibMs = vibMs;
+  if (!strcmp(ctype, "TEST_SPEAKER") || !strcmp(ctype, "TEST_SOUND")) {
+    cmd.has = true;
+    cmd.speakerHz = 1200;
+    cmd.speakerMs = 800; // Левый динамик
+  } else if (!strcmp(ctype, "TEST_BUZZER")) {
+    cmd.has = true;
+    cmd.buzzerMs = 500;  // Правый зуммер
+  } else if (!strcmp(ctype, "TEST_VIBRATION")) {
+    cmd.has = true;
+    cmd.vibrateMs = 1000; // Вибрация
   }
-  if (p.has) {
+
+  // 2. Прямые миллисекунды от сервера (если сервер передал)
+  int spkMs = res["speakerMs"] | 0;
+  int spkHz = res["speakerHz"] | 0;
+  int buzMs = res["buzzerMs"] | 0;
+  int vibMs = res["vibrateMs"] | 0;
+
+  if (spkMs > 0 && spkHz > 0) {
+    cmd.has = true;
+    cmd.speakerHz = constrain(spkHz, 100, 3000);
+    cmd.speakerMs = min(spkMs, 5000);
+  }
+  if (buzMs > 0) {
+    cmd.has = true;
+    cmd.buzzerMs = min(buzMs, 5000);
+  }
+  if (vibMs > 0) {
+    cmd.has = true;
+    cmd.vibrateMs = min(vibMs, 5000);
+  }
+
+  // 3. Стандартные флаги геозоны
+  bool sound = res["sound"] | false;
+  int tone = res["toneFrequencyHz"] | 0;
+  bool vibrate = res["vibrate"] | false;
+  int vDuration = res["vibrateDurationMs"] | 0;
+
+  if (sound && tone > 0 && cmd.speakerMs == 0) {
+    cmd.has = true;
+    cmd.speakerHz = constrain(tone, 100, 3000);
+    cmd.speakerMs = 600;
+  }
+  if (vibrate && vDuration > 0 && cmd.vibrateMs == 0) {
+    cmd.has = true;
+    cmd.vibrateMs = min(vDuration, 5000);
+  }
+
+  if (cmd.has) {
     portENTER_CRITICAL(&g_mux);
-    g_pending = p;
+    g_pending = cmd;
     portEXIT_CRITICAL(&g_mux);
   }
-
-  int interval = clampInterval(next);
-  if (g_mode == MODE_PILOT) interval = min(interval, (int)PILOT_INTERVAL_SEC);
-  return interval;
 }
 
 static void netTask(void *) {
-  vTaskDelay(2000 / portTICK_PERIOD_MS);  // let the sensors produce a first snapshot
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
   for (;;) {
-    int wait;
-    if (!wifiEnsure()) wait = BACKOFF_MIN_SEC;
-    else if (!timeSync()) wait = BACKOFF_MIN_SEC;  // TLS and the timestamp need a valid clock
-    else wait = sendTelemetry();
-    Serial.printf("[net] next attempt in %d s\n", wait);
-    vTaskDelay((uint32_t)wait * 1000 / portTICK_PERIOD_MS);
+    if (wifiEnsure() && timeSync()) {
+      sendTelemetry();
+    }
+    // Строго 1 секунда между попытками
+    vTaskDelay(SEND_INTERVAL_SEC * 1000 / portTICK_PERIOD_MS);
   }
 }
 
-// ---------- Setup / loop ----------
+// ---------- setup() и loop() ----------
 static bool codeIsValid(const char *c) {
   if (strlen(c) != 8) return false;
   for (int i = 0; i < 8; i++)
@@ -565,14 +420,14 @@ static bool codeIsValid(const char *c) {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\n=== Qamqor collar ===");
+  Serial.println("\n=== Qamqor collar (Thin Client) ===");
   if (!codeIsValid(DEVICE_CODE)) {
     for (;;) {
       Serial.println("FATAL: DEVICE_CODE must be exactly 8 digits");
       delay(2000);
     }
   }
-  Serial.printf("[main] device code %s\n", DEVICE_CODE);
+  Serial.printf("[main] device code: %s\n", DEVICE_CODE);
 
   pinMode(PIN_VIBRATION, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
@@ -594,28 +449,20 @@ void setup() {
 
   setupAudio();
 
+  // Фоновая сетевая задача на Core 0
   xTaskCreatePinnedToCore(netTask, "net", 20480, NULL, 1, NULL, 0);
 }
 
 void loop() {
-  static uint8_t lastMode = MODE_REAL;
   static uint32_t lastSnap = 0;
 
   pulseTick();
   gpsPump();
 
-  if (g_mode != lastMode) {  // mode switched: drop whatever is playing
-    playStop();
-    g_pilotRunning = false;
-    lastMode = g_mode;
-  }
-  if (g_mode == MODE_PILOT) pilotTick();
-  else applyPending();
-
-  playTick();
+  applyActuators();
   audioPump();
 
-  if (millis() - lastSnap >= 500) {
+  if (millis() - lastSnap >= 250) {
     lastSnap = millis();
     snapshotUpdate();
   }

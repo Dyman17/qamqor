@@ -265,9 +265,9 @@ export class TelemetryService {
     if (suppressedBy) warningMessage += ' Some signals are suppressed by the daily limit.';
 
     // Deliver at most one queued test signal per ping (once only).
-    let command: { id: string; type: 'TEST_SOUND' | 'TEST_VIBRATION' } | undefined;
+    let command: { id: string; type: 'TEST_SOUND' | 'TEST_SPEAKER' | 'TEST_BUZZER' | 'TEST_VIBRATION' } | undefined;
     const pending = await this.prisma.deviceCommand.findFirst({
-      where: { deviceId: device.deviceId, status: 'PENDING', command: { in: ['TEST_SOUND', 'TEST_VIBRATION'] } },
+      where: { deviceId: device.deviceId, status: 'PENDING', command: { in: ['TEST_SOUND', 'TEST_SPEAKER', 'TEST_BUZZER', 'TEST_VIBRATION'] } },
       orderBy: { createdAt: 'asc' },
     });
     if (pending) {
@@ -276,7 +276,7 @@ export class TelemetryService {
         data: { status: 'EXECUTED', executedAt: new Date() },
       });
       if (claimed.count === 1) {
-        command = { id: pending.id, type: pending.command as 'TEST_SOUND' | 'TEST_VIBRATION' };
+        command = { id: pending.id, type: pending.command as any };
       }
     }
 

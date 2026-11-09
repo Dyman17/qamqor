@@ -176,10 +176,16 @@ export class DevicesService {
 
   async queueTestSignal(userId: string, farmId: string, deviceId: string, dto: TestSignalDto) {
     const device = await this.findOwned(farmId, deviceId);
+    let commandStr: string;
+    if (dto.signal === 'BUZZER') commandStr = 'TEST_BUZZER';
+    else if (dto.signal === 'SPEAKER') commandStr = 'TEST_SPEAKER';
+    else if (dto.signal === 'VIBRATION') commandStr = 'TEST_VIBRATION';
+    else commandStr = 'TEST_SOUND';
+
     const command = await this.prisma.deviceCommand.create({
       data: {
         deviceId: device.deviceId,
-        command: dto.signal === 'SOUND' ? 'TEST_SOUND' : 'TEST_VIBRATION',
+        command: commandStr,
         status: 'PENDING',
         payload: { requestedBy: userId },
       },

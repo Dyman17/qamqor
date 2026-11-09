@@ -151,7 +151,7 @@ class QamqorApiClient {
   }
 
   /** Queues a test signal; the collar picks it up on its next ping (202 {commandId}). */
-  testSignal(deviceId: string, signal: 'SOUND' | 'VIBRATION') {
+  testSignal(deviceId: string, signal: 'SOUND' | 'SPEAKER' | 'BUZZER' | 'VIBRATION') {
     return this.request<{ commandId: string }>(`/devices/${encodeURIComponent(deviceId)}/test-signal`, {
       method: 'POST',
       body: JSON.stringify({ signal }),

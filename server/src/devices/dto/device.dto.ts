@@ -28,6 +28,6 @@ export class UpdateDeviceDto {
 
 /** IMPULSE is deliberately not accepted. */
 export class TestSignalDto {
-  @IsIn(['SOUND', 'VIBRATION'])
-  signal!: 'SOUND' | 'VIBRATION';
+  @IsIn(['SOUND', 'SPEAKER', 'BUZZER', 'VIBRATION'])
+  signal!: 'SOUND' | 'SPEAKER' | 'BUZZER' | 'VIBRATION';
 }

@@ -60,7 +60,7 @@ export interface DeviceTelemetryResponseDto {
   serverTime: string;
   nextInterval: number;
   configVersion: number;
-  command?: { id: string; type: 'TEST_SOUND' | 'TEST_VIBRATION' };
+  command?: { id: string; type: 'TEST_SOUND' | 'TEST_SPEAKER' | 'TEST_BUZZER' | 'TEST_VIBRATION' };
   /** null = boundary not set / invalid or unreliable fix (zone UNKNOWN). */
   inFence: boolean | null;
   zone: Zone | 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';

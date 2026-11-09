@@ -33,7 +33,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <p class="caption muted">${t('a.co.offlineRule')}</p></section>
       </div>
       <section class="panel-block"><div class="row-actions">
-        <button type="button" class="btn btn-secondary" id="t-sound" data-write>${t('a.co.testSound')}</button>
+        <button type="button" class="btn btn-secondary" id="t-spk" data-write>${t('a.co.testSpeaker')}</button>
+        <button type="button" class="btn btn-secondary" id="t-buz" data-write>${t('a.co.testBuzzer')}</button>
         <button type="button" class="btn btn-secondary" id="t-vib" data-write>${t('a.co.testVib')}</button></div>
         <p class="muted" id="queued" role="status"></p></section>
       ${ctx.isOwner ? html`<section class="panel-block danger-zone"><div class="row-actions"><button type="button" class="btn btn-secondary" id="rotate" data-write>${t('a.co.rotate')}</button><button type="button" class="btn btn-danger" id="remove" data-write>${t('a.co.delete')}</button></div></section>` : ''}`);
@@ -44,10 +45,11 @@ export const mount: AppView['mount'] = (el, ctx) => {
       if (!v) return;
       try { await patch(`/devices/${encodeURIComponent(id)}`, { animalId: v }); reload(); } catch (e) { toast(e instanceof ApiError && e.code === 'CONFLICT' ? e.message : errText(e)); }
     });
-    const test = (signal: 'SOUND' | 'VIBRATION') => async () => {
+    const test = (signal: 'SPEAKER' | 'BUZZER' | 'VIBRATION') => async () => {
       try { await post(`/devices/${encodeURIComponent(id)}/test-signal`, { signal }); $('#queued', el)!.textContent = t('a.co.queued'); } catch (e) { toast(errText(e)); }
     };
-    $('#t-sound', el)!.addEventListener('click', test('SOUND'));
+    $('#t-spk', el)!.addEventListener('click', test('SPEAKER'));
+    $('#t-buz', el)!.addEventListener('click', test('BUZZER'));
     $('#t-vib', el)!.addEventListener('click', test('VIBRATION'));
     $('#rotate', el)?.addEventListener('click', async () => {
       if (!await confirmDialog({ title: t('a.co.rotateTitle'), text: t('a.co.rotateText'), confirmLabel: t('a.co.rotate'), danger: true, typeValue: id })) return;

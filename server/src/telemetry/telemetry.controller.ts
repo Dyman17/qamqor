@@ -23,7 +23,7 @@ export class TelemetryController {
   @RateLimit(
     'device-telemetry',
     { limit: 300, windowMs: MIN },
-    { limit: 30, windowMs: MIN, keyField: 'code', headerField: 'x-device-code', perIp: false },
+    { limit: 120, windowMs: MIN, keyField: 'code', headerField: 'x-device-code', perIp: false },
   )
   async receiveTelemetry(
     @CurrentDevice() device: any,
