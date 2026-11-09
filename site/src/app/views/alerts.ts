@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { patch, post, request, type AlertDto, type AlertType } from '../api';
-import { demoTag, getSim, isDemoMode } from '../demo';
+import { demoTag } from '../demo';
 import { emptyState, errorState, offlineGuard, skeleton, timeEl, toast } from '../common';
 
 const TYPES: AlertType[] = ['GEOFENCE_BREACH', 'GEOFENCE_RETURN', 'DEVICE_OFFLINE', 'DEVICE_RESTORED', 'SIGNAL_LIMIT_REACHED', 'GPS_LOST'];
@@ -83,10 +83,10 @@ export const mount: AppView['mount'] = (el, ctx) => {
   });
   void load(true);
 
-  // demo: new alerts appear on their own (10 s in AUTO, 20 s in MANUAL); the first page only, so "load more" is not reset needlessly
+  // Auto-refresh alerts: 5 s in REAL mode, 10 s in AUTO mode; the first page only, so "load more" is not reset needlessly
   let timer = 0;
   const poll = async () => {
-    if (!document.hidden && isDemoMode() && !st.next && st.loaded && el.isConnected) {
+    if (!document.hidden && !st.next && st.loaded && el.isConnected) {
       const my = ++seq;
       const p = new URLSearchParams({ status: st.status, limit: '50' });
       if (st.type) p.set('type', st.type);
@@ -95,8 +95,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
         if (my === seq && el.isConnected) { st.items = r.data; st.next = r.next; draw(); ctx.refreshChrome(); }
       } catch { /* the shell banner reports the network state */ }
     }
-    if (el.isConnected) timer = window.setTimeout(() => void poll(), getSim()?.dataMode === 'AUTO' ? 10000 : 20000);
+    if (el.isConnected) timer = window.setTimeout(() => void poll(), 5000);
   };
-  timer = window.setTimeout(() => void poll(), 10000);
+  timer = window.setTimeout(() => void poll(), 5000);
   return () => { seq++; window.clearTimeout(timer); stop(); };
 };

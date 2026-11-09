@@ -11,7 +11,10 @@ export const mount: AppView['mount'] = (el, ctx) => {
   ctx.setTitle(t('a.co.title'));
   ctx.setActions(ctx.isOwner ? html`<a class="btn btn-primary btn-sm" href="/app/collars/connect">${raw(icon('plus', 20))}${t('a.co.connect')}</a>` : '');
   const stop = offlineGuard(document.body);
-  void loadInto(el, () => get<CollarDto[]>('/devices'), (list) => {
+  const alive = () => el.isConnected;
+  let pollTimer: number | null = null;
+
+  function renderList(list: CollarDto[]): void {
     if (!list.length) {
       el.innerHTML = emptyState(t('a.co.empty'), ctx.isOwner ? undefined : t('a.co.workerHint'), ctx.isOwner ? html`<a class="btn btn-primary" href="/app/collars/connect">${t('a.co.connect')}</a>` : undefined).s;
       return;
@@ -22,6 +25,23 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const cards: Safe = html`<ul class="cards collars-cards">${list.map((c) => html`<li><a class="card-row" href="/app/collars/${encodeURIComponent(c.deviceId)}"><span class="card-main"><strong>${c.deviceId}</strong><span class="caption muted">${c.animalName ?? t('a.co.unassigned')} · ${rssi(c)}</span></span><span class="card-side">${collarBadge(c)}</span></a></li>`)}</ul>`;
     el.innerHTML = html`${table}${cards}<p class="caption muted rule">${t('a.co.offlineRule')}</p>`.s;
     el.querySelectorAll<HTMLElement>('tr.row-link').forEach((tr) => tr.addEventListener('click', (e) => { if (!(e.target as Element).closest('a')) ($('a', tr) as HTMLElement).click(); }));
+  }
+
+  void loadInto(el, () => get<CollarDto[]>('/devices'), (list) => {
+    renderList(list);
+
+    pollTimer = window.setInterval(async () => {
+      if (!alive() || document.hidden) return;
+      try {
+        const fresh = await get<CollarDto[]>('/devices');
+        if (!alive()) return;
+        renderList(fresh);
+      } catch {}
+    }, 3000);
   });
-  return stop;
+
+  return () => {
+    if (pollTimer) clearInterval(pollTimer);
+    stop();
+  };
 };

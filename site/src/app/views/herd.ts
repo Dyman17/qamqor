@@ -4,7 +4,7 @@ import { navigate } from '../../router';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { request, get, type AnimalDto, type PenDto } from '../api';
-import { animalBadge, emptyState, errorState, offlineGuard, skeleton, speciesName, timeEl } from '../common';
+import { animalBadge, emptyState, errorState, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeEl } from '../common';
 import { openAnimalForm } from './animal';
 
 export const mount: AppView['mount'] = async (el, ctx) => {
@@ -32,10 +32,10 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   const clear = $('#q-clear', el)!;
 
   const rowsDesktop = (items: AnimalDto[]): Safe => html`
-    <table class="table herd-table"><thead><tr>${['tag', 'name', 'species', 'pen', 'collar', 'status', 'seen'].map((c) => html`<th scope="col">${t(`a.herd.c.${c}` as 'a.herd.c.tag')}</th>`)}</tr></thead>
-    <tbody>${items.map((a) => html`<tr class="row-link"><td class="num"><a class="row-a" href="/app/herd/${a.id}">${a.tag}</a></td><td>${a.name}</td><td>${speciesName(a.species)}</td><td>${penName(a.penId)}</td><td>${a.collarId ?? t('a.herd.noCollar')}</td><td>${animalBadge(a)}</td><td>${timeEl(a.lastSeenAt)}</td></tr>`)}</tbody></table>`;
+    <table class="table herd-table"><thead><tr>${['tag', 'name', 'species', 'pen', 'collar', 'status', 'pulse', 'seen'].map((c) => html`<th scope="col">${t(`a.herd.c.${c}` as 'a.herd.c.tag')}</th>`)}</tr></thead>
+    <tbody>${items.map((a) => html`<tr class="row-link"><td class="num"><a class="row-a" href="/app/herd/${a.id}">${a.tag}</a></td><td>${a.name}</td><td>${speciesName(a.species)}</td><td>${penName(a.penId)}</td><td>${a.collarId ?? t('a.herd.noCollar')}</td><td>${animalBadge(a)}</td><td>${a.lastHeartRate != null ? html`<span class="num">${a.lastHeartRate}</span> ${pulseThreatBadge(a.pulseThreat)}` : '—'}</td><td>${timeEl(a.lastSeenAt)}</td></tr>`)}</tbody></table>`;
   const rowsCards = (items: AnimalDto[]): Safe => html`
-    <ul class="cards herd-cards">${items.map((a) => html`<li><a class="card-row" href="/app/herd/${a.id}"><span class="card-main"><strong>${a.name}</strong><span class="caption muted">${speciesName(a.species)} · ${a.tag} · ${penName(a.penId)}</span></span><span class="card-side">${animalBadge(a)}</span></a></li>`)}</ul>`;
+    <ul class="cards herd-cards">${items.map((a) => html`<li><a class="card-row" href="/app/herd/${a.id}"><span class="card-main"><strong>${a.name}</strong><span class="caption muted">${speciesName(a.species)} · ${a.tag} · ${penName(a.penId)}${a.lastHeartRate != null ? ` · ${a.lastHeartRate} уд/мин` : ''}</span></span><span class="card-side">${pulseThreatBadge(a.pulseThreat)}</span></a></li>`)}</ul>`;
 
   function syncChips(): void { $$('.chip-btn', el).forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.status ?? '') === st.status))); }
 
@@ -86,5 +86,20 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   $<HTMLSelectElement>('#pen', el)!.addEventListener('change', (e) => { st.pen = (e.target as HTMLSelectElement).value; void load(true); });
   $('#add')!.addEventListener('click', () => openAnimalForm(ctx, undefined, () => void load(true)));
   void load(true);
-  return () => { window.clearTimeout(timer); stopGuard(); seq++; };
+
+  // Фоновое автообновление списка каждые 3 секунды без потери фокуса/поиска
+  const pollTimer = window.setInterval(async () => {
+    if (!alive() || document.hidden || st.loading || st.search) return;
+    try {
+      const p = new URLSearchParams({ limit: '50' });
+      if (st.status) p.set('status', st.status);
+      if (st.pen) p.set('penId', st.pen);
+      const r = await request<AnimalDto[]>('GET', `/animals?${p}`);
+      if (!alive() || st.search) return;
+      st.items = r.data;
+      draw();
+    } catch {}
+  }, 3000);
+
+  return () => { window.clearTimeout(timer); window.clearInterval(pollTimer); stopGuard(); seq++; };
 };

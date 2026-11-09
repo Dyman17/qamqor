@@ -50,7 +50,7 @@ export const app = def({
 
     'a.herd.title': 'Стадо', 'a.herd.search': 'Поиск', 'a.herd.clear': 'Очистить поиск', 'a.herd.all': 'Все', 'a.herd.out': 'Вне зоны', 'a.herd.off': 'Нет связи',
     'a.herd.pen': 'Загон', 'a.herd.anyPen': 'Все загоны', 'a.herd.more': 'Показать ещё', 'a.herd.add': 'Добавить животное',
-    'a.herd.c.tag': 'Номер', 'a.herd.c.name': 'Кличка', 'a.herd.c.species': 'Вид', 'a.herd.c.pen': 'Загон', 'a.herd.c.collar': 'Ошейник', 'a.herd.c.status': 'Статус', 'a.herd.c.seen': 'Был(а) на связи',
+    'a.herd.c.tag': 'Номер', 'a.herd.c.name': 'Кличка', 'a.herd.c.species': 'Вид', 'a.herd.c.pen': 'Загон', 'a.herd.c.collar': 'Ошейник', 'a.herd.c.status': 'Статус', 'a.herd.c.pulse': 'Пульс', 'a.herd.c.seen': 'Был(а) на связи',
     'a.herd.empty': 'В стаде пока никого', 'a.herd.noMatch': 'Ничего не найдено', 'a.herd.reset': 'Сбросить фильтры', 'a.herd.noCollar': 'Нет', 'a.herd.noPen': 'Без границы',
     'a.sp.CATTLE': 'Корова', 'a.sp.HORSE': 'Лошадь', 'a.sp.CAMEL': 'Верблюд', 'a.sp.SHEEP': 'Овца', 'a.sp.GOAT': 'Коза',
     'a.st.online': 'На связи', 'a.st.offline': 'Нет связи', 'a.st.offlineAt': 'Нет связи · {time}', 'a.st.danger': 'Вне зоны', 'a.st.warning': 'Требует внимания', 'a.st.ok': 'В зоне',
@@ -240,7 +240,7 @@ export const app = def({
 
     'a.herd.title': 'Herd', 'a.herd.search': 'Search', 'a.herd.clear': 'Clear search', 'a.herd.all': 'All', 'a.herd.out': 'Out of zone', 'a.herd.off': 'No connection',
     'a.herd.pen': 'Pen', 'a.herd.anyPen': 'All pens', 'a.herd.more': 'Show more', 'a.herd.add': 'Add an animal',
-    'a.herd.c.tag': 'Number', 'a.herd.c.name': 'Name', 'a.herd.c.species': 'Species', 'a.herd.c.pen': 'Pen', 'a.herd.c.collar': 'Collar', 'a.herd.c.status': 'Status', 'a.herd.c.seen': 'Last seen',
+    'a.herd.c.tag': 'Number', 'a.herd.c.name': 'Name', 'a.herd.c.species': 'Species', 'a.herd.c.pen': 'Pen', 'a.herd.c.collar': 'Collar', 'a.herd.c.status': 'Status', 'a.herd.c.pulse': 'Pulse', 'a.herd.c.seen': 'Last seen',
     'a.herd.empty': 'No animals in the herd yet', 'a.herd.noMatch': 'Nothing found', 'a.herd.reset': 'Reset filters', 'a.herd.noCollar': 'None', 'a.herd.noPen': 'No boundary',
     'a.sp.CATTLE': 'Cow', 'a.sp.HORSE': 'Horse', 'a.sp.CAMEL': 'Camel', 'a.sp.SHEEP': 'Sheep', 'a.sp.GOAT': 'Goat',
     'a.st.online': 'Online', 'a.st.offline': 'No connection', 'a.st.offlineAt': 'No connection · {time}', 'a.st.danger': 'Out of zone', 'a.st.warning': 'Needs attention', 'a.st.ok': 'In zone',

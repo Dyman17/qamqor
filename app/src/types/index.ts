@@ -50,6 +50,17 @@ export interface Animal {
   lastSeenAt: string | null;
   lastHeartRate?: number | null;
   lastHeartRateAt?: string | null;
+  pulseThreat?: {
+    level: 'NORMAL' | 'ELEVATED' | 'CRITICAL' | 'LOW' | 'UNKNOWN';
+    score: number;
+    labelRu: string;
+    labelKk: string;
+    labelEn: string;
+    normalMin: number;
+    normalMax: number;
+    baseline: number;
+    deltaPercent: number;
+  } | null;
   status: AnimalStatus;
   isDemo: boolean;
 }

@@ -1,9 +1,9 @@
-import { $, html, raw, setHtml } from '../../dom';
+import { $, html, raw, setHtml, type Safe } from '../../dom';
 import { t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
 import { ApiError, del, get, patch, post, type AlertDto, type AnimalDto, type CollarDto, type EventsDto, type PenDto } from '../api';
-import { animalBadge, confirmDialog, loadInto, offlineGuard, SPECIES, speciesName, timeEl, toast } from '../common';
+import { animalBadge, confirmDialog, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
 import { formModal } from '../forms';
 
 /** Create or edit an animal in a modal form (POST /animals, PATCH /animals/:id). */
@@ -68,6 +68,13 @@ export const mount: AppView['mount'] = (el, ctx) => {
     return { val, sub };
   };
 
+  const threatDetails = (a: AnimalDto): Safe => {
+    const pt = a.pulseThreat;
+    if (!pt || pt.level === 'UNKNOWN') return html`<span class="caption muted">Норма вида (${speciesName(a.species)}): ${pt?.normalMin ?? '—'}–${pt?.normalMax ?? '—'} уд/мин</span>`;
+    const sign = pt.deltaPercent > 0 ? '+' : '';
+    return html`<span class="caption muted">Норма: <strong class="num">${pt.normalMin}–${pt.normalMax}</strong> уд/мин · База: <strong class="num">${pt.baseline}</strong> (${sign}${pt.deltaPercent}%)</span>`;
+  };
+
   void loadInto(el, async () => {
     const [animal, ev, pens] = await Promise.all([get<AnimalDto>(`/animals/${id}`), get<EventsDto>(`/animals/${id}/events`).catch(() => null), get<PenDto[]>('/geofences').catch(() => [] as PenDto[])]);
     return { animal, ev, pens };
@@ -89,9 +96,14 @@ export const mount: AppView['mount'] = (el, ctx) => {
         <section class="panel-block" aria-labelledby="h-col"><h2 class="title-2" id="h-col">${t('a.animal.collar')}</h2>
           <p id="col-val">${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</p>
           ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}</section>
-        <section class="panel-block" aria-labelledby="h-pulse"><h2 class="title-2" id="h-pulse">${t('a.animal.pulse')}</h2>
+        <section class="panel-block" aria-labelledby="h-pulse">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h2 class="title-2" id="h-pulse">${t('a.animal.pulse')}</h2>
+            <div id="pulse-threat-wrap">${pulseThreatBadge(a.pulseThreat)}</div>
+          </div>
           <p class="num" id="pulse-val">${pi.val}</p>
-          <p class="muted" id="pulse-sub">${pi.sub}</p></section>
+          <p class="muted" id="pulse-sub">${pi.sub}</p>
+          <div id="pulse-details">${threatDetails(a)}</div></section>
         <section class="panel-block" aria-labelledby="h-pen"><h2 class="title-2" id="h-pen">${t('a.animal.pen')}</h2><p>${pen?.name ?? t('a.herd.noPen')}</p></section>
         <section class="panel-block" aria-labelledby="h-sig"><h2 class="title-2" id="h-sig">${t('a.animal.signals')}</h2>
           ${sig ? html`<p>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)})</p><p>${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</p>` : html`<p>—</p>`}</section>
@@ -99,7 +111,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       <section class="panel-block" aria-labelledby="h-ev"><h2 class="title-2" id="h-ev">${t('a.animal.events')}</h2>
         ${ev?.alerts.length ? html`<ul class="events">${ev.alerts.map((x) => html`<li><strong>${alertLabel(x)}</strong><span class="muted">${x.message}</span>${timeEl(x.createdAt)}</li>`)}</ul>` : html`<p class="muted">${t('a.animal.noEvents')}</p>`}</section>`);
 
-    // Автоматическое обновление данных без перезагрузки страницы (каждые 2 сек)
+    // Автоматическое обновление данных без перезагрузки страницы (каждую 1 сек)
     pollTimer = window.setInterval(async () => {
       if (!alive() || document.hidden) return;
       try {
@@ -107,8 +119,15 @@ export const mount: AppView['mount'] = (el, ctx) => {
         const pFresh = pulseInfo(fresh.lastHeartRate, fresh.lastHeartRateAt);
         const pVal = $('#pulse-val', el);
         const pSub = $('#pulse-sub', el);
+        const pThreat = $('#pulse-threat-wrap', el);
+        const pDet = $('#pulse-details', el);
+        const bWrap = $('#badge-wrap', el);
+
         if (pVal) pVal.textContent = String(pFresh.val);
         if (pSub) setHtml(pSub, pFresh.sub);
+        if (pThreat) setHtml(pThreat, pulseThreatBadge(fresh.pulseThreat));
+        if (pDet) setHtml(pDet, threatDetails(fresh));
+        if (bWrap) setHtml(bWrap, animalBadge(fresh));
 
         const posVal = $('#pos-val', el);
         const posSub = $('#pos-sub', el);

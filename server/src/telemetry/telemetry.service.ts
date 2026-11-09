@@ -13,6 +13,7 @@ import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
 import { DeviceStatus } from '@qamqor/shared';
 import { DEVICE_AUTH_ERROR } from '../devices/device-auth.guard';
 import { SignalsService } from '../signals/signals.service';
+import { smoothHeartRate } from '../animals/pulse-analysis';
 
 type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
 
@@ -85,7 +86,8 @@ export class TelemetryService {
     let nextInterval = this.num('NORMAL_PING_INTERVAL_SEC', 300);
     const emergencyInterval = this.num('EMERGENCY_PING_INTERVAL_SEC', 60);
 
-    const hr: number | null = typeof dto.heartRate === 'number' ? dto.heartRate : null;
+    const rawHr: number | null = typeof dto.heartRate === 'number' ? dto.heartRate : null;
+    const hr: number | null = rawHr !== null ? smoothHeartRate(device.animal?.lastHeartRate, rawHr) : null;
     const animal = device.animal;
     const polygon = animal?.activeGeofence?.polygonJson ?? null;
 

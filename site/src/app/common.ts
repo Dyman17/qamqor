@@ -2,7 +2,7 @@ import { esc, html, raw, type Safe } from '../dom';
 import { getLang, t } from '../i18n';
 import { openModal } from '../ui/dialog';
 import { icon } from '../ui/icons';
-import { ApiError, type AnimalDto, type CollarDto } from './api';
+import { ApiError, type AnimalDto, type CollarDto, type PulseThreatDto } from './api';
 import { demoTag } from './demo';
 
 export function timeAgo(iso: string | null | undefined): string {
@@ -59,6 +59,15 @@ function animalBadgeBase(a: AnimalDto): Safe {
   if (a.status === 'offline') return statusBadge('offline', a.lastSeenAt ? t('a.st.offlineAt', { time: timeAgo(a.lastSeenAt) }) : t('a.st.offline'));
   if (a.status === 'warning') return statusBadge('warning', t('a.st.warning'));
   return a.collarId ? statusBadge('online', t('a.st.online')) : statusBadge('none', t('a.st.ok'));
+}
+
+export function pulseThreatBadge(t?: PulseThreatDto | null): Safe {
+  if (!t || t.level === 'UNKNOWN') return statusBadge('none', 'Нет данных');
+  const label = getLang() === 'en' ? t.labelEn : getLang() === 'kk' ? t.labelKk : t.labelRu;
+  if (t.level === 'CRITICAL') return statusBadge('danger', label);
+  if (t.level === 'ELEVATED') return statusBadge('warning', label);
+  if (t.level === 'LOW') return statusBadge('warning', label);
+  return statusBadge('online', label);
 }
 
 export function collarBadge(c: CollarDto): Safe {

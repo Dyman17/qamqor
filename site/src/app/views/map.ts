@@ -4,9 +4,9 @@ import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { get, request, type AnimalDto, type PenDto } from '../api';
 import { demoTag } from '../demo';
-import { absTime, animalBadge, emptyState, errorState, offlineGuard, skeleton, speciesName, timeAgo, toast } from '../common';
+import { absTime, animalBadge, emptyState, errorState, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
 import { openAnimalForm } from './animal';
-import { getSim, isDemoMode, onSim } from '../demo';
+import { getSim, onSim } from '../demo';
 import { mountDemoPanel } from './demo-panel';
 
 // MapLibre is loaded lazily, only on this route (site-brief 8). Base map: OpenFreeMap (no key), OSM attribution from the style.
@@ -108,7 +108,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         <h2 class="title-2">${sel.name} · ${sel.tag}</h2>
         <p>${animalBadge(sel)}</p>
         <p class="muted">${speciesName(sel.species)} · ${sel.penId ? pens.find((p) => p.id === sel.penId)?.name ?? '' : t('a.map.noPen')}</p>
-        <p class="muted">${sel.lastHeartRate != null ? `${t('a.animal.pulse')}: ${t('a.animal.bpm', { n: sel.lastHeartRate })} · ` : ''}${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</p>
+        <p>${sel.lastHeartRate != null ? html`${pulseThreatBadge(sel.pulseThreat)} <span class="num">${sel.lastHeartRate} уд/мин</span> · ` : ''}<span class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</span></p>
         <p><a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a></p>`.s;
       $('#back', panelBody)!.addEventListener('click', () => { selected = null; drawPanel(); renderMarkers(); });
       return;
@@ -337,7 +337,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     void reload().catch(() => undefined);
   });
 
-  // live positions: 30 s normally, 10 s while the demo is on (AUTO moves the herd every tick)
+  // live positions: 3 s in REAL and demo modes for real-time tracking without manual refresh
   const tick = async () => {
     if (!document.hidden && !disposed) {
       try {
@@ -348,9 +348,9 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         demo.update();
       } catch { /* the shell banner reports the network state */ }
     }
-    if (!disposed) timers.push(window.setTimeout(() => void tick(), getSim()?.dataMode === 'AUTO' ? 10000 : isDemoMode() ? 15000 : 30000));
+    if (!disposed) timers.push(window.setTimeout(() => void tick(), 3000));
   };
-  timers.push(window.setTimeout(() => void tick(), getSim()?.dataMode === 'AUTO' ? 10000 : 30000));
+  timers.push(window.setTimeout(() => void tick(), 3000));
 
   return () => {
     disposed = true;

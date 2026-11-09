@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { computeConnState } from '../devices/connectivity';
+import { computePulseThreat, type PulseThreatDto } from './pulse-analysis';
 
 export type AnimalStatus = 'ok' | 'danger' | 'warning' | 'offline';
 
@@ -22,6 +23,8 @@ export interface AnimalDto {
   /** Last pulse, BPM (null = never measured). */
   lastHeartRate: number | null;
   lastHeartRateAt: string | null;
+  /** Physiological threat level and baseline analysis based on species */
+  pulseThreat?: PulseThreatDto | null;
   status: AnimalStatus;
   /** Demo (simulated) animal; deleted when the farm returns to REAL mode. */
   isDemo: boolean;
@@ -71,6 +74,7 @@ export function toAnimalDto(a: any, now: number = Date.now()): AnimalDto {
     lastSeenAt: a.lastSeenAt ? a.lastSeenAt.toISOString() : null,
     lastHeartRate: a.lastHeartRate ?? null,
     lastHeartRateAt: a.lastHeartRateAt ? a.lastHeartRateAt.toISOString() : null,
+    pulseThreat: computePulseThreat(a.species, a.lastHeartRate),
     status: animalStatus(a, now),
     isDemo: a.isDemo ?? false,
   };

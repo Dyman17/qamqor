@@ -10,10 +10,24 @@ export interface MembershipDto { farmId: string; farmName: string; role: Role }
 export interface AuthResponse { token: string; user: UserDto; memberships: MembershipDto[] }
 export interface FarmDto { id: string; name: string; description?: string; timezone: string; workerCanEditBoundaries: boolean; myRole: Role; dataMode?: DataMode }
 export interface SignalLimitDto { level: 'SOUND' | 'VIBRATION' | 'IMPULSE'; dailyLimit: number | null; unlimited: boolean }
+export type PulseThreatLevel = 'NORMAL' | 'ELEVATED' | 'CRITICAL' | 'LOW' | 'UNKNOWN';
+export interface PulseThreatDto {
+  level: PulseThreatLevel;
+  score: number;
+  labelRu: string;
+  labelKk: string;
+  labelEn: string;
+  normalMin: number;
+  normalMax: number;
+  baseline: number;
+  deltaPercent: number;
+}
+
 export interface AnimalDto {
   id: string; farmId: string; name: string; tag: string; species: 'CATTLE' | 'HORSE' | 'CAMEL' | 'SHEEP' | 'GOAT'; gender?: string; breed?: string;
   penId: string | null; collarId: string | null; lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null; status: AnimalStatus; isDemo?: boolean;
   lastHeartRate?: number | null; lastHeartRateAt?: string | null;
+  pulseThreat?: PulseThreatDto | null;
 }
 export interface CollarDto { deviceId: string; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
 export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number; isDemo?: boolean }
