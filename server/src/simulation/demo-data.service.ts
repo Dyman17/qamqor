@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateDeviceSecret, hashDeviceSecret } from '../devices/device-secret';
 import { PenGeometry, rectanglePolygon } from './geometry';
@@ -146,8 +146,66 @@ export class DemoDataService {
     if (orphan.length) {
       await this.prisma.animal.updateMany({ where: { id: { in: orphan } }, data: { activeGeofenceId: pen.id } });
     }
-    for (let i = existing.length; i < Math.min(herd, MAX_DEMO_ANIMALS); i++) {
-      await this.createAnimal(farmId, {}, pen);
+    const need = Math.min(herd, MAX_DEMO_ANIMALS) - existing.length;
+    if (need > 0) await this.createMany(farmId, need, pen, existing.length);
+  }
+
+  /** Creates `n` demo animals with collars in two inserts (one transaction): few round trips on a remote DB. */
+  private async createMany(farmId: string, n: number, pen: any, have: number): Promise<void> {
+    const geom = penGeometryOf(pen);
+    const rng = mulberry32(Date.now() ^ have);
+    const now = new Date();
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const tags = await this.prisma.animal.findMany({ where: { farmId }, select: { tagNumber: true } });
+      const taken = new Set(tags.map((t) => t.tagNumber));
+      const used = [...taken].map((t) => /^D-(\d+)$/.exec(t)?.[1]).filter(Boolean).map(Number);
+      let next = (used.length ? Math.max(...used) : 0) + 1;
+      const animals: any[] = [];
+      const devices: any[] = [];
+      for (let i = 0; i < n; i++) {
+        while (taken.has(`D-${String(next).padStart(3, '0')}`)) next++;
+        const tag = `D-${String(next).padStart(3, '0')}`;
+        taken.add(tag);
+        const id = randomUUID();
+        const start = geom ? geom.toGeo(geom.interiorPoint(rng, 25)) : null;
+        animals.push({
+          id,
+          farmId,
+          name: NAMES[(next - 1) % NAMES.length],
+          tagNumber: tag,
+          species: 'CATTLE',
+          isDemo: true,
+          activeGeofenceId: pen.id,
+          ...(start && { lastLatitude: start.latitude, lastLongitude: start.longitude, lastAccuracy: 5, lastSeenAt: now }),
+        });
+        devices.push({
+          deviceId: `QAM-DEMO-${randomBytes(3).toString('hex').toUpperCase()}`,
+          secretHash: hashDeviceSecret(generateDeviceSecret()),
+          isSimulated: true,
+          farmId,
+          animalId: id,
+          status: 'ONLINE',
+          signal: -70,
+          lastHeartbeatAt: now,
+        });
+      }
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.animal.createMany({ data: animals });
+          await tx.device.createMany({ data: devices });
+        });
+        const total = await this.prisma.animal.count({ where: { farmId, isDemo: true } });
+        if (total > MAX_DEMO_ANIMALS) {
+          const ids = animals.map((a) => a.id);
+          await this.prisma.device.deleteMany({ where: { farmId, isSimulated: true, animalId: { in: ids } } });
+          await this.prisma.animal.deleteMany({ where: { id: { in: ids }, isDemo: true } });
+          throw new ConflictException(`Не больше ${MAX_DEMO_ANIMALS} демо-животных на ферму`);
+        }
+        return;
+      } catch (e: any) {
+        if (e?.code !== 'P2002') throw e;
+        if (attempt === 5) throw new ConflictException('Не удалось выбрать бирку, повторите');
+      }
     }
   }
 

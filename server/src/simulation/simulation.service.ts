@@ -102,22 +102,31 @@ export class SimulationService {
     const m = await this.farms.requireOwner(userId, farmId);
     this.assertEnabled();
     const farm: any = m.farm;
-    if (farm.dataMode === mode) return this.toDto(farm);
+    // REAL with leftovers (an earlier switch timed out waiting for the tick) is finished instead of skipped.
+    if (farm.dataMode === mode && !(mode === 'REAL' && (await this.demo.counts(farmId)).animals > 0)) {
+      return this.toDto(farm);
+    }
 
     if (mode === 'AUTO') return this.begin(farm, {});
 
     this.simulator.forgetFarm(farmId);
     if (mode === 'REAL') {
-      // Hold the tick lease so a running tick cannot re-create demo rows during or after the purge.
-      if (!(await this.simulator.acquireLease(farmId))) {
-        throw new ConflictException('Симуляция занята, повторите через несколько секунд');
-      }
+      // The owner wins over the tick: claim the farm and switch the mode first, so the tick yields
+      // after its current animal; then wait for its lease and purge.
+      this.simulator.claim(farmId);
       try {
         await this.prisma.farm.update({ where: { id: farmId }, data: { dataMode: 'REAL', simUntil: null } });
-        // The demo data is removed; real animals, collars, pens and alerts are not touched.
-        await this.demo.purge(farmId);
+        if (!(await this.simulator.acquireLease(farmId, 15_000))) {
+          throw new ConflictException('Симуляция занята, повторите через несколько секунд');
+        }
+        try {
+          // The demo data is removed; real animals, collars, pens and alerts are not touched.
+          await this.demo.purge(farmId);
+        } finally {
+          await this.simulator.releaseLease(farmId);
+        }
       } finally {
-        await this.simulator.releaseLease(farmId);
+        this.simulator.unclaim(farmId);
       }
       return this.toDto(await this.farmOf(farmId));
     }
@@ -132,20 +141,36 @@ export class SimulationService {
     const speed = p.speed ?? farm.simSpeed ?? 1;
     const herd = p.herd ?? farm.simHerd ?? 8;
     const until = new Date(Date.now() + (p.hours ?? DEFAULT_AUTO_HOURS) * 3600_000);
-    // The herd is built first and the farm switches to AUTO only afterwards: a failure leaves the mode as it was.
-    if (!(await this.simulator.acquireLease(farm.id))) {
-      throw new ConflictException('Симуляция занята, повторите через несколько секунд');
+    if (farm.dataMode === 'AUTO') {
+      // Already running: a plain update, no lease. The tick builds up the herd and trims it on its next round.
+      const running = await this.prisma.farm.update({
+        where: { id: farm.id },
+        data: { simSpeed: speed, simHerd: herd, simUntil: until },
+      });
+      if (p.herd !== undefined) this.simulator.requestTrim(farm.id, herd);
+      this.simulator.beginFarm(farm.id);
+      this.simulator.markViewed(farm.id);
+      return this.toDto(running);
     }
+    // The herd is built first and the farm switches to AUTO only afterwards: a failure leaves the mode as it was.
+    this.simulator.claim(farm.id);
     let updated: any;
     try {
-      if (p.herd !== undefined) await this.demo.trimHerd(farm.id, herd);
-      await this.demo.ensureHerd(farm.id, herd);
-      updated = await this.prisma.farm.update({
-        where: { id: farm.id },
-        data: { dataMode: 'AUTO', simSpeed: speed, simHerd: herd, simUntil: until },
-      });
+      if (!(await this.simulator.acquireLease(farm.id, 15_000))) {
+        throw new ConflictException('Симуляция занята, повторите через несколько секунд');
+      }
+      try {
+        if (p.herd !== undefined) await this.demo.trimHerd(farm.id, herd);
+        await this.demo.ensureHerd(farm.id, herd);
+        updated = await this.prisma.farm.update({
+          where: { id: farm.id },
+          data: { dataMode: 'AUTO', simSpeed: speed, simHerd: herd, simUntil: until },
+        });
+      } finally {
+        await this.simulator.releaseLease(farm.id);
+      }
     } finally {
-      await this.simulator.releaseLease(farm.id);
+      this.simulator.unclaim(farm.id);
     }
     this.simulator.beginFarm(farm.id);
     this.simulator.markViewed(farm.id);

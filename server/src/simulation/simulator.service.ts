@@ -59,6 +59,10 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private readonly viewed = new Map<string, number>();
   private readonly farms = new Map<string, FarmState>();
+  /** Farms an owner action is taking over: the tick yields at the next animal boundary. */
+  private readonly claimed = new Set<string>();
+  /** Herd size to trim down to on the next tick (set by start on a running simulation). */
+  private readonly pendingTrim = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -101,6 +105,19 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
     this.farms.set(farmId, this.newState(farmId, seed ?? (hashSeed(farmId) ^ (now >>> 0)), now, true));
   }
 
+  /** An owner action takes over the farm: a running tick stops after the animal it is on. */
+  claim(farmId: string): void {
+    this.claimed.add(farmId);
+  }
+
+  unclaim(farmId: string): void {
+    this.claimed.delete(farmId);
+  }
+
+  requestTrim(farmId: string, herd: number): void {
+    this.pendingTrim.set(farmId, herd);
+  }
+
   forgetFarm(farmId: string): void {
     this.farms.delete(farmId);
     this.viewed.delete(farmId);
@@ -134,6 +151,7 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
           await this.autoStop(farm.id);
           continue;
         }
+        if (this.claimed.has(farm.id)) continue;
         const lease = await this.prisma.farm.updateMany({
           where: { id: farm.id, dataMode: 'AUTO', OR: [{ simLeaseUntil: null }, { simLeaseUntil: { lt: now } }] },
           data: { simLeaseUntil: new Date(ms + LEASE_MS) },
@@ -160,7 +178,7 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
    * Takes the farm's tick lease for an owner action (REAL purge, start) so it cannot interleave with
    * a running tick. Waits briefly for a tick in progress; false = still held.
    */
-  async acquireLease(farmId: string, waitMs = 3000): Promise<boolean> {
+  async acquireLease(farmId: string, waitMs = 15_000): Promise<boolean> {
     const deadline = Date.now() + waitMs;
     for (;;) {
       const now = new Date();
@@ -197,6 +215,11 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
 
   private async processFarm(farm: any, now: Date, cfg: ReturnType<typeof loadAppConfig>) {
     const ms = now.getTime();
+    const trimTo = this.pendingTrim.get(farm.id);
+    if (trimTo !== undefined) {
+      this.pendingTrim.delete(farm.id);
+      await this.demo.trimHerd(farm.id, trimTo);
+    }
     let devices = await this.demoDevices(farm.id);
     if (devices.length < Math.min(farm.simHerd, 20) || devices.some((d) => !d.animal?.activeGeofence)) {
       // Fresh read: the owner may have switched the farm away (REAL purge) since the tick began.
@@ -212,7 +235,14 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
     }
     const stepCfg = { speed: farm.simSpeed || 1, tickSec: cfg.simTickSec, offlineSec: cfg.simDemoOfflineSec };
     let pings = 0;
+    let checked = 0;
     for (const device of devices) {
+      // An owner action wins: stop after the current animal so the lease is released at once.
+      if (this.claimed.has(farm.id)) break;
+      if (checked++ > 0) {
+        const cur = await this.prisma.farm.findUnique({ where: { id: farm.id }, select: { dataMode: true } });
+        if (!cur || cur.dataMode !== 'AUTO') break;
+      }
       const animal: any = device.animal;
       const geom = penGeometryOf(animal?.activeGeofence);
       if (!geom) continue; // no valid pen: nothing is guessed

@@ -133,9 +133,11 @@ describe('modes and permissions', () => {
     expect(new Date(r.until!).getTime() - T0).toBe(4 * 3600_000);
     expect(r.demo.animals).toBe(3);
     expect((await c.sim.setSpeed(OWNER, c.farm.id, 10)).speed).toBe(10);
-    // fewer animals on the next start: the surplus is removed with its collar
-    const again = await c.sim.start(OWNER, c.farm.id, { herd: 2 });
-    expect(again.demo.animals).toBe(2);
+    // fewer animals on a start of the running simulation: the next tick removes the surplus with its collar
+    await c.sim.start(OWNER, c.farm.id, { herd: 2 });
+    c.simulator.markViewed(c.farm.id, Date.now());
+    await c.simulator.tick(new Date());
+    expect((await c.sim.getState(OWNER, c.farm.id)).demo.animals).toBe(2);
     expect(c.prisma.tables.device).toHaveLength(2);
   });
 
@@ -636,15 +638,73 @@ describe('review fixes', () => {
     expect(ok).toMatchObject({ dataMode: 'AUTO', demo: { animals: 8 } });
   });
 
-  it('REAL and start refuse (409) while a tick holds the farm lease; the mode is untouched', async () => {
+  it('REAL waits for the lease and then 409s only when it never frees; a retry finishes the purge', async () => {
     useFakeClock();
     const c = await build();
     await c.sim.start(OWNER, c.farm.id, {});
-    jest.spyOn(c.simulator, 'acquireLease').mockResolvedValue(false);
+    const spy = jest.spyOn(c.simulator, 'acquireLease').mockResolvedValueOnce(false);
     await expect(c.sim.setMode(OWNER, c.farm.id, 'REAL')).rejects.toBeInstanceOf(ConflictException);
-    await expect(c.sim.start(OWNER, c.farm.id, {})).rejects.toBeInstanceOf(ConflictException);
-    expect(c.prisma.tables.farm[0].dataMode).toBe('AUTO');
-    expect(c.prisma.tables.animal.filter((a) => a.isDemo)).toHaveLength(8);
+    expect(spy).toHaveBeenCalledWith(c.farm.id, 15_000);
+    expect(c.prisma.tables.farm[0].dataMode).toBe('REAL'); // the tick no longer picks the farm up
+    const done = await c.sim.setMode(OWNER, c.farm.id, 'REAL');
+    expect(done).toMatchObject({ dataMode: 'REAL', demo: { animals: 0 } });
+    expect(c.prisma.tables.animal).toHaveLength(0);
+  });
+
+  it('REAL wins over a tick that is in the middle of the herd: the tick yields and nothing is re-created', async () => {
+    useFakeClock();
+    const c = await build();
+    await c.sim.start(OWNER, c.farm.id, {});
+    c.simulator.markViewed(c.farm.id, Date.now());
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    const orig = c.telemetry.processDeviceTelemetry.bind(c.telemetry);
+    jest.spyOn(c.telemetry, 'processDeviceTelemetry').mockImplementation(async (d: any, dto: any) => {
+      if (++calls === 1) await gate; // the tick stops inside its first animal
+      return orig(d, dto);
+    });
+    const tick = c.simulator.tick(new Date());
+    await new Promise((r) => setImmediate(r));
+    const real = c.sim.setMode(OWNER, c.farm.id, 'REAL');
+    await new Promise((r) => setImmediate(r));
+    release();
+    await tick;
+    const res = await real;
+    expect(res).toMatchObject({ dataMode: 'REAL', demo: { animals: 0, alerts: 0 } });
+    expect(c.prisma.tables.animal).toHaveLength(0);
+    expect(c.prisma.tables.device).toHaveLength(0);
+    expect(c.prisma.tables.farm[0].simLeaseUntil).toBeNull();
+    expect(calls).toBeLessThanOrEqual(1); // the tick did not go on to the other animals
+  });
+
+  it('start with speed/herd on a running simulation is a plain update (no lease); the tick trims', async () => {
+    useFakeClock();
+    const c = await build();
+    await c.sim.start(OWNER, c.farm.id, { herd: 8 });
+    const lease = jest.spyOn(c.simulator, 'acquireLease');
+    c.prisma.tables.farm[0].simLeaseUntil = new Date(Date.now() + 25_000); // a tick holds the farm
+    const r = await c.sim.start(OWNER, c.farm.id, { speed: 5, herd: 3 });
+    expect(lease).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ dataMode: 'AUTO', speed: 5, herd: 3 });
+    expect(c.prisma.tables.animal.filter((a) => a.isDemo)).toHaveLength(8); // trimmed by the tick, not here
+    c.prisma.tables.farm[0].simLeaseUntil = null;
+    c.simulator.markViewed(c.farm.id, Date.now());
+    await c.simulator.tick(new Date());
+    expect(c.prisma.tables.animal.filter((a) => a.isDemo)).toHaveLength(3);
+    const sp = await c.sim.setSpeed(OWNER, c.farm.id, 10);
+    expect(sp.speed).toBe(10);
+    expect(lease).not.toHaveBeenCalled();
+  });
+
+  it('the herd is created with a constant number of queries, not per animal', async () => {
+    useFakeClock();
+    const c = await build();
+    const before = c.prisma.calls;
+    await c.sim.start(OWNER, c.farm.id, { herd: 20 });
+    expect(c.prisma.tables.animal.filter((a) => a.isDemo)).toHaveLength(20);
+    expect(c.prisma.tables.device.filter((d) => d.isSimulated)).toHaveLength(20);
+    expect(c.prisma.calls - before).toBeLessThan(30);
   });
 
   it('a tick that read a stale AUTO farm cannot take the lease once the farm is REAL, and re-creates nothing', async () => {
