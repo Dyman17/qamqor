@@ -298,4 +298,70 @@ export class TelemetryService {
       warningMessage,
     };
   }
+
+  /**
+   * Returns latest raw telemetry packets for debugging and live inspection.
+   */
+  async getLatestTelemetry(code?: string, limit: number = 10) {
+    let device: any = null;
+    if (code) {
+      device = await this.prisma.device.findUnique({
+        where: { code },
+        include: { animal: true },
+      });
+    } else {
+      device = await this.prisma.device.findFirst({
+        where: { code: { not: null } },
+        orderBy: { lastHeartbeatAt: 'desc' },
+        include: { animal: true },
+      });
+    }
+
+    if (!device) {
+      return {
+        success: false,
+        message: code ? `Device with code ${code} not found` : 'No devices found',
+      };
+    }
+
+    const packets = await this.prisma.telemetry.findMany({
+      where: { deviceId: device.deviceId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    const isLive = device.lastHeartbeatAt
+      ? Date.now() - new Date(device.lastHeartbeatAt).getTime() < 15000
+      : false;
+
+    return {
+      success: true,
+      code: device.code,
+      deviceId: device.deviceId,
+      online: isLive,
+      lastHeartbeatAt: device.lastHeartbeatAt,
+      signalRssi: device.signalRssi,
+      animal: device.animal
+        ? {
+            id: device.animal.id,
+            name: device.animal.name,
+            tag: device.animal.tagNumber,
+            lastHeartRate: device.animal.lastHeartRate,
+            lastHeartRateAt: device.animal.lastHeartRateAt,
+            lastLatitude: device.animal.lastLatitude,
+            lastLongitude: device.animal.lastLongitude,
+          }
+        : null,
+      totalRecentPackets: packets.length,
+      packets: packets.map((p) => ({
+        time: p.createdAt,
+        heartRate: p.heartRate,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        satellites: p.satellites,
+        accuracy: p.accuracy,
+        signal: p.signal,
+      })),
+    };
+  }
 }

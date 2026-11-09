@@ -113,22 +113,28 @@ static void pulseTick() {
     long ir = particleSensor.getFIFOIR();
     particleSensor.nextSample();
     uint32_t now = millis();
-    if (ir < 50000) {
-      beatAvg = 0;
+    // Порог наличия пальца: ниже 25000 — датчик открыт
+    if (ir < 25000) {
+      if (lastGoodBeatMs > 0 && now - lastGoodBeatMs > 5000) {
+        beatAvg = 0;
+      }
       lastBeatMs = 0;
       continue;
     }
     if (checkForBeat(ir)) {
       if (lastBeatMs != 0) {
         float bpm = 60000.0f / (float)(now - lastBeatMs);
-        if (bpm >= 40 && bpm <= 200) {
-          beatAvg = beatAvg <= 0 ? bpm : 0.7f * beatAvg + 0.3f * bpm;
+        if (bpm >= 45 && bpm <= 190) {
+          beatAvg = beatAvg <= 0 ? bpm : 0.6f * beatAvg + 0.4f * bpm;
           lastGoodBeatMs = now;
+          Serial.printf("[pulse] Удар! BPM: %.0f (IR: %ld)\n", beatAvg, ir);
         }
       }
       lastBeatMs = now;
     }
-    if (beatAvg > 0 && now - lastGoodBeatMs > 10000) beatAvg = 0;
+    if (beatAvg > 0 && now - lastGoodBeatMs > 6000) {
+      beatAvg = 0;
+    }
   }
 }
 
@@ -450,6 +456,7 @@ void setup() {
   if (particleSensor.begin(Wire, I2C_SPEED_FAST)) {
     particleSensor.setup();
     particleSensor.setPulseAmplitudeRed(0x0A);
+    particleSensor.setPulseAmplitudeIR(0x24);
     particleSensor.setPulseAmplitudeGreen(0);
     pulseOk = true;
     Serial.println("[pulse] MAX30102 ready");

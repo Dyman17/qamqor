@@ -57,6 +57,17 @@ export const mount: AppView['mount'] = (el, ctx) => {
   const stop = offlineGuard(document.body);
   const id = ctx.params.id;
   const alive = () => el.isConnected;
+  let pollTimer: number | null = null;
+
+  const pulseInfo = (hr: number | null | undefined, at: string | null | undefined) => {
+    const isLive = at ? Date.now() - new Date(at).getTime() < 15000 : false;
+    const val = hr != null ? t('a.animal.bpm', { n: hr }) : '—';
+    const sub = at
+      ? html`${timeEl(at)} ${isLive ? html`<span class="badge badge-online"><span class="dot"></span> ${t('a.animal.livePulse')}</span>` : html`<span class="muted">(${t('a.animal.noFinger')})</span>`}`
+      : html`${t('a.animal.noPulse')}`;
+    return { val, sub };
+  };
+
   void loadInto(el, async () => {
     const [animal, ev, pens] = await Promise.all([get<AnimalDto>(`/animals/${id}`), get<EventsDto>(`/animals/${id}/events`).catch(() => null), get<PenDto[]>('/geofences').catch(() => [] as PenDto[])]);
     return { animal, ev, pens };
@@ -66,25 +77,46 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const pen = pens.find((p) => p.id === a.penId);
     const sig = ev?.signals;
     const lim = (l: number | null) => (l == null ? t('a.animal.noLimit') : t('a.animal.limit', { n: l }));
+    const pi = pulseInfo(a.lastHeartRate, a.lastHeartRateAt);
+
     setHtml(el, html`
       <p><a href="/app/herd">${t('a.animal.back')}</a></p>
-      <div class="profile-head"><div>${animalBadge(a)}</div><a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}">${t('a.map.showOnMap')}</a></div>
+      <div class="profile-head"><div id="badge-wrap">${animalBadge(a)}</div><a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}">${t('a.map.showOnMap')}</a></div>
       <div class="grid-2">
         <section class="panel-block" aria-labelledby="h-pos"><h2 class="title-2" id="h-pos">${t('a.animal.position')}</h2>
-          <p class="num">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
-          <p class="muted">${t('a.animal.accuracy')}: ${a.accuracyM != null ? `${Math.round(a.accuracyM)} m` : '—'} · ${timeEl(a.lastSeenAt)}</p></section>
+          <p class="num" id="pos-val">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
+          <p class="muted" id="pos-sub">${t('a.animal.accuracy')}: ${a.accuracyM != null ? `${Math.round(a.accuracyM)} m` : '—'} · ${timeEl(a.lastSeenAt)}</p></section>
         <section class="panel-block" aria-labelledby="h-col"><h2 class="title-2" id="h-col">${t('a.animal.collar')}</h2>
-          <p>${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</p>
+          <p id="col-val">${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</p>
           ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}</section>
         <section class="panel-block" aria-labelledby="h-pulse"><h2 class="title-2" id="h-pulse">${t('a.animal.pulse')}</h2>
-          <p class="num">${a.lastHeartRate != null ? t('a.animal.bpm', { n: a.lastHeartRate }) : '—'}</p>
-          <p class="muted">${a.lastHeartRateAt ? timeEl(a.lastHeartRateAt) : t('a.animal.noPulse')}</p></section>
+          <p class="num" id="pulse-val">${pi.val}</p>
+          <p class="muted" id="pulse-sub">${pi.sub}</p></section>
         <section class="panel-block" aria-labelledby="h-pen"><h2 class="title-2" id="h-pen">${t('a.animal.pen')}</h2><p>${pen?.name ?? t('a.herd.noPen')}</p></section>
         <section class="panel-block" aria-labelledby="h-sig"><h2 class="title-2" id="h-sig">${t('a.animal.signals')}</h2>
           ${sig ? html`<p>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)})</p><p>${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</p>` : html`<p>—</p>`}</section>
       </div>
       <section class="panel-block" aria-labelledby="h-ev"><h2 class="title-2" id="h-ev">${t('a.animal.events')}</h2>
         ${ev?.alerts.length ? html`<ul class="events">${ev.alerts.map((x) => html`<li><strong>${alertLabel(x)}</strong><span class="muted">${x.message}</span>${timeEl(x.createdAt)}</li>`)}</ul>` : html`<p class="muted">${t('a.animal.noEvents')}</p>`}</section>`);
+
+    // Автоматическое обновление данных без перезагрузки страницы (каждые 2 сек)
+    pollTimer = window.setInterval(async () => {
+      if (!alive() || document.hidden) return;
+      try {
+        const fresh = await get<AnimalDto>(`/animals/${id}`);
+        const pFresh = pulseInfo(fresh.lastHeartRate, fresh.lastHeartRateAt);
+        const pVal = $('#pulse-val', el);
+        const pSub = $('#pulse-sub', el);
+        if (pVal) pVal.textContent = String(pFresh.val);
+        if (pSub) setHtml(pSub, pFresh.sub);
+
+        const posVal = $('#pos-val', el);
+        const posSub = $('#pos-sub', el);
+        if (posVal) posVal.textContent = fresh.lat != null && fresh.lng != null ? t('a.animal.coords', { lat: fresh.lat.toFixed(5), lng: fresh.lng.toFixed(5) }) : '—';
+        if (posSub) setHtml(posSub, html`${t('a.animal.accuracy')}: ${fresh.accuracyM != null ? `${Math.round(fresh.accuracyM)} m` : '—'} · ${timeEl(fresh.lastSeenAt)}`);
+      } catch {}
+    }, 2000);
+
     $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true })));
     $('#remove')!.addEventListener('click', async () => {
       if (!await confirmDialog({ title: t('a.animal.deleteTitle'), text: t('a.animal.deleteText', { name: a.name }), confirmLabel: t('a.animal.delete'), danger: true })) return;
@@ -94,5 +126,9 @@ export const mount: AppView['mount'] = (el, ctx) => {
       try { await post(`/animals/${a.id}/unassign-collar`); void navigate(location.pathname, { replace: true }); } catch (e) { toast((e as Error).message); }
     });
   }, { alive });
-  return stop;
+
+  return () => {
+    if (pollTimer) clearInterval(pollTimer);
+    stop();
+  };
 };
