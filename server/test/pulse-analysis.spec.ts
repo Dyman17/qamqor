@@ -41,3 +41,4 @@ describe('pulse analysis and threat levels by species', () => {
     expect(mod).toBe(69);
   });
 });
+

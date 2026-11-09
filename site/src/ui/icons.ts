@@ -21,7 +21,14 @@ import i_caret_down from '@phosphor-icons/core/assets/regular/caret-down.svg?raw
 import i_arrow_down from '@phosphor-icons/core/assets/regular/arrow-down.svg?raw';
 import i_plant from '@phosphor-icons/core/assets/regular/plant.svg?raw';
 
+import i_speaker_high from '@phosphor-icons/core/assets/regular/speaker-high.svg?raw';
+import i_vibrate from '@phosphor-icons/core/assets/regular/vibrate.svg?raw';
+import i_heartbeat from '@phosphor-icons/core/assets/regular/heartbeat.svg?raw';
+
 const RAW: Record<string, string> = {
+  'speaker-high': i_speaker_high,
+  'vibrate': i_vibrate,
+  'heartbeat': i_heartbeat,
   'map-trifold': i_map_trifold,
   'cow': i_cow,
   'bell-ringing': i_bell_ringing,

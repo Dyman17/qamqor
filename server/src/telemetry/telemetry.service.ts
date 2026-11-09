@@ -13,13 +13,37 @@ import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
 import { DeviceStatus } from '@qamqor/shared';
 import { DEVICE_AUTH_ERROR } from '../devices/device-auth.guard';
 import { SignalsService } from '../signals/signals.service';
-import { smoothHeartRate } from '../animals/pulse-analysis';
+import { smoothHeartRate, computePulseThreat, PulseThreatDto } from '../animals/pulse-analysis';
+import { Subject, Observable } from 'rxjs';
+import { filter } from 'rxjs/operators';
 
-type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+export type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+
+export interface TelemetryStreamEvent {
+  deviceId: string;
+  code: string | null;
+  animalId: string | null;
+  animalName?: string | null;
+  heartRate: number | null;
+  lastHeartRateAt: string | null;
+  pulseThreat: PulseThreatDto | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyM: number | null;
+  zone: ZoneName;
+  inFence: boolean | null;
+  distanceToBorderMeters: number | null;
+  sound: boolean;
+  vibrate: boolean;
+  lastSeenAt: string;
+  serverTime: string;
+  rssi: number | null;
+}
 
 @Injectable()
 export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
+  private readonly telemetryEvents$ = new Subject<TelemetryStreamEvent>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -28,6 +52,20 @@ export class TelemetryService {
     private readonly configService: ConfigService,
     private readonly signals: SignalsService,
   ) {}
+
+  /**
+   * Returns an Observable stream of real-time telemetry events.
+   * Can be filtered by device code/id or animal id.
+   */
+  getTelemetryStream(code?: string, animalId?: string): Observable<TelemetryStreamEvent> {
+    return this.telemetryEvents$.asObservable().pipe(
+      filter((ev) => {
+        if (code && ev.code !== code && ev.deviceId !== code) return false;
+        if (animalId && ev.animalId !== animalId) return false;
+        return true;
+      }),
+    );
+  }
 
   private num(key: string, def: number): number {
     const n = parseInt(this.configService.get<string>(key, String(def)), 10);
@@ -280,6 +318,32 @@ export class TelemetryService {
       if (claimed.count === 1) {
         command = { id: pending.id, type: pending.command as any };
       }
+    }
+
+    try {
+      const pulseThreat = computePulseThreat(device.animal?.species, hr ?? device.animal?.lastHeartRate);
+      this.telemetryEvents$.next({
+        deviceId: device.deviceId,
+        code: device.code ?? null,
+        animalId: device.animal?.id || device.animalId || null,
+        animalName: device.animal?.name || null,
+        heartRate: hr,
+        lastHeartRateAt: hr != null ? pingTime.toISOString() : (device.animal?.lastHeartRateAt ? new Date(device.animal.lastHeartRateAt).toISOString() : null),
+        pulseThreat,
+        latitude: typeof dto.latitude === 'number' && isFinite(dto.latitude) ? dto.latitude : null,
+        longitude: typeof dto.longitude === 'number' && isFinite(dto.longitude) ? dto.longitude : null,
+        accuracyM: dto.accuracy ?? null,
+        zone,
+        inFence,
+        distanceToBorderMeters,
+        sound,
+        vibrate,
+        lastSeenAt: pingTime.toISOString(),
+        serverTime: now.toISOString(),
+        rssi: dto.signal ?? null,
+      });
+    } catch (e) {
+      this.logger.warn(`Failed to broadcast telemetry event: ${(e as Error).message}`);
     }
 
     return {

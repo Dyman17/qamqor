@@ -44,6 +44,8 @@ const EXPECTED_ROUTES = [
   `GET ${V}/alerts`, `GET ${V}/alerts/stats`, `POST ${V}/alerts/read-all`, `PATCH ${V}/alerts/:id/status`,
   `GET ${V}/analytics/overview`,
   `POST ${V}/device/telemetry`,
+  `GET ${V}/device/telemetry`,
+  `GET ${V}/device/stream`,
   `GET ${V}/farms/:id/simulation`, `PATCH ${V}/farms/:id/simulation`, `PUT ${V}/farms/:id/data-mode`,
   `POST ${V}/farms/:id/simulation/start`, `POST ${V}/farms/:id/simulation/stop`, `POST ${V}/farms/:id/simulation/reset`,
   `POST ${V}/farms/:id/simulate/animals`, `POST ${V}/farms/:id/simulate/telemetry`, `POST ${V}/farms/:id/simulate/events`,
@@ -80,7 +82,7 @@ describe('response shapes (key snapshots)', () => {
   it('AnimalDto', () => {
     const d = toAnimalDto(animalRow(), now.getTime());
     expect(keys(d)).toEqual(
-      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastHeartRate', 'lastHeartRateAt', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'species', 'status', 'tag', 'isDemo'].sort(),
+      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastHeartRate', 'lastHeartRateAt', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'pulseThreat', 'species', 'status', 'tag', 'isDemo'].sort(),
     );
     expect(d).toMatchObject({ tag: 'KZ-1', penId: 'p1', collarId: 'QAM-1', lat: 43.65, lng: 51.15, status: 'ok', birthDate: '2024-03-01' });
     expect(JSON.stringify(d)).not.toMatch(forbidden);

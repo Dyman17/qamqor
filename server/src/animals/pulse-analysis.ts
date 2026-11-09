@@ -161,3 +161,4 @@ export function computePulseThreat(species: string | null | undefined, bpm: numb
     deltaPercent,
   };
 }
+

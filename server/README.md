@@ -56,6 +56,8 @@ NestJS 11 (TypeScript), Prisma 6, PostgreSQL, JWT (Passport), bcrypt (стоим
 - `POST /api/v1/devices/:id/rotate-secret`, `POST /api/v1/devices/:id/test-signal` (W)
 - `DELETE /api/v1/devices/:id` (O)
 - `POST /api/v1/device/telemetry` (Д) — пинг ошейника по 8-значному коду (`code` в теле или `X-Device-Code`); ответ содержит тот же `code`
+- `GET /api/v1/device/telemetry` — просмотр сырых данных телеметрии
+- `GET /api/v1/device/stream` — поток событий реального времени (Server-Sent Events)
 
 Оповещения и аналитика (W):
 

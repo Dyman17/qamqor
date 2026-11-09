@@ -1,4 +1,6 @@
-import { Controller, Post, Get, Query, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Sse, MessageEvent, Query, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { interval, merge, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { TelemetryService } from './telemetry.service';
 import { DeviceTelemetryDto } from './dto/device-telemetry.dto';
 import { DeviceTelemetryResponseDto } from '@qamqor/contracts';
@@ -24,6 +26,25 @@ export class TelemetryController {
   ) {
     const limit = Math.min(Math.max(parseInt(limitStr || '15', 10) || 15, 1), 50);
     return this.telemetryService.getLatestTelemetry(code, limit);
+  }
+
+  /**
+   * Real-time Server-Sent Events (SSE) telemetry stream:
+   * GET /api/v1/device/stream?code=12345678 or GET /api/v1/device/stream?animalId=...
+   * Pushes incoming telemetry immediately to browser clients without polling.
+   */
+  @Sse('stream')
+  streamTelemetry(
+    @Query('code') code?: string,
+    @Query('animalId') animalId?: string,
+  ): Observable<MessageEvent> {
+    const pings$ = interval(15000).pipe(
+      map(() => ({ data: { type: 'keepalive', serverTime: new Date().toISOString() } } as MessageEvent)),
+    );
+    const events$ = this.telemetryService.getTelemetryStream(code, animalId).pipe(
+      map((ev) => ({ data: { type: 'telemetry', ...ev } } as MessageEvent)),
+    );
+    return merge(pings$, events$);
   }
 
   /**
