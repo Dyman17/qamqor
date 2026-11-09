@@ -83,6 +83,13 @@ export class SimulateTelemetryDto {
   @Min(0)
   @Max(300)
   speedKmh?: number;
+
+  /** Pulse, BPM (20..250); default: a plausible resting value. */
+  @IsOptional()
+  @IsInt()
+  @Min(20)
+  @Max(250)
+  heartRate?: number;
 }
 
 export class SimulateEventDto {

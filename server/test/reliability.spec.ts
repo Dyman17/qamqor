@@ -255,7 +255,7 @@ describe('GET /animals/:id/track query', () => {
     const res = await new AnimalsService(prisma).getAnimalTrack('u', 'f', 'a', { limit: 2 });
     expect(prisma.telemetry.findMany.mock.calls[0][0]).toMatchObject({ orderBy: { timestamp: 'desc' }, take: 2 });
     expect(res.points.map((p) => p.lat)).toEqual([1, 2]);
-    expect(res.points[1]).toEqual({ lat: 2, lng: 2, accuracyM: 3, at: t(2).toISOString(), isOutside: true });
+    expect(res.points[1]).toEqual({ lat: 2, lng: 2, accuracyM: 3, heartRate: null, at: t(2).toISOString(), isOutside: true });
     expect(res.animal).toEqual({ id: 'a', name: 'A', tag: 'T' });
   });
 });

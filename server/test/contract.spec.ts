@@ -80,7 +80,7 @@ describe('response shapes (key snapshots)', () => {
   it('AnimalDto', () => {
     const d = toAnimalDto(animalRow(), now.getTime());
     expect(keys(d)).toEqual(
-      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'species', 'status', 'tag', 'isDemo'].sort(),
+      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastHeartRate', 'lastHeartRateAt', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'species', 'status', 'tag', 'isDemo'].sort(),
     );
     expect(d).toMatchObject({ tag: 'KZ-1', penId: 'p1', collarId: 'QAM-1', lat: 43.65, lng: 51.15, status: 'ok', birthDate: '2024-03-01' });
     expect(JSON.stringify(d)).not.toMatch(forbidden);

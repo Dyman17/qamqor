@@ -49,7 +49,13 @@ export class TelemetryService {
     }
 
     // Anti-replay and timestamp window
-    const pingTime = new Date(dto.timestamp);
+    const hasFix = typeof dto.latitude === 'number' && typeof dto.longitude === 'number';
+    const lat = dto.latitude as number;
+    const lng = dto.longitude as number;
+    const acc = dto.accuracy as number;
+    // A pulse-only ping (no GPS fix, e.g. indoors) may omit the timestamp: server time is used.
+    const now0 = new Date();
+    const pingTime = dto.timestamp ? new Date(dto.timestamp) : now0;
     const now = new Date();
     const maxAgeMs = this.num('TELEMETRY_MAX_AGE_SEC', 600) * 1000;
     const maxFutureMs = this.num('TELEMETRY_MAX_FUTURE_SEC', 120) * 1000;
@@ -64,7 +70,7 @@ export class TelemetryService {
       select: { id: true },
     }));
     // An older or equal timestamp must not move the animal backwards.
-    const stale = !!(device.animal?.lastSeenAt && pingTime.getTime() <= new Date(device.animal.lastSeenAt).getTime());
+    const stale = hasFix && !!(device.animal?.lastSeenAt && pingTime.getTime() <= new Date(device.animal.lastSeenAt).getTime());
 
     let isOutside: boolean = device.animal?.isOutsideGeofence ?? false;
     let zone: ZoneName = 'UNKNOWN';
@@ -73,21 +79,22 @@ export class TelemetryService {
     let toneFrequencyHz = 0;
     let sound = false;
     let vibrate = false;
-    let unknownReason: string | null = 'NO_BOUNDARY';
+    let unknownReason: string | null = hasFix ? 'NO_BOUNDARY' : 'NO_FIX';
     let suppressedBy: 'SIGNAL_LIMIT' | null = null;
 
     let nextInterval = this.num('NORMAL_PING_INTERVAL_SEC', 300);
     const emergencyInterval = this.num('EMERGENCY_PING_INTERVAL_SEC', 60);
 
+    const hr: number | null = typeof dto.heartRate === 'number' ? dto.heartRate : null;
     const animal = device.animal;
     const polygon = animal?.activeGeofence?.polygonJson ?? null;
 
-    if (animal) {
+    if (animal && hasFix) {
       const evaluation = this.geofenceService.evaluateLocation(
         {
-          latitude: dto.latitude,
-          longitude: dto.longitude,
-          accuracy: dto.accuracy,
+          latitude: lat,
+          longitude: lng,
+          accuracy: acc,
           speed: dto.speedKmh,
         },
         polygon,
@@ -138,8 +145,8 @@ export class TelemetryService {
               animalId: animal.id,
               animalName: animal.name,
               deviceId: device.deviceId,
-              latitude: dto.latitude,
-              longitude: dto.longitude,
+              latitude: lat,
+              longitude: lng,
               isDemo: !!animal.isDemo,
             });
           }
@@ -150,8 +157,8 @@ export class TelemetryService {
             animalId: animal.id,
             animalName: animal.name,
             deviceId: device.deviceId,
-            latitude: dto.latitude,
-            longitude: dto.longitude,
+            latitude: lat,
+            longitude: lng,
             isDemo: !!animal.isDemo,
           });
         }
@@ -169,13 +176,23 @@ export class TelemetryService {
       if (!stale) await this.prisma.animal.update({
         where: { id: animal.id },
         data: {
-          lastLatitude: dto.latitude,
-          lastLongitude: dto.longitude,
-          lastAccuracy: dto.accuracy,
+          lastLatitude: lat,
+          lastLongitude: lng,
+          lastAccuracy: acc,
           lastSeenAt: pingTime,
           isOutsideGeofence: isOutside,
+          ...(hr !== null && { lastHeartRate: hr, lastHeartRateAt: pingTime }),
         },
       });
+    }
+
+    
+    // Pulse-only ping: keep the latest pulse, no zone logic, no signals, no GPS alerts.
+    if (animal && !hasFix && hr !== null) {
+      const prev = animal.lastHeartRateAt ? new Date(animal.lastHeartRateAt).getTime() : 0;
+      if (pingTime.getTime() >= prev) {
+        await this.prisma.animal.update({ where: { id: animal.id }, data: { lastHeartRate: hr, lastHeartRateAt: pingTime } });
+      }
     }
 
     // Device status: last contact is the server receive time.
@@ -204,10 +221,12 @@ export class TelemetryService {
       data: {
         deviceId: device.deviceId,
         animalId: animal?.id,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        accuracy: dto.accuracy,
+        latitude: hasFix ? lat : null,
+        longitude: hasFix ? lng : null,
+        accuracy: hasFix ? acc : null,
         signal: dto.signal,
+        heartRate: hr,
+        satellites: dto.satellites ?? null,
         isOutsideGeofence: isOutside,
         timestamp: pingTime,
       },
@@ -232,7 +251,9 @@ export class TelemetryService {
         break;
       default:
         warningMessage =
-          unknownReason === 'LOW_ACCURACY'
+          unknownReason === 'NO_FIX'
+            ? 'Zone UNKNOWN: no GPS fix. No signals.'
+            : unknownReason === 'LOW_ACCURACY'
             ? 'Zone UNKNOWN: GPS fix is not reliable. No signals.'
             : unknownReason === 'INVALID_BOUNDARY'
               ? 'Zone UNKNOWN: the boundary is invalid. No signals.'
@@ -259,6 +280,7 @@ export class TelemetryService {
 
     return {
       success: true,
+      mode: device.farm?.dataMode === 'AUTO' ? 'AUTO' : device.farm?.dataMode === 'MANUAL' ? 'PILOT' : 'REAL',
       serverTime: now.toISOString(),
       nextInterval,
       configVersion: 1,

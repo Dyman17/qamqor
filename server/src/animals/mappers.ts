@@ -19,6 +19,9 @@ export interface AnimalDto {
   lng: number | null;
   accuracyM: number | null;
   lastSeenAt: string | null;
+  /** Last pulse, BPM (null = never measured). */
+  lastHeartRate: number | null;
+  lastHeartRateAt: string | null;
   status: AnimalStatus;
   /** Demo (simulated) animal; deleted when the farm returns to REAL mode. */
   isDemo: boolean;
@@ -66,6 +69,8 @@ export function toAnimalDto(a: any, now: number = Date.now()): AnimalDto {
     lng: a.lastLongitude ?? null,
     accuracyM: a.lastAccuracy ?? null,
     lastSeenAt: a.lastSeenAt ? a.lastSeenAt.toISOString() : null,
+    lastHeartRate: a.lastHeartRate ?? null,
+    lastHeartRateAt: a.lastHeartRateAt ? a.lastHeartRateAt.toISOString() : null,
     status: animalStatus(a, now),
     isDemo: a.isDemo ?? false,
   };

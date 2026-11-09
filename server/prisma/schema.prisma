@@ -182,6 +182,8 @@ model Animal {
   lastLongitude     Float?
   lastAccuracy      Float?
   lastSeenAt        DateTime?
+  lastHeartRate     Int?
+  lastHeartRateAt   DateTime?
   isOutsideGeofence Boolean          @default(false)
 
   telemetries       Telemetry[]
@@ -223,10 +225,12 @@ model Telemetry {
   device            Device   @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
   animalId          String?
   animal            Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
-  latitude          Float
-  longitude         Float
-  accuracy          Float
+  latitude          Float?
+  longitude         Float?
+  accuracy          Float?
   signal            Int?
+  heartRate         Int?
+  satellites        Int?
   isOutsideGeofence Boolean  @default(false)
   timestamp         DateTime
   createdAt         DateTime @default(now())

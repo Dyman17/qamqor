@@ -44,5 +44,5 @@ app/.expo/
 *.tmp
 
 # ESP firmware secrets and build output
-esp/include/secrets.h
+esp/local/
 esp/.pio/

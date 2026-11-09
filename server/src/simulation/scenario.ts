@@ -31,6 +31,17 @@ export type Phase =
   | 'GPS_LOST'
   | 'OFFLINE';
 
+/** Plausible cattle pulse, BPM: 48-84, small noise; higher while the animal is escaping or being herded. */
+export function heartRateFor(phase: Phase, rng: () => number = Math.random): number {
+  const centre =
+    phase === 'BREAKOUT' || phase === 'ESCAPED' ? 76 : phase === 'HERDED_BACK' || phase === 'TURN_BACK' ? 70 : phase === 'APPROACH' ? 62 : 58;
+  const noise = (rng() + rng() + rng() - 1.5) * 8; // about +-6 bpm
+  return Math.max(48, Math.min(84, Math.round(centre + noise)));
+}
+
+/** Resting pulse for manual pings. */
+export const restingHeartRate = (): number => heartRateFor('GRAZE');
+
 export type Plan = 'TURN_BACK' | 'BREAKOUT';
 /** Scripted opening role of an animal: guarantees every key event within the first minutes. */
 export type Role = Plan | 'GPS_LOST' | 'OFFLINE';

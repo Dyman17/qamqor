@@ -1,4 +1,5 @@
 import {
+  ValidateIf,
   IsInt,
   IsISO8601,
   IsNotEmpty,
@@ -11,6 +12,11 @@ import {
   Min,
 } from 'class-validator';
 import { DeviceTelemetryRequestDto } from '@qamqor/contracts';
+
+const hasCoords = (o: any) =>
+  (o.latitude !== undefined && o.latitude !== null) ||
+  (o.longitude !== undefined && o.longitude !== null) ||
+  (o.accuracy !== undefined && o.accuracy !== null);
 
 export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
   /** 8-digit device code; identifies the collar (the guard also accepts the X-Device-Code header). */
@@ -27,25 +33,30 @@ export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
   deviceId?: string;
 
   /** ISO 8601 with a time zone designator; the acceptance window is checked by the service. */
+  @ValidateIf((o) => o.timestamp !== undefined || (o.latitude !== undefined && o.latitude !== null) || (o.longitude !== undefined && o.longitude !== null))
   @IsISO8601({ strict: true, strictSeparator: true })
   @Matches(/(Z|[+-]\d{2}:?\d{2})$/, { message: 'timestamp: нужен часовой пояс (Z или +hh:mm)' })
   @MaxLength(40)
-  timestamp!: string;
+  timestamp?: string;
 
+  /** Optional as a pair: a pulse-only ping (no GPS fix) omits latitude, longitude and accuracy. */
+  @ValidateIf(hasCoords)
   @IsNumber()
   @Min(-90)
   @Max(90)
-  latitude!: number;
+  latitude?: number;
 
+  @ValidateIf(hasCoords)
   @IsNumber()
   @Min(-180)
   @Max(180)
-  longitude!: number;
+  longitude?: number;
 
+  @ValidateIf(hasCoords)
   @IsNumber()
   @Min(0)
   @Max(100000)
-  accuracy!: number;
+  accuracy?: number;
 
   /** RSSI, dBm. */
   @IsOptional()
@@ -71,4 +82,11 @@ export class DeviceTelemetryDto implements DeviceTelemetryRequestDto {
   @Min(0)
   @Max(64)
   satellites?: number;
+
+  /** Pulse, BPM; null when the sensor has no contact. */
+  @IsOptional()
+  @IsInt()
+  @Min(20)
+  @Max(250)
+  heartRate?: number | null;
 }

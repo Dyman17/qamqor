@@ -11,6 +11,7 @@ import {
   FarmSim,
   SCRIPTED_ROLES,
   hashSeed,
+  heartRateFor,
   newAnimalSim,
   newFarmSim,
   restoreAnimalSim,
@@ -269,7 +270,7 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
           }
         }
         if (out.ping) {
-          await this.sendPing(device, geom, out.ping, now);
+          await this.sendPing(device, geom, out.ping, now, heartRateFor(out.phase, state.sim.rng));
           pings++;
         }
       } catch (e: any) {
@@ -303,6 +304,7 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
     geom: PenGeometry,
     ping: { pos: { x: number; y: number }; accuracy: number; speedKmh: number },
     now: Date,
+    heartRate?: number,
   ) {
     const g = geom.toGeo(ping.pos);
     const last = device.animal?.lastSeenAt ? new Date(device.animal.lastSeenAt).getTime() : 0;
@@ -315,6 +317,7 @@ export class SimulatorService implements OnModuleInit, OnModuleDestroy {
       accuracy: Math.round(ping.accuracy * 10) / 10,
       signal: -70,
       speedKmh: Math.round(ping.speedKmh * 10) / 10,
+      ...(heartRate !== undefined && { heartRate }),
     } as any);
   }
 

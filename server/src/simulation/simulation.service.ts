@@ -9,6 +9,7 @@ import { DemoDataService } from './demo-data.service';
 import { SimulatorService } from './simulator.service';
 import { penGeometryOf } from './pen-cache';
 import { PenGeometry, Pt } from './geometry';
+import { restingHeartRate } from './scenario';
 import { DataModeName, SimEvent } from './dto/simulation.dto';
 
 export const MANUAL_CALLS_PER_MIN = 60;
@@ -260,6 +261,7 @@ export class SimulationService {
     pos: { latitude: number; longitude: number },
     accuracy: number,
     speedKmh?: number,
+    heartRate?: number,
   ): Promise<CollarResponseDto> {
     const device: any = await this.prisma.device.findUnique({
       where: { id: animal.device.id },
@@ -275,6 +277,7 @@ export class SimulationService {
       accuracy,
       signal: -70,
       ...(speedKmh !== undefined && { speedKmh }),
+      heartRate: heartRate ?? restingHeartRate(),
     } as any);
     return {
       zone: res.zone,
@@ -290,11 +293,11 @@ export class SimulationService {
   async simulateTelemetry(
     userId: string,
     farmId: string,
-    dto: { animalId: string; lat: number; lng: number; accuracyM?: number; speedKmh?: number },
+    dto: { animalId: string; lat: number; lng: number; accuracyM?: number; speedKmh?: number; heartRate?: number },
   ): Promise<CollarResponseDto> {
     await this.manualFarm(userId, farmId);
     const animal = await this.demoAnimal(farmId, dto.animalId);
-    return this.ping(animal, { latitude: dto.lat, longitude: dto.lng }, dto.accuracyM ?? 5, dto.speedKmh);
+    return this.ping(animal, { latitude: dto.lat, longitude: dto.lng }, dto.accuracyM ?? 5, dto.speedKmh, dto.heartRate);
   }
 
   async simulateEvent(

@@ -85,6 +85,8 @@ export class AnimalsService {
     const rows = await this.prisma.telemetry.findMany({
       where: {
         animalId,
+        latitude: { not: null },
+        longitude: { not: null },
         ...((opts.from || opts.to) && {
           timestamp: { ...(opts.from && { gte: opts.from }), ...(opts.to && { lte: opts.to }) },
         }),
@@ -95,6 +97,7 @@ export class AnimalsService {
         latitude: true,
         longitude: true,
         accuracy: true,
+        heartRate: true,
         isOutsideGeofence: true,
         timestamp: true,
       },
@@ -103,9 +106,10 @@ export class AnimalsService {
     return {
       animal: { id: animal.id, name: animal.name, tag: animal.tagNumber },
       points: rows.reverse().map((r) => ({
-        lat: r.latitude,
-        lng: r.longitude,
-        accuracyM: r.accuracy,
+        lat: r.latitude as number,
+        lng: r.longitude as number,
+        accuracyM: r.accuracy ?? 0,
+        heartRate: r.heartRate ?? null,
         at: r.timestamp.toISOString(),
         isOutside: r.isOutsideGeofence,
       })),

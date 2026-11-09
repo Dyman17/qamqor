@@ -54,6 +54,7 @@ interface AnimalDto {
   penId: string | null;                       // activeGeofenceId; null = «Без границы»
   collarId: string | null;                    // deviceId
   lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null;
+  lastHeartRate: number | null; lastHeartRateAt: string | null;   // пульс, уд/мин (null = не измерялся)
   status: AnimalStatus;
   isDemo: boolean;                            // демо-животное (удаляется при возврате фермы в REAL)
 }
@@ -230,7 +231,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 | `POST /farms/:id/simulation/reset` | O | — | `200 SimulationDto`; удаляет демо-оповещения, телеметрию и события сигналов, возвращает демо-животных внутрь загона, сценарий начинается заново; в `REAL` -> `409` |
 | `PATCH /farms/:id/simulation` | O | `{speed?}` | `SimulationDto` (скорость на лету); в `REAL` -> `409` |
 | `POST /farms/:id/simulate/animals` | O, MANUAL | `{name?, species?}` | `201 AnimalDto` (демо-животное `D-001…` + симулированный ошейник `QAM-DEMO-xxxx` у загона фермы; не больше 20 на ферму -> `409`) |
-| `POST /farms/:id/simulate/telemetry` | O, MANUAL | `{animalId, lat, lng, accuracyM?(по умолчанию 5), speedKmh?}` | `200 CollarResponseDto` |
+| `POST /farms/:id/simulate/telemetry` | O, MANUAL | `{animalId, lat, lng, accuracyM?(по умолчанию 5), speedKmh?, heartRate?(20–250, по умолчанию покой 48–70)}` | `200 CollarResponseDto` |
 | `POST /farms/:id/simulate/events` | O, MANUAL | `{animalId, event}` | `200 CollarResponseDto` или `{ok: true}` (`COLLAR_OFFLINE`) |
 
 **`POST /animals` в режимах `MANUAL` и `AUTO`.** Обычная форма создаёт демо-животное: `isDemo: true` в ответе (форма ответа прежняя) и автоматически привязанный симулированный ошейник `QAM-DEMO-xxxxxx`. Загон: переданный `penId` сохраняется только если это демо-загон фермы, иначе (в том числе реальный загон, он не трогается) берётся демо-загон фермы (создаётся при необходимости); животное появляется внутри загона. `collarId` в этих режимах -> `409`; не больше 20 демо-животных на ферму -> `409`; повтор бирки -> `409`. В `REAL` форма работает как раньше (реальное животное). Такое животное принимает `POST /farms/:id/simulate/telemetry` `{animalId, lat, lng}` (подтверждено: поля `accuracyM`, `speedKmh` необязательны) в `MANUAL`, чтобы перетаскивать его по карте; в `AUTO` ручной ввод по-прежнему `409` (сценарий двигает животных сам).
@@ -258,7 +259,7 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 
 | Метод и путь | Запрос | Ответ |
 |---|---|---|
-| `POST /device/telemetry` | `{code(8 цифр), timestamp(ISO, не старше 10 мин и не позже +2 мин), latitude, longitude, accuracy, signal?(−130…0 dBm), speedKmh?(0–300), hdop?(0–99), satellites?(0–64)}` — **без `battery`, без секрета**; код можно передать и заголовком `X-Device-Code` (тело и заголовок должны совпадать); `timestamp` — ISO 8601 с часовым поясом, окно задаётся `TELEMETRY_MAX_AGE_SEC` (600) и `TELEMETRY_MAX_FUTURE_SEC` (120) | см. ниже |
+| `POST /device/telemetry` | `{code(8 цифр), timestamp(ISO, не старше 10 мин и не позже +2 мин), latitude, longitude, accuracy, signal?(−130…0 dBm), speedKmh?(0–300), hdop?(0–99), satellites?(0–64), heartRate?(целое 20–250 уд/мин или null — нет контакта)}`; **`latitude`, `longitude`, `accuracy` идут только вместе; без GPS-фикса (например в помещении) их можно опустить, тогда `timestamp` тоже необязателен (берётся время сервера)** — **без `battery`, без секрета**; код можно передать и заголовком `X-Device-Code` (тело и заголовок должны совпадать); `timestamp` — ISO 8601 с часовым поясом, окно задаётся `TELEMETRY_MAX_AGE_SEC` (600) и `TELEMETRY_MAX_FUTURE_SEC` (120) | см. ниже |
 
 **Протокол кода (решение владельца 2026-11-09).** Идентичность ESP32 — 8-значный код из прошивки. Сервер принимает пинг только от кода, который владелец «принял» (`POST /devices {code}`); неизвестный, не принятый или неверного формата код даёт `401`, ничего не сохраняется. **Каждый ответ, в том числе ошибка, содержит `code`, равный коду запроса; прошивка принимает ответ только при совпадении.** В ответах-ошибках на этом маршруте поле `code` занято кодом устройства (или `null`, если в запросе нет корректного кода), а вид ошибки лежит в `error` (`UNAUTHENTICATED`, `VALIDATION`, `RATE_LIMITED`).
 
@@ -270,15 +271,32 @@ README указывает `PUT /alerts/:id/resolve`: не создаётся, о
 POST /api/v1/device/telemetry
 Content-Type: application/json
 
-{"code":"12345678","timestamp":"2026-11-09T08:15:30Z","latitude":43.65012,"longitude":51.15731,"accuracy":6.5,"signal":-71,"speedKmh":1.2}
+{"code":"12345678","timestamp":"2026-11-09T08:15:30Z","latitude":43.65012,"longitude":51.15731,"accuracy":6.5,"signal":-71,"speedKmh":1.2,"satellites":9,"heartRate":64}
 ```
 
 ```json
-{"success":true,"code":"12345678","serverTime":"2026-11-09T08:15:31.204Z","nextInterval":300,"configVersion":1,
+{"success":true,"mode":"REAL","code":"12345678","serverTime":"2026-11-09T08:15:31.204Z","nextInterval":300,"configVersion":1,
  "inFence":true,"zone":"YELLOW","distanceToBorderMeters":14.3,"toneFrequencyHz":1124,
  "sound":true,"vibrate":false,"vibrateDurationMs":0,"suppressedBy":null,
  "warningMessage":"Zone YELLOW: warning, 14.3 m to the border. Sound signal (1124 Hz)."}
 ```
+
+Пульс без GPS-фикса (ошейник в помещении):
+
+```json
+{"code":"12345678","heartRate":66,"satellites":0}
+```
+
+```json
+{"success":true,"mode":"PILOT","code":"12345678","serverTime":"2026-11-09T08:15:31.204Z","nextInterval":300,"configVersion":1,
+ "inFence":null,"zone":"UNKNOWN","distanceToBorderMeters":null,"toneFrequencyHz":0,
+ "sound":false,"vibrate":false,"vibrateDurationMs":0,"suppressedBy":null,
+ "warningMessage":"Zone UNKNOWN: no GPS fix. No signals."}
+```
+
+Без фикса сервер только сохраняет пульс (`Animal.lastHeartRate/lastHeartRateAt`, строка телеметрии с пустыми координатами) и отмечает ошейник онлайн; зона `UNKNOWN`, сигналов нет, оповещение `GPS_LOST` не создаётся (оно остаётся только для плохой точности при наличии координат). Точки без координат в `GET /animals/:id/track` не попадают.
+
+**Режим данных для ошейника.** Каждый успешный ответ содержит `mode`: `"REAL"`, `"PILOT"` (ферма в `MANUAL`) или `"AUTO"`. Ошейник всегда шлёт GPS и пульс независимо от режима; `mode` нужен ему для индикации.
 
 Ошибка (код не принят):
 
@@ -289,7 +307,7 @@ Content-Type: application/json
 Ответ телеметрии (убраны `shock`, `shockDurationMs`, числа импульса, эмодзи и «400кВ» из `warningMessage`):
 
 ```ts
-{ success: true, code, serverTime, nextInterval, configVersion,
+{ success: true, mode: 'REAL'|'PILOT'|'AUTO', code, serverTime, nextInterval, configVersion,
   zone: 'GREEN'|'YELLOW'|'ORANGE'|'RED'|'ESCAPE'|'UNKNOWN',
   inFence: boolean | null,            // null = граница не задана или координаты ненадёжны
   distanceToBorderMeters: number | null,

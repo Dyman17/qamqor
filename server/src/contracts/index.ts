@@ -38,18 +38,23 @@ export interface DeviceTelemetryRequestDto {
   /** Legacy public collar id; optional, ignored: the code identifies the device. */
   deviceId?: string;
   /** ISO 8601; accepted when not older than 10 min and not later than +2 min (configurable). */
-  timestamp: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
+  timestamp?: string;
+  /** latitude, longitude and accuracy go together; omit all three when there is no GPS fix. */
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
   signal?: number;
   speedKmh?: number;
   hdop?: number;
   satellites?: number;
+  /** Pulse, BPM (20..250); null or absent = no sensor contact. */
+  heartRate?: number | null;
 }
 
 export interface DeviceTelemetryResponseDto {
   success: boolean;
+  /** Farm data mode for the collar: REAL, PILOT (owner-driven demo) or AUTO (server demo). */
+  mode?: 'REAL' | 'PILOT' | 'AUTO';
   /** The request's device code, echoed. The firmware discards a response whose code differs. */
   code?: string;
   serverTime: string;
