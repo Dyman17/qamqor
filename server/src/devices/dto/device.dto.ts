@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, Max, Min, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class RegisterDeviceDto {
   /** 8-digit code of the ESP32: the owner "claims" the collar with it. */
@@ -30,4 +30,21 @@ export class UpdateDeviceDto {
 export class TestSignalDto {
   @IsIn(['SOUND', 'SPEAKER', 'BUZZER', 'VIBRATION'])
   signal!: 'SOUND' | 'SPEAKER' | 'BUZZER' | 'VIBRATION';
+}
+
+export class SetControlModeDto {
+  @IsIn(['AUTO', 'GPS_MANUAL', 'MANUAL'])
+  mode!: 'AUTO' | 'GPS_MANUAL' | 'MANUAL';
+}
+
+export class ManualPositionDto {
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
 }

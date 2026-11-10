@@ -9,6 +9,7 @@ import { DevicesController } from '../src/devices/devices.controller';
 import { AlertsController } from '../src/alerts/alerts.controller';
 import { AnalyticsController } from '../src/analytics/analytics.controller';
 import { TelemetryController } from '../src/telemetry/telemetry.controller';
+import { CollarControlController } from '../src/telemetry/collar-control.controller';
 import { SimulationController } from '../src/simulation/simulation.controller';
 import { toAnimalDto, animalStatus } from '../src/animals/mappers';
 import { toAlertDto } from '../src/alerts/mappers';
@@ -41,6 +42,7 @@ const EXPECTED_ROUTES = [
   `GET ${V}/geofences`, `GET ${V}/geofences/:id`, `POST ${V}/geofences`, `PATCH ${V}/geofences/:id`, `DELETE ${V}/geofences/:id`,
   `GET ${V}/devices`, `GET ${V}/devices/:id`, `POST ${V}/devices`, `PATCH ${V}/devices/:id`,
   `POST ${V}/devices/:id/test-signal`, `DELETE ${V}/devices/:id`,
+  `PATCH ${V}/devices/:id/control-mode`, `PUT ${V}/devices/:id/manual-position`,
   `GET ${V}/alerts`, `GET ${V}/alerts/stats`, `POST ${V}/alerts/read-all`, `PATCH ${V}/alerts/:id/status`,
   `GET ${V}/analytics/overview`,
   `POST ${V}/device/telemetry`,
@@ -55,7 +57,7 @@ describe('route inventory matches the contract', () => {
   it('exposes exactly the contract routes (no extra, none missing)', () => {
     const actual = [
       AppController, AuthController, FarmsController, AnimalsController, GeofenceController,
-      DevicesController, AlertsController, AnalyticsController, TelemetryController, SimulationController,
+      DevicesController, CollarControlController, AlertsController, AnalyticsController, TelemetryController, SimulationController,
     ].flatMap(routesOf);
     expect(actual.sort()).toEqual([...EXPECTED_ROUTES].sort());
   });
@@ -82,7 +84,7 @@ describe('response shapes (key snapshots)', () => {
   it('AnimalDto', () => {
     const d = toAnimalDto(animalRow(), now.getTime());
     expect(keys(d)).toEqual(
-      ['accuracyM', 'birthDate', 'breed', 'collarId', 'farmId', 'gender', 'id', 'lastHeartRate', 'lastHeartRateAt', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'pulseThreat', 'species', 'status', 'tag', 'isDemo'].sort(),
+      ['accuracyM', 'birthDate', 'breed', 'collarId', 'controlMode', 'controlModeExpiresAt', 'controlModeSince', 'farmId', 'gender', 'id', 'lastHeartRate', 'lastHeartRateAt', 'lastSeenAt', 'lat', 'lng', 'name', 'penId', 'photoUrl', 'positionSource', 'pulseThreat', 'species', 'status', 'tag', 'isDemo'].sort(),
     );
     expect(d).toMatchObject({ tag: 'KZ-1', penId: 'p1', collarId: 'QAM-1', lat: 43.65, lng: 51.15, status: 'ok', birthDate: '2024-03-01' });
     expect(JSON.stringify(d)).not.toMatch(forbidden);
@@ -90,7 +92,7 @@ describe('response shapes (key snapshots)', () => {
 
   it('CollarDto', () => {
     const d = toCollarDto({ deviceId: 'QAM-1', signal: -70, firmwareVersion: '1.0.0', lastHeartbeatAt: new Date(), animal: { id: 'a1', name: 'M' }, secretHash: 'x', isSimulated: true });
-    expect(keys(d)).toEqual(['animalId', 'animalName', 'code', 'deviceId', 'firmwareVersion', 'isDemo', 'lastSeenAt', 'signalRssi', 'status']);
+    expect(keys(d)).toEqual(['animalId', 'animalName', 'code', 'controlMode', 'controlModeExpiresAt', 'controlModeSince', 'deviceId', 'firmwareVersion', 'isDemo', 'lastSeenAt', 'positionSource', 'signalRssi', 'status']);
     expect(d.isDemo).toBe(true);
     expect(JSON.stringify(d)).not.toMatch(forbidden);
   });

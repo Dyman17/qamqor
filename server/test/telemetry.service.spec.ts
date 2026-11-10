@@ -62,12 +62,12 @@ describe('TelemetryService (device already authenticated)', () => {
     expect(res.vibrate).toBe(true);
   });
 
-  it('delivers a queued test signal once', async () => {
+  it('delivers a queued test signal (first delivery: still PENDING, counted)', async () => {
     const { svc, prisma, device } = setup({ id: 'c1', command: 'TEST_SOUND' });
     const res: any = await svc.processDeviceTelemetry(device, dto(43.65, 51.157));
     expect(res.command).toEqual({ id: 'c1', type: 'TEST_SOUND' });
     expect(prisma.deviceCommand.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'c1', status: 'PENDING' } }),
+      expect.objectContaining({ where: { id: 'c1', status: 'PENDING', deliveryCount: 0 } }),
     );
     const none = setup(null);
     const res2: any = await none.svc.processDeviceTelemetry(none.device, dto(43.65, 51.157));

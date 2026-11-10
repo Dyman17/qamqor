@@ -34,7 +34,7 @@ export function validateEnv(env: Record<string, string | undefined>): Record<str
     errors.push('CORS_ORIGINS is required in production');
   }
 
-  for (const key of ['NORMAL_PING_INTERVAL_SEC', 'EMERGENCY_PING_INTERVAL_SEC', 'TELEMETRY_MAX_AGE_SEC', 'TELEMETRY_MAX_FUTURE_SEC', 'OFFLINE_AFTER_MISSED_PINGS', 'OFFLINE_CHECK_INTERVAL_SEC', 'SIM_TICK_SEC', 'SIM_DEMO_OFFLINE_SEC', 'UNCLAIMED_PING_INTERVAL_SEC', 'PORT']) {
+  for (const key of ['NORMAL_PING_INTERVAL_SEC', 'EMERGENCY_PING_INTERVAL_SEC', 'TELEMETRY_MAX_AGE_SEC', 'TELEMETRY_MAX_FUTURE_SEC', 'OFFLINE_AFTER_MISSED_PINGS', 'OFFLINE_CHECK_INTERVAL_SEC', 'SIM_TICK_SEC', 'SIM_DEMO_OFFLINE_SEC', 'UNCLAIMED_PING_INTERVAL_SEC', 'CONTROL_MODE_TTL_MIN', 'PORT']) {
     const v = env[key];
     if (v !== undefined && v !== '' && !(Number.isInteger(Number(v)) && Number(v) > 0)) {
       errors.push(`${key} must be a positive integer`);
@@ -42,7 +42,7 @@ export function validateEnv(env: Record<string, string | undefined>): Record<str
   }
 
   // Non-negative: 0 switches the linger / cooldown / storage throttle off.
-  for (const key of ['LIVE_LINGER_SEC', 'SIGNAL_COOLDOWN_SEC', 'TELEMETRY_STORE_MIN_SEC']) {
+  for (const key of ['LIVE_LINGER_SEC', 'SIGNAL_COOLDOWN_SEC', 'TELEMETRY_STORE_MIN_SEC', 'ESCALATION_RESET_SEC']) {
     const v = env[key];
     if (v !== undefined && v !== '' && !(Number.isInteger(Number(v)) && Number(v) >= 0)) {
       errors.push(`${key} must be a non-negative integer`);

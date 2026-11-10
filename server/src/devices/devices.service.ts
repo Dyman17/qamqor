@@ -10,9 +10,16 @@ import { RegisterDeviceDto, UpdateDeviceDto, TestSignalDto } from './dto/device.
 import { generateDeviceSecret, hashDeviceSecret } from './device-secret';
 import { DeviceStatus } from '@prisma/client';
 import { ConnState, computeConnState } from './connectivity';
+import { controlModeExpiresAt } from './control-mode';
+import { loadAppConfig } from '../config/config';
+
+export function controlModeTtlMs(env: Record<string, string | undefined> = process.env): number {
+  return loadAppConfig(env).controlModeTtlMin * 60_000;
+}
+import type { CollarControlMode, PositionSource } from '@qamqor/shared';
 
 /** Explicit projection: secrets and hashes are never selected. */
-const COLLAR_SELECT = {
+export const COLLAR_SELECT = {
   deviceId: true,
   code: true,
   status: true,
@@ -20,6 +27,9 @@ const COLLAR_SELECT = {
   firmwareVersion: true,
   lastHeartbeatAt: true,
   isSimulated: true,
+  controlMode: true,
+  controlModeSince: true,
+  controlActivityAt: true,
   animal: { select: { id: true, name: true } },
 } as const;
 
@@ -37,6 +47,18 @@ export interface CollarDto {
   lastSeenAt: string | null;
   /** Simulated (demo) collar: `Device.isSimulated`. */
   isDemo: boolean;
+  /** AUTO (default), GPS_MANUAL (position dragged by the operator) or MANUAL (no automatic signals). */
+  controlMode: CollarControlMode;
+  /** MANUAL while the position is the operator's point (GPS_MANUAL), otherwise GPS. */
+  positionSource: PositionSource;
+  /** When the current MANUAL / GPS_MANUAL mode was entered (null in AUTO). */
+  controlModeSince: string | null;
+  /** When it lapses back to AUTO without operator activity (null in AUTO): for a persistent badge. */
+  controlModeExpiresAt: string | null;
+}
+
+export function positionSourceOf(controlMode: string | null | undefined): PositionSource {
+  return controlMode === 'GPS_MANUAL' ? 'MANUAL' : 'GPS';
 }
 
 export function toCollarDto(d: any): CollarDto {
@@ -52,6 +74,10 @@ export function toCollarDto(d: any): CollarDto {
     firmwareVersion: d.firmwareVersion ?? null,
     lastSeenAt: last ? last.toISOString() : null,
     isDemo: d.isSimulated ?? false,
+    controlMode: d.controlMode ?? 'AUTO',
+    positionSource: positionSourceOf(d.controlMode),
+    controlModeSince: d.controlMode && d.controlMode !== 'AUTO' && d.controlModeSince ? new Date(d.controlModeSince).toISOString() : null,
+    controlModeExpiresAt: controlModeExpiresAt(d, controlModeTtlMs())?.toISOString() ?? null,
   };
 }
 
@@ -172,6 +198,10 @@ export class DevicesService {
     else if (dto.signal === 'VIBRATION') commandStr = 'TEST_VIBRATION';
     else commandStr = 'TEST_SOUND';
 
+    // An operator command in a manual mode counts as activity (keeps the mode from lapsing).
+    if (device.controlMode && device.controlMode !== 'AUTO') {
+      await this.prisma.device.update({ where: { id: device.id }, data: { controlActivityAt: new Date() } });
+    }
     const command = await this.prisma.deviceCommand.create({
       data: {
         deviceId: device.deviceId,

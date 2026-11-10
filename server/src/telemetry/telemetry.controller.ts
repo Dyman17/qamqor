@@ -73,7 +73,7 @@ export class TelemetryController {
     @Query('code') code?: string,
     @Query('animalId') animalId?: string,
   ): Observable<MessageEvent> {
-    return this.telemetryService.openStream({ userId: user.id, farmId, code, animalId });
+    return this.telemetryService.openStream({ userId: user.id, farmId, code, animalId, expiresAtSec: user.tokenExp });
   }
 
   /**

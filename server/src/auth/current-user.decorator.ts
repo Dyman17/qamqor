@@ -4,6 +4,8 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   fullName: string;
+  /** JWT expiry (seconds since epoch); used to end long-lived SSE streams. */
+  tokenExp?: number;
 }
 
 export const CurrentUser = createParamDecorator(

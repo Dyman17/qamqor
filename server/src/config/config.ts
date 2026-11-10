@@ -24,6 +24,8 @@ export interface AppConfig {
   simTickSec: number;
   /** Demo-only shortened "collar is silent" threshold of the AUTO scenario (seconds). */
   simDemoOfflineSec: number;
+  /** A MANUAL / GPS_MANUAL collar reverts to AUTO this many minutes after the last operator activity. */
+  controlModeTtlMin: number;
 }
 
 function intOr(v: string | undefined, def: number): number {
@@ -59,5 +61,6 @@ export function loadAppConfig(env: Record<string, string | undefined> = process.
     demoModesEnabled: env.DEMO_MODES_ENABLED !== 'false',
     simTickSec: intOr(env.SIM_TICK_SEC, 10),
     simDemoOfflineSec: intOr(env.SIM_DEMO_OFFLINE_SEC, 90),
+    controlModeTtlMin: intOr(env.CONTROL_MODE_TTL_MIN, 120),
   };
 }

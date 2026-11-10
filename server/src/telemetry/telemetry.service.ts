@@ -16,10 +16,12 @@ import { DeviceStatus } from '@qamqor/shared';
 import { DEVICE_AUTH_ERROR } from '../devices/device-auth.guard';
 import { SignalsService } from '../signals/signals.service';
 import { smoothHeartRate, computePulseThreat, PulseThreatDto } from '../animals/pulse-analysis';
-import { Subject, Observable, interval, merge } from 'rxjs';
-import { filter, map, startWith } from 'rxjs/operators';
+import { Subject, Observable, Subscription, interval } from 'rxjs';
+import { concatMap, filter, map } from 'rxjs/operators';
+import type { CollarControlMode, PositionSource } from '@qamqor/shared';
 import { LiveViewersService, MAX_STREAMS_PER_USER, tooManyStreams } from './live-viewers.service';
 import { DEFAULT_SIGNAL_COOLDOWN_SEC } from '../signals/signals.service';
+import { AUTO_RESET_DATA, isControlModeExpired, leaveGpsManual } from '../devices/control-mode';
 
 export type ZoneName = 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
 
@@ -43,6 +45,11 @@ interface DeviceTrack {
   zone: ZoneName | null;
   /** The last ping with a fix was unreliable (a GPS_LOST alert may be open). */
   lowAccuracy: boolean;
+  /**
+   * A GPS_LOST alert may still be open: set by an unreliable fix, cleared only once a reliable fix has
+   * actually run resolveGpsLost (whatever its zone, also UNKNOWN / NO_BOUNDARY). Unknown after a restart.
+   */
+  gpsLostMaybeOpen: boolean;
   /** The last ping carried a pulse. */
   hadHeartRate: boolean;
   /** Server time (ms) the last Telemetry row was stored. */
@@ -72,13 +79,50 @@ export interface TelemetryStreamEvent {
   lastSeenAt: string;
   serverTime: string;
   rssi: number | null;
+  /** Control mode of the collar (AUTO when unknown). */
+  controlMode: CollarControlMode;
+  /** MANUAL = the position is the operator's dragged point (GPS_MANUAL), GPS = the collar's own fix. */
+  positionSource: PositionSource;
 }
+
+/** Severity of a zone for signalling: entering a higher rank is an escalation. */
+export function zoneRank(zone: ZoneName | null | undefined): number {
+  switch (zone) {
+    case 'YELLOW':
+      return 1;
+    case 'ORANGE':
+      return 2;
+    case 'RED':
+      return 3;
+    default:
+      return 0; // GREEN, ESCAPE (silent), UNKNOWN, none
+  }
+}
+
+/**
+ * Escalation state of an animal (in process memory): the highest signalling rank reached in the current
+ * episode. A new episode starts only after the animal was in GREEN continuously for ESCALATION_RESET_SEC;
+ * a single GREEN ping or an UNKNOWN / unreliable ping never resets it, so GPS noise on a zone line cannot
+ * re-fire an escalation (which bypasses the cooldown).
+ */
+interface Episode {
+  rank: number;
+  greenSince: number | null;
+  seenAt: number;
+}
+export const DEFAULT_ESCALATION_RESET_SEC = 60;
+
+/** A command is re-delivered (same id) until delivered this many times ... */
+export const COMMAND_MAX_DELIVERIES = 2;
+/** ... or until this long after the first delivery. */
+export const COMMAND_REDELIVER_WINDOW_MS = 20_000;
 
 @Injectable()
 export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
   private readonly telemetryEvents$ = new Subject<TelemetryStreamEvent>();
   private readonly track = new Map<string, DeviceTrack>();
+  private readonly episodes = new Map<string, Episode>();
   private trackCalls = 0;
 
   constructor(
@@ -108,9 +152,18 @@ export class TelemetryService {
   /**
    * The SSE stream of a farm for the web client. Counts as a live viewer of the farm (collars of a live
    * farm are told to ping often, see nextInterval) until the client disconnects. Throws 429 when the user
-   * already holds the maximum of open streams. Emits a keepalive immediately and every 15 s.
+   * already holds the maximum of open streams. Emits a keepalive immediately and every 15 s. The stream is
+   * ended (completed) when the JWT expires (`expiresAtSec`) and on the first keepalive tick after the user
+   * stopped being a member of the farm; the viewer and the stream slot are released either way.
    */
-  openStream(args: { userId: string; farmId: string; code?: string; animalId?: string }): Observable<MessageEvent> {
+  openStream(args: {
+    userId: string;
+    farmId: string;
+    code?: string;
+    animalId?: string;
+    /** JWT `exp` (seconds since epoch). */
+    expiresAtSec?: number;
+  }): Observable<MessageEvent> {
     const { userId, farmId } = args;
     if (this.live.userStreams(userId) >= MAX_STREAMS_PER_USER) throw tooManyStreams();
     const keepalive = (): MessageEvent => ({ data: { type: 'keepalive', serverTime: new Date().toISOString() } });
@@ -121,20 +174,66 @@ export class TelemetryService {
         return undefined;
       }
       const releaseFarm = this.live.join(farmId);
-      const inner = merge(
-        interval(KEEPALIVE_MS).pipe(map(keepalive)),
-        this.getTelemetryStream(farmId, args.code, args.animalId).pipe(
-          map(({ farmId: _farmId, ...ev }): MessageEvent => ({ data: { type: 'telemetry', ...ev } })),
-        ),
-      )
-        .pipe(startWith(keepalive()))
-        .subscribe(subscriber);
+      const subs = new Subscription();
+      subscriber.next(keepalive());
+      subs.add(
+        this.getTelemetryStream(farmId, args.code, args.animalId)
+          .pipe(map(({ farmId: _farmId, ...ev }): MessageEvent => ({ data: { type: 'telemetry', ...ev } })))
+          .subscribe({ next: (m) => subscriber.next(m), error: (e) => subscriber.error(e) }),
+      );
+      subs.add(
+        interval(KEEPALIVE_MS)
+          .pipe(concatMap(() => this.stillMember(userId, farmId)))
+          .subscribe((member) => {
+            if (member) subscriber.next(keepalive());
+            else subscriber.complete();
+          }),
+      );
+      let expiryTimer: NodeJS.Timeout | undefined;
+      if (typeof args.expiresAtSec === 'number') {
+        const ms = Math.min(Math.max(args.expiresAtSec * 1000 - Date.now(), 0), 2 ** 31 - 1);
+        expiryTimer = setTimeout(() => subscriber.complete(), ms);
+        expiryTimer.unref?.();
+      }
       return () => {
-        inner.unsubscribe();
+        subs.unsubscribe();
+        if (expiryTimer) clearTimeout(expiryTimer);
         releaseFarm();
         releaseUser();
       };
     });
+  }
+
+  /** Membership re-check of an open stream. A database error does not end the stream. */
+  private async stillMember(userId: string, farmId: string): Promise<boolean> {
+    try {
+      const m = await this.prisma.farmMember.findUnique({
+        where: { userId_farmId: { userId, farmId } },
+        select: { farmId: true },
+      });
+      return !!m;
+    } catch (e) {
+      this.logger.warn(`stream membership check failed: ${(e as Error).message}`);
+      return true;
+    }
+  }
+
+  /** Broadcasts an event to the open streams of its farm (also used by the manual-position route). */
+  publishEvent(ev: TelemetryStreamEvent) {
+    try {
+      this.telemetryEvents$.next(ev);
+    } catch (e) {
+      this.logger.warn(`Failed to broadcast telemetry event: ${(e as Error).message}`);
+    }
+  }
+
+  /** The stored pulse of an animal while it is still fresh (<= 120 s), else null. */
+  static freshStoredHeartRate(animal: any, nowMs: number): { value: number; at: string } | null {
+    if (animal?.lastHeartRate != null && animal.lastHeartRateAt) {
+      const at = new Date(animal.lastHeartRateAt).getTime();
+      if (nowMs - at <= STORED_HEART_RATE_MAX_AGE_MS) return { value: animal.lastHeartRate, at: new Date(at).toISOString() };
+    }
+    return null;
   }
 
   private num(key: string, def: number): number {
@@ -149,9 +248,34 @@ export class TelemetryService {
     return raw !== '' && raw != null && Number.isInteger(n) && n >= 0 ? n : def;
   }
 
+  /**
+   * Updates the episode of the animal with a fresh ping of a KNOWN zone and says whether the zone is a
+   * escalation: a rank higher than any reached in the episode. The first ping of an animal (also after a
+   * restart) only opens the episode: the normal cooldown applies.
+   */
+  private episodeEscalation(animalId: string, zone: ZoneName, nowMs: number, resetMs: number): boolean {
+    const rank = zoneRank(zone);
+    const ep = this.episodes.get(animalId);
+    if (!ep) {
+      this.episodes.set(animalId, { rank, greenSince: zone === 'GREEN' ? nowMs : null, seenAt: nowMs });
+      return false;
+    }
+    ep.seenAt = nowMs;
+    if (zone === 'GREEN') {
+      if (ep.greenSince === null) ep.greenSince = nowMs;
+      if (nowMs - ep.greenSince >= resetMs) ep.rank = 0;
+    } else {
+      ep.greenSince = null; // any other known zone interrupts the green stretch
+    }
+    const escalated = rank > ep.rank;
+    if (escalated) ep.rank = rank;
+    return escalated;
+  }
+
   private pruneTrack(nowMs: number) {
     if (++this.trackCalls % 500 !== 0 && this.track.size < 5000) return;
     for (const [k, v] of this.track) if (nowMs - v.seenAt > 3600_000) this.track.delete(k);
+    for (const [k, v] of this.episodes) if (nowMs - v.seenAt > 3600_000) this.episodes.delete(k);
   }
 
   /**
@@ -189,13 +313,46 @@ export class TelemetryService {
     const st = this.track.get(device.deviceId);
     this.pruneTrack(nowMs);
 
+    const animal = device.animal;
+    // A MANUAL / GPS_MANUAL mode without operator activity for CONTROL_MODE_TTL_MIN lapses to AUTO (lazily
+    // here; the background watcher does the same for silent collars).
+    if (
+      animal &&
+      !device.isSimulated &&
+      (device.controlMode === 'GPS_MANUAL' || device.controlMode === 'MANUAL') &&
+      isControlModeExpired(device, nowMs, this.num('CONTROL_MODE_TTL_MIN', 120) * 60_000)
+    ) {
+      await this.prisma.device.update({ where: { id: device.id }, data: AUTO_RESET_DATA });
+      if (device.controlMode === 'GPS_MANUAL') {
+        // The animal still carries the dragged point: restore the last real fix so this ping is not stale.
+        animal.lastSeenAt = await leaveGpsManual(this.prisma, device.deviceId, animal.id);
+      }
+      Object.assign(device, { ...AUTO_RESET_DATA });
+    }
+    // The control mode applies to real collars attached to an animal; anything else behaves as AUTO.
+    const controlMode: CollarControlMode =
+      animal && !device.isSimulated && (device.controlMode === 'GPS_MANUAL' || device.controlMode === 'MANUAL')
+        ? device.controlMode
+        : 'AUTO';
+    const manualGps = controlMode === 'GPS_MANUAL';
+    const manualLat: number | null = typeof device.manualLatitude === 'number' ? device.manualLatitude : null;
+    const manualLng: number | null = typeof device.manualLongitude === 'number' ? device.manualLongitude : null;
+    const hasManual = manualGps && manualLat !== null && manualLng !== null;
+    // The position the zone logic works with: the collar's fix, or in GPS_MANUAL the operator's point
+    // (accuracy 0, speed 0). The real GPS of a GPS_MANUAL collar is only stored in the telemetry row.
+    const evalFix = manualGps ? hasManual : hasFix;
+    const eLat = manualGps ? (manualLat as number) : lat;
+    const eLng = manualGps ? (manualLng as number) : lng;
+    const eAcc = manualGps ? 0 : acc;
+    const eSpeed = manualGps ? 0 : dto.speedKmh;
+
     // A retried ping (same device + timestamp) is answered but not counted again.
     const duplicate = !!(await this.prisma.telemetry.findFirst({
       where: { deviceId: device.deviceId, timestamp: pingTime },
       select: { id: true },
     }));
     // An older or equal timestamp must not move the animal backwards.
-    const stale = hasFix && !!(device.animal?.lastSeenAt && pingTime.getTime() <= new Date(device.animal.lastSeenAt).getTime());
+    const stale = !manualGps && hasFix && !!(animal?.lastSeenAt && pingTime.getTime() <= new Date(animal.lastSeenAt).getTime());
 
     const prevOutside: boolean = device.animal?.isOutsideGeofence ?? false;
     let isOutside: boolean = prevOutside;
@@ -205,9 +362,10 @@ export class TelemetryService {
     let toneFrequencyHz = 0;
     let sound = false;
     let vibrate = false;
-    let unknownReason: string | null = hasFix ? 'NO_BOUNDARY' : 'NO_FIX';
+    let unknownReason: string | null = evalFix ? 'NO_BOUNDARY' : manualGps ? 'NO_MANUAL_POSITION' : 'NO_FIX';
     let suppressedBy: 'SIGNAL_LIMIT' | null = null;
     let lowAccuracy = false;
+    let gpsLostMaybeOpen = st ? st.gpsLostMaybeOpen : true;
     let alertCheckedAt = st?.alertCheckedAt ?? 0;
     let outside = false; // outside on a fresh (non-stale) ping: emergency cadence
 
@@ -222,23 +380,33 @@ export class TelemetryService {
 
     const rawHr: number | null = typeof dto.heartRate === 'number' ? dto.heartRate : null;
     const hr: number | null = rawHr !== null ? smoothHeartRate(device.animal?.lastHeartRate, rawHr) : null;
-    const animal = device.animal;
     const polygon = animal?.activeGeofence?.polygonJson ?? null;
 
-    if (animal && hasFix) {
+    if (animal && evalFix) {
       const evaluation = this.geofenceService.evaluateLocation(
         {
-          latitude: lat,
-          longitude: lng,
-          accuracy: acc,
-          speed: dto.speedKmh,
+          latitude: eLat,
+          longitude: eLng,
+          accuracy: eAcc,
+          speed: eSpeed,
         },
         polygon,
       );
       zone = evaluation.zone;
       unknownReason = evaluation.reason;
       distanceToBorderMeters = evaluation.distanceMeters;
-      lowAccuracy = zone === 'UNKNOWN' && evaluation.reason === 'LOW_ACCURACY';
+      lowAccuracy = !manualGps && zone === 'UNKNOWN' && evaluation.reason === 'LOW_ACCURACY';
+
+      // A GPS_LOST alert can only be open if an earlier fix was unreliable (or nothing is known yet, e.g.
+      // after a restart). ANY reliable fix closes it, whatever its zone (also UNKNOWN: no / invalid boundary).
+      if (!manualGps && !stale) {
+        if (lowAccuracy) {
+          gpsLostMaybeOpen = true;
+        } else if (evaluation.isReliable && device.farmId && gpsLostMaybeOpen) {
+          await this.alertsService.resolveGpsLost(animal.id);
+          gpsLostMaybeOpen = false;
+        }
+      }
 
       if (zone !== 'UNKNOWN') {
         toneFrequencyHz = evaluation.toneFrequencyHz;
@@ -249,13 +417,18 @@ export class TelemetryService {
         sound = zone === 'YELLOW' || zone === 'ORANGE' || zone === 'RED';
         vibrate = zone === 'ORANGE' || zone === 'RED';
 
-        // A GPS_LOST alert can only be open if the last fix was unreliable (or nothing is known yet).
-        if (device.farmId && !stale && (!st || st.lowAccuracy)) {
-          await this.alertsService.resolveGpsLost(animal.id);
-        }
-
-        if (stale || duplicate) {
-          // A stale or retried ping never delivers (or records) a signal.
+        const escalation =
+          !stale &&
+          !duplicate &&
+          this.episodeEscalation(
+            animal.id,
+            zone,
+            nowMs,
+            this.numNonNeg('ESCALATION_RESET_SEC', DEFAULT_ESCALATION_RESET_SEC) * 1000,
+          );
+        if (controlMode === 'MANUAL' || stale || duplicate) {
+          // MANUAL: no automatic zone signals, only the operator's commands. A stale or retried ping never
+          // delivers (or records) a signal either.
           sound = false;
           vibrate = false;
           toneFrequencyHz = 0;
@@ -273,6 +446,8 @@ export class TelemetryService {
             now,
             record: true,
             cooldownSec,
+            // Entering a MORE severe zone than any in this episode is delivered at once, inside the cooldown.
+            escalation,
           });
           if (limited.suppressed) suppressedBy = 'SIGNAL_LIMIT';
           if (!limited.sound) toneFrequencyHz = 0;
@@ -292,8 +467,8 @@ export class TelemetryService {
               animalId: animal.id,
               animalName: animal.name,
               deviceId: device.deviceId,
-              latitude: lat,
-              longitude: lng,
+              latitude: eLat,
+              longitude: eLng,
               isDemo: !!animal.isDemo,
               freshBreach: !prevOutside,
             });
@@ -305,8 +480,8 @@ export class TelemetryService {
             animalId: animal.id,
             animalName: animal.name,
             deviceId: device.deviceId,
-            latitude: lat,
-            longitude: lng,
+            latitude: eLat,
+            longitude: eLng,
             isDemo: !!animal.isDemo,
           });
         }
@@ -324,7 +499,14 @@ export class TelemetryService {
       }
 
       if (!stale) {
-        if (lowAccuracy) {
+        if (manualGps) {
+          // The animal's position is the operator's point (written by PUT manual-position): a ping only
+          // keeps the pulse (and the outside flag in step with the zone).
+          const data: Record<string, unknown> = {};
+          if (hr !== null) Object.assign(data, { lastHeartRate: hr, lastHeartRateAt: pingTime });
+          if (zone !== 'UNKNOWN' && isOutside !== prevOutside) data.isOutsideGeofence = isOutside;
+          if (Object.keys(data).length) await this.prisma.animal.update({ where: { id: animal.id }, data });
+        } else if (lowAccuracy) {
           // The firmware repeats the LAST KNOWN position with accuracy 999 when it loses the fix: it is not
           // a new position, so the animal's position and lastSeenAt stay as they were. Only the pulse is kept.
           if (hr !== null) {
@@ -351,7 +533,7 @@ export class TelemetryService {
     }
 
     // Pulse-only ping: keep the latest pulse, no zone logic, no signals, no GPS alerts.
-    if (animal && !hasFix && hr !== null) {
+    if (animal && !evalFix && hr !== null) {
       const prev = animal.lastHeartRateAt ? new Date(animal.lastHeartRateAt).getTime() : 0;
       if (pingTime.getTime() >= prev) {
         await this.prisma.animal.update({ where: { id: animal.id }, data: { lastHeartRate: hr, lastHeartRateAt: pingTime } });
@@ -377,7 +559,8 @@ export class TelemetryService {
     // watcher marked the device OFFLINE (or, for alerts raised before that mark existed, the silence
     // lasted longer than the offline threshold).
     const offlineThresholdMs = this.num('OFFLINE_AFTER_MISSED_PINGS', 3) * normalInterval * 1000;
-    if (animal && device.farmId && (wasOffline || (lastBeat > 0 && nowMs - lastBeat > offlineThresholdMs))) {
+    // The first ping after a process restart (no track entry) also checks: the watcher's mark may predate it.
+    if (animal && device.farmId && (wasOffline || !st || (lastBeat > 0 && nowMs - lastBeat > offlineThresholdMs))) {
       await this.alertsService.restoreDevice({
         farmId: device.farmId,
         animalId: animal.id,
@@ -390,7 +573,7 @@ export class TelemetryService {
     // Record a Telemetry point only when it adds information: the zone changed, a breach / return /
     // GPS_LOST transition happened, a pulse appeared, or TELEMETRY_STORE_MIN_SEC passed since the last row.
     // (The live stream below is broadcast on every ping regardless.)
-    const fresh = hasFix && !stale;
+    const fresh = evalFix && !stale;
     const changed =
       fresh &&
       !!st &&
@@ -418,6 +601,7 @@ export class TelemetryService {
       seenAt: nowMs,
       zone: fresh ? zone : st?.zone ?? null,
       lowAccuracy: fresh ? lowAccuracy : st?.lowAccuracy ?? false,
+      gpsLostMaybeOpen,
       hadHeartRate: hr !== null,
       storedAt: store ? nowMs : st?.storedAt ?? 0,
       alertCheckedAt,
@@ -460,38 +644,66 @@ export class TelemetryService {
               : 'Zone UNKNOWN: no boundary is set for this animal. No signals.';
     }
 
+    if (controlMode === 'MANUAL' && zone !== 'UNKNOWN') {
+      warningMessage = `Mode MANUAL: zone ${zone}, automatic signals are off.`;
+    }
+    if (unknownReason === 'NO_MANUAL_POSITION' && zone === 'UNKNOWN') {
+      warningMessage = 'Zone UNKNOWN: mode GPS_MANUAL, no manual position set yet. No signals.';
+    }
+
     if (!device.farmId) warningMessage = 'Device not claimed yet';
 
     if (suppressedBy) warningMessage += ' Some signals are suppressed by the daily limit.';
 
-    // Deliver at most one queued test signal per ping (once only).
+    // Deliver at most one queued command per ping. A delivered command stays PENDING and is re-delivered
+    // (same id, the firmware ignores a repeated id) until it was delivered COMMAND_MAX_DELIVERIES times or
+    // COMMAND_REDELIVER_WINDOW_MS passed since its first delivery, then it is marked EXECUTED: a reply that
+    // was lost to a client timeout does not lose the command.
     let command: { id: string; type: 'TEST_SOUND' | 'TEST_SPEAKER' | 'TEST_BUZZER' | 'TEST_VIBRATION' } | undefined;
-    const pending = await this.prisma.deviceCommand.findFirst({
-      where: { deviceId: device.deviceId, status: 'PENDING', command: { in: ['TEST_SOUND', 'TEST_SPEAKER', 'TEST_BUZZER', 'TEST_VIBRATION'] } },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (pending) {
-      const claimedCmd = await this.prisma.deviceCommand.updateMany({
-        where: { id: pending.id, status: 'PENDING' },
-        data: { status: 'EXECUTED', executedAt: new Date() },
+    for (let i = 0; i < 5 && !command; i++) {
+      const pending: any = await this.prisma.deviceCommand.findFirst({
+        where: { deviceId: device.deviceId, status: 'PENDING', command: { in: ['TEST_SOUND', 'TEST_SPEAKER', 'TEST_BUZZER', 'TEST_VIBRATION'] } },
+        orderBy: { createdAt: 'asc' },
       });
-      if (claimedCmd.count === 1) {
-        command = { id: pending.id, type: pending.command as any };
+      if (!pending) break;
+      const count: number = pending.deliveryCount ?? 0;
+      const firstAt: number | null = pending.deliveredAt ? new Date(pending.deliveredAt).getTime() : null;
+      if (count >= COMMAND_MAX_DELIVERIES || (count >= 1 && firstAt !== null && nowMs - firstAt > COMMAND_REDELIVER_WINDOW_MS)) {
+        // Done: close it without delivering again and look at the next one.
+        await this.prisma.deviceCommand.updateMany({
+          where: { id: pending.id, status: 'PENDING' },
+          data: { status: 'EXECUTED', executedAt: now },
+        });
+        continue;
       }
+      const delivery = count + 1;
+      const claimedCmd = await this.prisma.deviceCommand.updateMany({
+        where: { id: pending.id, status: 'PENDING', deliveryCount: count },
+        data: {
+          deliveryCount: delivery,
+          deliveredAt: pending.deliveredAt ?? now,
+          ...(delivery >= COMMAND_MAX_DELIVERIES && { status: 'EXECUTED', executedAt: now }),
+        },
+      });
+      if (claimedCmd.count === 1) command = { id: pending.id, type: pending.command as any };
+      break; // a lost race (a parallel ping took this delivery): none this ping
     }
 
     try {
       // The pulse of this ping, or the stored one while it is still fresh (<= 120 s); never an old value.
       let streamHr: number | null = hr;
       let streamHrAt: string | null = hr != null ? pingTime.toISOString() : null;
-      if (hr == null && device.animal?.lastHeartRate != null && device.animal.lastHeartRateAt) {
-        const storedAt = new Date(device.animal.lastHeartRateAt).getTime();
-        if (nowMs - storedAt <= STORED_HEART_RATE_MAX_AGE_MS) {
-          streamHr = device.animal.lastHeartRate;
-          streamHrAt = new Date(storedAt).toISOString();
+      if (hr == null) {
+        const stored = TelemetryService.freshStoredHeartRate(device.animal, nowMs);
+        if (stored) {
+          streamHr = stored.value;
+          streamHrAt = stored.at;
         }
       }
       const pulseThreat = computePulseThreat(device.animal?.species, streamHr);
+      // GPS_MANUAL: the streamed position is the operator's point, not the collar's GPS.
+      const evLat = manualGps ? manualLat : typeof dto.latitude === 'number' && isFinite(dto.latitude) ? dto.latitude : null;
+      const evLng = manualGps ? manualLng : typeof dto.longitude === 'number' && isFinite(dto.longitude) ? dto.longitude : null;
       this.telemetryEvents$.next({
         farmId: device.farmId ?? null,
         deviceId: device.deviceId,
@@ -501,9 +713,9 @@ export class TelemetryService {
         heartRate: streamHr,
         lastHeartRateAt: streamHrAt,
         pulseThreat,
-        latitude: typeof dto.latitude === 'number' && isFinite(dto.latitude) ? dto.latitude : null,
-        longitude: typeof dto.longitude === 'number' && isFinite(dto.longitude) ? dto.longitude : null,
-        accuracyM: dto.accuracy ?? null,
+        latitude: evLat,
+        longitude: evLng,
+        accuracyM: manualGps ? (hasManual ? 0 : null) : dto.accuracy ?? null,
         zone,
         inFence,
         distanceToBorderMeters,
@@ -512,6 +724,8 @@ export class TelemetryService {
         lastSeenAt: pingTime.toISOString(),
         serverTime: now.toISOString(),
         rssi: dto.signal ?? null,
+        controlMode,
+        positionSource: manualGps ? 'MANUAL' : 'GPS',
       });
     } catch (e) {
       this.logger.warn(`Failed to broadcast telemetry event: ${(e as Error).message}`);
@@ -533,6 +747,7 @@ export class TelemetryService {
       vibrateDurationMs: vibrate ? 3000 : 0,
       suppressedBy,
       warningMessage,
+      controlMode,
     };
   }
 

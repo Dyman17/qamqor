@@ -28,6 +28,12 @@ export enum DeviceStatus {
   INACTIVE = 'INACTIVE',
 }
 
+/** Control mode of a real collar (see docs/architecture/api-contract.md). */
+export type CollarControlMode = 'AUTO' | 'GPS_MANUAL' | 'MANUAL';
+export const COLLAR_CONTROL_MODES: readonly CollarControlMode[] = ['AUTO', 'GPS_MANUAL', 'MANUAL'];
+/** Where the shown position of an animal comes from. */
+export type PositionSource = 'GPS' | 'MANUAL';
+
 export enum GeofenceStatus {
   INSIDE = 'INSIDE',
   OUTSIDE = 'OUTSIDE',

@@ -32,6 +32,15 @@ enum AnimalGender {
   UNKNOWN
 }
 
+/// How a real collar is controlled: AUTO = real GPS and automatic zone signals; GPS_MANUAL = the operator
+/// drags the animal on the map (the manual point replaces the GPS for zones, alerts and signals);
+/// MANUAL = real GPS but no automatic signals, only the operator's queued commands.
+enum CollarControlMode {
+  AUTO
+  GPS_MANUAL
+  MANUAL
+}
+
 enum DeviceStatus {
   ONLINE
   OFFLINE
@@ -143,6 +152,15 @@ model Device {
   signal            Int?             // dBm RSSI
   firmwareVersion   String?          @default("1.0.0")
   lastHeartbeatAt   DateTime?
+  controlMode       CollarControlMode @default(AUTO)
+  // The point the operator dragged the animal to (only in GPS_MANUAL; cleared when the mode is left).
+  manualLatitude    Float?
+  manualLongitude   Float?
+  manualPositionAt  DateTime?
+  // When the current non-AUTO mode was entered, and the last operator activity in it (mode change, manual
+  // position, test command). A non-AUTO mode reverts to AUTO CONTROL_MODE_TTL_MIN after the last activity.
+  controlModeSince  DateTime?
+  controlActivityAt DateTime?
   farmId            String?
   farm              Farm?            @relation(fields: [farmId], references: [id], onDelete: SetNull)
   animalId          String?          @unique
@@ -296,6 +314,10 @@ model DeviceCommand {
   payload    Json?     // Optional params
   status     String    @default("PENDING") // PENDING, EXECUTED, CANCELLED
   executedAt DateTime?
+  // A command is re-delivered (same id) until it was delivered twice or 20 s passed since the first
+  // delivery, then marked EXECUTED: a reply lost to a client timeout must not lose the command.
+  deliveredAt   DateTime?
+  deliveryCount Int       @default(0)
   createdAt  DateTime  @default(now())
 
   @@index([deviceId, status])

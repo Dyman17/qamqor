@@ -265,11 +265,14 @@ describe('write volume per ping', () => {
     expect(prisma.device.update.mock.calls[1][0].data.status).toBe('ONLINE');
   });
 
-  it('restoreDevice only for a device that was OFFLINE (or silent past the offline threshold)', async () => {
+  it('restoreDevice for a device that was OFFLINE, silent past the threshold, or on the first ping after a restart', async () => {
     useFakeDate();
     const online = setup();
-    await online.svc.processDeviceTelemetry(online.device, ping());
-    expect(online.alerts.restoreDevice).not.toHaveBeenCalled();
+    await online.svc.processDeviceTelemetry(online.device, ping()); // no track entry yet (restart): checked once
+    expect(online.alerts.restoreDevice).toHaveBeenCalledTimes(1);
+    jest.setSystemTime(Date.now() + 1000);
+    await online.svc.processDeviceTelemetry(online.device, ping()); // steady state: not again
+    expect(online.alerts.restoreDevice).toHaveBeenCalledTimes(1);
     const off = setup({}, { status: 'OFFLINE' });
     await off.svc.processDeviceTelemetry(off.device, ping());
     expect(off.alerts.restoreDevice).toHaveBeenCalledTimes(1);

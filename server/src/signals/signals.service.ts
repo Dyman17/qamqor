@@ -61,9 +61,14 @@ export class SignalsService {
     record?: boolean;
     /** Minimum seconds between two delivered signals of one kind (default 30; 0 = off). */
     cooldownSec?: number;
+    /**
+     * The animal entered a MORE severe signalling zone: the cooldown is skipped (the signals are still
+     * recorded and counted against the daily limits).
+     */
+    escalation?: boolean;
   }): Promise<LimitedSignals> {
     const { farmId, animal, deviceId, now } = args;
-    const cooldownMs = (args.cooldownSec ?? DEFAULT_SIGNAL_COOLDOWN_SEC) * 1000;
+    const cooldownMs = args.escalation ? 0 : (args.cooldownSec ?? DEFAULT_SIGNAL_COOLDOWN_SEC) * 1000;
     if (!args.sound && !args.vibrate) return { sound: false, vibrate: false, suppressed: false };
 
     const win = dayWindow(now, args.timezone);

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { loadAppConfig } from '../config/config';
+import { AUTO_RESET_DATA, leaveGpsManual } from './control-mode';
 
 /** An unclaimed device with no ping for this long is removed. */
 export const UNCLAIMED_TTL_DAYS = 7;
@@ -35,12 +36,38 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
     this.timer = setInterval(() => {
       this.tick().catch((e) => this.logger.error(`offline watcher tick failed: ${e?.message}`));
       this.purgeUnclaimed().catch((e) => this.logger.error(`unclaimed purge failed: ${e?.message}`));
+      this.expireControlModes().catch((e) => this.logger.error(`control mode expiry failed: ${e?.message}`));
     }, cfg.offlineCheckIntervalSec * 1000);
     this.timer.unref();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * MANUAL / GPS_MANUAL collars without operator activity for CONTROL_MODE_TTL_MIN go back to AUTO and the
+   * manual point is cleared (a forgotten manual mode must not leave an animal without automatic signals).
+   * The telemetry path also does this lazily on the next ping of the collar.
+   */
+  async expireControlModes(now: Date = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - loadAppConfig(process.env).controlModeTtlMin * 60_000);
+    const lapsed = { OR: [{ controlActivityAt: { lt: cutoff } }, { controlActivityAt: null }] };
+    const rows = await this.prisma.device.findMany({
+      where: { controlMode: { not: 'AUTO' }, isSimulated: false, ...lapsed },
+      select: { id: true, deviceId: true, controlMode: true, animalId: true },
+    });
+    let n = 0;
+    for (const d of rows) {
+      const r = await this.prisma.device.updateMany({
+        where: { id: d.id, controlMode: d.controlMode, ...lapsed },
+        data: AUTO_RESET_DATA,
+      });
+      if (r.count !== 1) continue;
+      n++;
+      if (d.controlMode === 'GPS_MANUAL' && d.animalId) await leaveGpsManual(this.prisma, d.deviceId, d.animalId);
+    }
+    return n;
   }
 
   /** Deletes never-claimed devices (and, by cascade, their telemetry) silent for UNCLAIMED_TTL_DAYS. */
@@ -113,7 +140,8 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
           // only for a device that is marked OFFLINE, so it does not query alerts on every ping.
           if (stale.length) {
             await tx.device.updateMany({
-              where: { id: { in: stale.map((d) => d.id) }, status: { not: 'OFFLINE' } },
+              // lastHeartbeatAt guard: a heartbeat that arrived after findMany must not be overwritten.
+              where: { id: { in: stale.map((d) => d.id) }, status: { not: 'OFFLINE' }, lastHeartbeatAt: { lt: cutoff } },
               data: { status: 'OFFLINE' },
             });
           }

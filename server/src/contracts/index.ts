@@ -72,6 +72,32 @@ export interface DeviceTelemetryResponseDto {
   /** Set when a daily signal limit suppressed a signal. */
   suppressedBy?: 'SIGNAL_LIMIT' | null;
   warningMessage?: string;
+  /** Control mode of the collar (AUTO when absent). MANUAL = no automatic zone signals, GPS_MANUAL = the operator's point is used. */
+  controlMode?: 'AUTO' | 'GPS_MANUAL' | 'MANUAL';
+}
+
+// ==========================================
+// 2b. COLLAR CONTROL MODES
+// PATCH /api/v1/devices/:id/control-mode, PUT /api/v1/devices/:id/manual-position
+// ==========================================
+
+export interface SetControlModeRequestDto {
+  mode: 'AUTO' | 'GPS_MANUAL' | 'MANUAL';
+}
+
+export interface ManualPositionRequestDto {
+  latitude: number;
+  longitude: number;
+}
+
+export interface ManualPositionResponseDto {
+  deviceId: string;
+  controlMode: 'GPS_MANUAL';
+  positionSource: 'MANUAL';
+  position: { latitude: number; longitude: number; at: string };
+  zone: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'ESCAPE' | 'UNKNOWN';
+  inFence: boolean | null;
+  distanceToBorderMeters: number | null;
 }
 
 // ==========================================
