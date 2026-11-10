@@ -97,7 +97,7 @@ describe('OfflineWatcherService', () => {
     });
     const prisma: any = {
       alert: delegates(),
-      device: { findMany: jest.fn(async () => devices) },
+      device: { findMany: jest.fn(async () => devices), updateMany: jest.fn(async () => ({ count: devices.length })) },
       $queryRaw: jest.fn(async () => [{ locked: true }]),
     };
     // The lock transaction gets its own client object so tests can see where writes go.
@@ -178,6 +178,7 @@ describe('signal limits', () => {
       signalLimit: { findMany: jest.fn(async () => limits) },
       signalEvent: {
         count: jest.fn(async ({ where }: any) => used[where.level] ?? 0),
+        findFirst: jest.fn(async () => null),
         createMany: jest.fn(async ({ data }: any) => { events.push(...data); }),
         groupBy: jest.fn(async () => Object.entries(used).map(([level, n]) => ({ level, _count: { _all: n } }))),
       },
@@ -252,7 +253,7 @@ describe('signal limits', () => {
     const signals: any = { applyLimits: jest.fn(async () => ({ sound: false, vibrate: true, suppressed: true })) };
     const svc = new TelemetryService(prisma, new GeofenceService({} as any), alerts, { get: (_k: string, d: string) => d } as any, signals);
     const device: any = {
-      id: 'd', deviceId: 'QAM-1', farmId: 'F', farm: { timezone: 'Asia/Aqtau' },
+      id: 'd', deviceId: 'QAM-1', farmId: 'F', status: 'OFFLINE', farm: { timezone: 'Asia/Aqtau' },
       animal: { id: 'a1', name: 'A', isOutsideGeofence: false, activeGeofence: { polygonJson: poly } },
     };
     const res: any = await svc.processDeviceTelemetry(device, {

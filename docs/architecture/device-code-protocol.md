@@ -1,4 +1,4 @@
-Status: approved (owner decision 2026-11-09)
+Status: approved (owner decision 2026-11-09); cadence, signal cooldown and read-endpoint auth added 2026-11-10 (implementation defaults)
 
 # ESP32 ↔ server: 8-digit device code
 
@@ -17,6 +17,11 @@ The owner's decision, verbatim in meaning:
 - Abuse limits: at most 500 unclaimed devices at once (429 beyond that); unclaimed devices with no ping for 7 days are deleted with their telemetry by the background job.
 - Every telemetry response is JSON with a `code` field equal to the request's code, plus the command fields (zone, signal, next ping interval).
 - Rate limit per IP and per code, to slow down guessing.
+- **`nextInterval` (seconds until the next ping; the firmware must obey it):** unclaimed device -> `UNCLAIMED_PING_INTERVAL_SEC` (30); claimed device whose farm is "live" (someone has the web map's SSE stream open, plus `LIVE_LINGER_SEC` = 120 s after the last viewer left) -> `LIVE_PING_INTERVAL_SEC` (1, allowed 1..60); otherwise `NORMAL_PING_INTERVAL_SEC` (300). An animal outside the fence gets `EMERGENCY_PING_INTERVAL_SEC` (60), never longer than the live interval (the minimum is used). Live state is kept in server memory (single instance).
+- **Signals are episodic:** per animal and per kind (sound, vibration) at most one signal per `SIGNAL_COOLDOWN_SEC` (30 s). Inside the cooldown the reply has `sound`/`vibrate` false, nothing is recorded or counted against the daily limit, `suppressedBy` stays null. Stale (`timestamp` not newer than the animal's last seen) and retried pings never deliver a signal.
+- A fix the firmware marks unreliable (accuracy 999 with the last known position) raises GPS_LOST but does not overwrite the animal's position or last-seen time.
+- The two read endpoints `GET /api/v1/device/telemetry?code=` and `GET /api/v1/device/stream` are for the web client, not for the collar: they need a JWT and `x-farm-id`, and only show devices of the caller's farm (unclaimed devices are never streamed). The collar uses only `POST /api/v1/device/telemetry`.
+- `POST /devices/:id/rotate-secret` is removed: the code is the identity, no secret is checked.
 - HTTPS only, through Render.
 
 ## Known risk (for the owner)

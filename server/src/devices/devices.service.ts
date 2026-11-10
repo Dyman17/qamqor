@@ -134,16 +134,6 @@ export class DevicesService {
     return code ? { collar: toCollarDto(created) } : { collar: toCollarDto(created), deviceSecret };
   }
 
-  async rotateSecret(userId: string, farmId: string, deviceId: string) {
-    const device = await this.findOwned(farmId, deviceId);
-    const deviceSecret = generateDeviceSecret();
-    await this.prisma.device.update({
-      where: { id: device.id },
-      data: { secretHash: hashDeviceSecret(deviceSecret) },
-    });
-    return { deviceSecret };
-  }
-
   async updateDevice(userId: string, farmId: string, deviceId: string, dto: UpdateDeviceDto) {
     const device = await this.findOwned(farmId, deviceId);
 

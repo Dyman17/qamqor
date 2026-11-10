@@ -34,11 +34,24 @@ export function validateEnv(env: Record<string, string | undefined>): Record<str
     errors.push('CORS_ORIGINS is required in production');
   }
 
-  for (const key of ['NORMAL_PING_INTERVAL_SEC', 'EMERGENCY_PING_INTERVAL_SEC', 'TELEMETRY_MAX_AGE_SEC', 'TELEMETRY_MAX_FUTURE_SEC', 'OFFLINE_AFTER_MISSED_PINGS', 'OFFLINE_CHECK_INTERVAL_SEC', 'SIM_TICK_SEC', 'SIM_DEMO_OFFLINE_SEC', 'PORT']) {
+  for (const key of ['NORMAL_PING_INTERVAL_SEC', 'EMERGENCY_PING_INTERVAL_SEC', 'TELEMETRY_MAX_AGE_SEC', 'TELEMETRY_MAX_FUTURE_SEC', 'OFFLINE_AFTER_MISSED_PINGS', 'OFFLINE_CHECK_INTERVAL_SEC', 'SIM_TICK_SEC', 'SIM_DEMO_OFFLINE_SEC', 'UNCLAIMED_PING_INTERVAL_SEC', 'PORT']) {
     const v = env[key];
     if (v !== undefined && v !== '' && !(Number.isInteger(Number(v)) && Number(v) > 0)) {
       errors.push(`${key} must be a positive integer`);
     }
+  }
+
+  // Non-negative: 0 switches the linger / cooldown / storage throttle off.
+  for (const key of ['LIVE_LINGER_SEC', 'SIGNAL_COOLDOWN_SEC', 'TELEMETRY_STORE_MIN_SEC']) {
+    const v = env[key];
+    if (v !== undefined && v !== '' && !(Number.isInteger(Number(v)) && Number(v) >= 0)) {
+      errors.push(`${key} must be a non-negative integer`);
+    }
+  }
+
+  const live = env.LIVE_PING_INTERVAL_SEC;
+  if (live !== undefined && live !== '' && !(Number.isInteger(Number(live)) && Number(live) >= 1 && Number(live) <= 60)) {
+    errors.push('LIVE_PING_INTERVAL_SEC must be an integer between 1 and 60');
   }
 
   const hops = env.TRUST_PROXY_HOPS;

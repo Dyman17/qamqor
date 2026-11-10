@@ -11,6 +11,9 @@ import { Page, PAGE_DEFAULT_LIMIT } from '../common/pagination';
 
 const OPEN_STATUSES = [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED];
 
+/** A breach alert the user resolved is not re-raised for this long while the animal stays outside. */
+export const BREACH_RESOLVED_COOLDOWN_MS = 10 * 60_000;
+
 /** Closes an animal's open DEVICE_OFFLINE and GPS_LOST alerts (collar removed, animal deleted). */
 export async function resolveCollarAlerts(db: any, animalId: string): Promise<void> {
   await db.alert.updateMany({
@@ -72,6 +75,12 @@ export class AlertsService {
     latitude: number;
     longitude: number;
     isDemo?: boolean;
+    /**
+     * true = the animal has just crossed the border (it was inside on the previous ping): always a new
+     * event. Otherwise (still outside) a breach alert that was resolved less than
+     * BREACH_RESOLVED_COOLDOWN_MS ago is not re-created, so a resolved alert does not come back on the next ping.
+     */
+    freshBreach?: boolean;
   }) {
     const dedupeKey = `${AlertType.GEOFENCE_BREACH}:${data.animalId}`;
     const existing = await this.prisma.alert.findFirst({
@@ -81,6 +90,22 @@ export class AlertsService {
     if (existing) {
       this.logger.debug(`Open breach alert already exists for animal ${data.animalId}`);
       return existing;
+    }
+
+    if (!data.freshBreach) {
+      const recentlyResolved = await this.prisma.alert.findFirst({
+        where: {
+          animalId: data.animalId,
+          type: AlertType.GEOFENCE_BREACH,
+          status: AlertStatus.RESOLVED,
+          resolvedAt: { gte: new Date(Date.now() - BREACH_RESOLVED_COOLDOWN_MS) },
+        },
+        select: { id: true },
+      });
+      if (recentlyResolved) {
+        this.logger.debug(`Breach alert for animal ${data.animalId} was resolved recently, not re-raised`);
+        return null;
+      }
     }
 
     this.logger.warn(`ALERT: Animal ${data.animalName} (${data.animalId}) exited geofence at [${data.latitude}, ${data.longitude}]`);

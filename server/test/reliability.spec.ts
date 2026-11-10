@@ -173,7 +173,8 @@ describe('TelemetryService', () => {
     const res: any = await svc.processDeviceTelemetry(device, dto({ accuracy: 80 }));
     expect(res).toMatchObject({ zone: 'UNKNOWN', sound: false, vibrate: false });
     expect(alerts.triggerGpsLost).toHaveBeenCalled();
-    expect(prisma.animal.update.mock.calls[0][0].data.isOutsideGeofence).toBe(true);
+    // an unreliable fix is not a new position: the animal row is not touched (no pulse in this ping)
+    expect(prisma.animal.update).not.toHaveBeenCalled();
   });
 
   it('a reliable fix closes GPS_LOST', async () => {

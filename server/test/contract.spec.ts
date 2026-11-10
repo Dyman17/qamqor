@@ -40,7 +40,7 @@ const EXPECTED_ROUTES = [
   `PATCH ${V}/animals/:id`, `DELETE ${V}/animals/:id`,
   `GET ${V}/geofences`, `GET ${V}/geofences/:id`, `POST ${V}/geofences`, `PATCH ${V}/geofences/:id`, `DELETE ${V}/geofences/:id`,
   `GET ${V}/devices`, `GET ${V}/devices/:id`, `POST ${V}/devices`, `PATCH ${V}/devices/:id`,
-  `POST ${V}/devices/:id/rotate-secret`, `POST ${V}/devices/:id/test-signal`, `DELETE ${V}/devices/:id`,
+  `POST ${V}/devices/:id/test-signal`, `DELETE ${V}/devices/:id`,
   `GET ${V}/alerts`, `GET ${V}/alerts/stats`, `POST ${V}/alerts/read-all`, `PATCH ${V}/alerts/:id/status`,
   `GET ${V}/analytics/overview`,
   `POST ${V}/device/telemetry`,

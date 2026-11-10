@@ -66,6 +66,8 @@ export interface RateRule {
   headerField?: string;
   /** false = the key does not include the client IP (limits one account across all IPs). Default true. */
   perIp?: boolean;
+  /** true = the key includes the authenticated user id (`request.user.id`); the route must run a JWT guard first. */
+  perUser?: boolean;
 }
 
 export const RATE_LIMIT_KEY = 'qamqor:rateLimit';
@@ -95,6 +97,7 @@ export class RateLimitGuard implements CanActivate {
     const ip = String(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
     for (const [i, rule] of meta.rules.entries()) {
       let key = `${meta.name}:${i}:${rule.perIp === false ? '*' : ip}`;
+      if (rule.perUser) key += `:u:${String(req.user?.id ?? 'anon')}`;
       if (rule.keyField) {
         const v = req.body?.[rule.keyField] ?? (rule.headerField ? req.headers?.[rule.headerField] : undefined);
         key += `:${typeof v === 'string' ? v.toLowerCase().trim().slice(0, 256) : ''}`;

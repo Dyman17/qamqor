@@ -12,6 +12,9 @@ export interface DaySignals {
   impulse: { used: 0; limit: number | null; available: false };
 }
 
+/** Default minimum gap between two delivered signals of one kind for one animal. */
+export const DEFAULT_SIGNAL_COOLDOWN_SEC = 30;
+
 export interface LimitedSignals {
   sound: boolean;
   vibrate: boolean;
@@ -19,20 +22,32 @@ export interface LimitedSignals {
 }
 
 /**
+ * Signals are episodic: per animal and kind (sound, vibration) at most one signal is delivered per
+ * cooldown, however often the collar pings. A signal inside the cooldown is silently dropped (it is
+ * normal behaviour, not a suppression): nothing is recorded and nothing counts against the daily limit.
+ *
  * Daily per-animal signal accounting. Days are local days of the farm time zone.
  * A limit that is not set (null) or `unlimited` never suppresses anything.
  */
 @Injectable()
 export class SignalsService {
+  /**
+   * Cooldown cache: last delivered signal per animal+level (ms). The database (latest SignalEvent per
+   * animal+level, index [animalId, level, at]) is the source of truth and is read only on a cache miss
+   * (the first signal decision after a restart), so a ping loop inside the cooldown costs no query.
+   * Single instance assumption, like the rest of the in-memory state.
+   */
+  private readonly lastSignal = new Map<string, number>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly alerts: AlertsService,
   ) {}
 
   /**
-   * Applies the farm daily limits to the signals the zone asks for. A level whose limit is
-   * reached is suppressed (and a SIGNAL_LIMIT_REACHED alert is raised once per day);
-   * every signal that is delivered is recorded.
+   * Applies the per-kind cooldown and the farm daily limits to the signals the zone asks for.
+   * A kind inside its cooldown is dropped quietly. A level whose daily limit is reached is suppressed
+   * (and a SIGNAL_LIMIT_REACHED alert is raised once per day); every signal that is delivered is recorded.
    */
   async applyLimits(args: {
     farmId: string;
@@ -42,10 +57,13 @@ export class SignalsService {
     sound: boolean;
     vibrate: boolean;
     now: Date;
-    /** false for a retried ping: limits are enforced but nothing is recorded. */
+    /** false: limits and cooldown are enforced but nothing is recorded. */
     record?: boolean;
+    /** Minimum seconds between two delivered signals of one kind (default 30; 0 = off). */
+    cooldownSec?: number;
   }): Promise<LimitedSignals> {
     const { farmId, animal, deviceId, now } = args;
+    const cooldownMs = (args.cooldownSec ?? DEFAULT_SIGNAL_COOLDOWN_SEC) * 1000;
     if (!args.sound && !args.vibrate) return { sound: false, vibrate: false, suppressed: false };
 
     const win = dayWindow(now, args.timezone);
@@ -58,6 +76,11 @@ export class SignalsService {
       ['VIBRATION', args.vibrate],
     ] as const) {
       if (!wanted) continue;
+      if (await this.inCooldown(animal.id, level, now.getTime(), cooldownMs)) {
+        if (level === 'SOUND') out.sound = false;
+        else out.vibrate = false;
+        continue;
+      }
       const limit = effectiveLimit(rows.find((r) => r.level === level));
       if (limit !== null) {
         const used = await this.prisma.signalEvent.count({
@@ -86,8 +109,31 @@ export class SignalsService {
       await this.prisma.signalEvent.createMany({
         data: toRecord.map((level) => ({ farmId, animalId: animal.id, deviceId, level, at: now })),
       });
+      for (const level of toRecord) this.lastSignal.set(`${animal.id}:${level}`, now.getTime());
     }
     return out;
+  }
+
+  private async inCooldown(
+    animalId: string,
+    level: 'SOUND' | 'VIBRATION',
+    nowMs: number,
+    cooldownMs: number,
+  ): Promise<boolean> {
+    if (cooldownMs <= 0) return false;
+    const key = `${animalId}:${level}`;
+    let last = this.lastSignal.get(key);
+    if (last === undefined) {
+      const row = await this.prisma.signalEvent.findFirst({
+        where: { animalId, level },
+        orderBy: { at: 'desc' },
+        select: { at: true },
+      });
+      if (!row) return false;
+      last = new Date(row.at).getTime();
+      this.lastSignal.set(key, last);
+    }
+    return nowMs - last < cooldownMs;
   }
 
   /** Counters for GET /animals/:id/signals. */

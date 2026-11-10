@@ -109,6 +109,14 @@ export class OfflineWatcherService implements OnModuleInit, OnModuleDestroy {
               tx,
             );
           }
+          // The stored status follows the alert: the telemetry path re-checks (and closes) the offline alert
+          // only for a device that is marked OFFLINE, so it does not query alerts on every ping.
+          if (stale.length) {
+            await tx.device.updateMany({
+              where: { id: { in: stale.map((d) => d.id) }, status: { not: 'OFFLINE' } },
+              data: { status: 'OFFLINE' },
+            });
+          }
           return { locked: true, stale: stale.length };
         },
         { timeout: 20_000 },

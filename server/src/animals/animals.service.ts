@@ -271,6 +271,10 @@ export class AnimalsService {
     try {
       await this.prisma.$transaction(async (tx) => {
         if (dto.collarId !== undefined) {
+          // Swapping or removing the collar: the old collar's open offline / GPS alerts no longer apply
+          // (same as unassignCollar). Re-sending the current collar changes nothing.
+          const current = await tx.device.findFirst({ where: { animalId }, select: { deviceId: true } });
+          if (current && current.deviceId !== dto.collarId) await resolveCollarAlerts(tx, animalId);
           await tx.device.updateMany({ where: { animalId }, data: { animalId: null } });
           if (dto.collarId !== null) {
             // Demo and real never mix: a demo animal takes only a simulated collar and vice versa.

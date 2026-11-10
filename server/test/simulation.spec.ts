@@ -391,7 +391,7 @@ describe('demo and real never mix', () => {
         where: { deviceId: 'QAM-0001' },
         include: { farm: true, animal: { include: { activeGeofence: true } } },
       });
-      jest.setSystemTime(Date.now() + 5000);
+      jest.setSystemTime(Date.now() + 15000); // beyond TELEMETRY_STORE_MIN_SEC, so both pings store a row
       const res = await c.telemetry.processDeviceTelemetry(device, {
         deviceId: 'QAM-0001', timestamp: new Date().toISOString(), latitude: mode === "AUTO" ? 43.6521 : 43.6520, longitude: 51.157, accuracy: 5,
       } as any);

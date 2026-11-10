@@ -48,9 +48,7 @@ describe('DevicesService', () => {
     expect(JSON.stringify(list)).not.toMatch(/secret|hash/i);
     const one = await svc.getDeviceById('u', 'f', 'QAM-0001');
     expect(JSON.stringify(one)).not.toMatch(/secret|hash/i);
-    const rot: any = await svc.rotateSecret('u', 'f', 'QAM-0001');
-    expect(rot.deviceSecret).not.toBe(res.deviceSecret);
-    expect(Object.keys(rot)).toEqual(['deviceSecret']);
+    expect((svc as any).rotateSecret).toBeUndefined(); // the fake rotate-secret feature is gone
   });
 
   it('claims a collar by its 8-digit code: no secret, deviceId derived, code in the DTO; 409 for a second claim', async () => {

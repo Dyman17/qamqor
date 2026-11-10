@@ -68,7 +68,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const res = http.getResponse();
     const req = http.getRequest();
-    if (typeof req?.originalUrl === 'string' && req.originalUrl.split('?')[0].endsWith('/api/v1/device/telemetry')) {
+    // Only the collar's POST ping speaks the device protocol; the user-facing GET inspection endpoint uses the normal body.
+    if (req?.method === 'POST' && typeof req?.originalUrl === 'string' && req.originalUrl.split('?')[0].endsWith('/api/v1/device/telemetry')) {
       // Device protocol: `code` is the request's 8-digit device code (the firmware matches it);
       // the error kind moves to `error`.
       res.status(statusCode).json({ ...body, error: body.code, code: requestDeviceCode(req) });

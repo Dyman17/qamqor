@@ -129,7 +129,7 @@ describe('2. acknowledged alerts are not re-raised until the condition clears', 
     await svc.resolveGeofenceBreach(breach); // the animal is back: acknowledged alert is resolved
     expect(rows[0].status).toBe('RESOLVED');
     expect(rows.some((r) => r.type === 'GEOFENCE_RETURN')).toBe(true);
-    await svc.triggerGeofenceBreach(breach); // leaves again: a new alert is raised
+    await svc.triggerGeofenceBreach({ ...breach, freshBreach: true }); // leaves again: a new alert is raised
     expect(rows.filter((r) => r.type === 'GEOFENCE_BREACH' && r.status === 'ACTIVE')).toHaveLength(1);
   });
 
@@ -206,7 +206,7 @@ describe('6. telemetry: stale and retried pings', () => {
       telemetry: { create: jest.fn(), findFirst: jest.fn(async () => (duplicate ? { id: 't' } : null)) },
       deviceCommand: { findFirst: jest.fn(async () => null), updateMany: jest.fn() },
       signalLimit: { findMany: jest.fn(async () => []) },
-      signalEvent: { count: jest.fn(async () => 0), createMany: jest.fn() },
+      signalEvent: { count: jest.fn(async () => 0), createMany: jest.fn(), findFirst: jest.fn(async () => null) },
       alert: { findFirst: jest.fn(async () => null), create: jest.fn(), updateMany: jest.fn(async () => ({ count: 0 })) },
     };
     const alerts = new AlertsService(prisma);
@@ -244,7 +244,8 @@ describe('6. telemetry: stale and retried pings', () => {
     const retry = setup({}, true);
     const res: any = await retry.svc.processDeviceTelemetry(retry.device, ping(iso));
     expect(res.zone).toBe('RED');
-    expect(res.sound).toBe(true);
+    expect(res.sound).toBe(false); // a retried ping never delivers a signal
+    expect(res.vibrate).toBe(false);
     expect(retry.prisma.signalEvent.createMany).not.toHaveBeenCalled();
     expect(retry.prisma.telemetry.create).not.toHaveBeenCalled();
     expect(retry.prisma.telemetry.findFirst.mock.calls[0][0].where).toMatchObject({ deviceId: 'QAM-1', timestamp: new Date(iso) });
@@ -263,6 +264,7 @@ describe('7. offline watcher writes on the lock transaction', () => {
       alert: mk(),
       $queryRaw: (...a: any[]) => prisma.$queryRaw(...a),
       device: {
+        updateMany: jest.fn(async () => ({ count: 2 })),
         findMany: jest.fn(async () => [
           { id: 'd1', deviceId: 'Q1', farmId: 'F', lastHeartbeatAt: new Date(Date.now() - 3600_000), animal: { id: 'a1', name: 'A' } },
           { id: 'd2', deviceId: 'Q2', farmId: 'F', lastHeartbeatAt: new Date(Date.now() - 3600_000), animal: { id: 'a2', name: 'B' } },

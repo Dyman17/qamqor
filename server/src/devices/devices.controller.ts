@@ -21,6 +21,10 @@ import { FarmRoles, RequireBoundaryEdit } from '../farms/roles.decorator';
 import { FarmId } from '../farms/farm-context.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../auth/current-user.decorator';
+import { RateLimit, RateLimitGuard } from '../common/rate-limit';
+
+const MIN = 60_000;
+const HOUR = 60 * MIN;
 
 @Controller('api/v1/devices')
 @UseGuards(JwtAuthGuard, FarmAccessGuard, PermissionsGuard)
@@ -44,8 +48,19 @@ export class DevicesController {
     return this.devicesService.getDeviceById(user.id, farmId, deviceId);
   }
 
+  /**
+   * Claim by the 8-digit code. Rate limited (code guessing): per user 10/min and 60/h, per IP 30/min.
+   * The RateLimitGuard runs after the class-level guards, so `request.user` is set.
+   */
   @Post()
   @FarmRoles('OWNER')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(
+    'device-claim',
+    { limit: 10, windowMs: MIN, perUser: true, perIp: false },
+    { limit: 60, windowMs: HOUR, perUser: true, perIp: false },
+    { limit: 30, windowMs: MIN },
+  )
   async registerDevice(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDeviceDto,
@@ -62,16 +77,6 @@ export class DevicesController {
     @FarmId() farmId: string,
   ) {
     return this.devicesService.updateDevice(user.id, farmId, deviceId, dto);
-  }
-
-  @Post(':id/rotate-secret')
-  @FarmRoles('OWNER')
-  async rotateSecret(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', DeviceIdPipe) deviceId: string,
-    @FarmId() farmId: string,
-  ) {
-    return this.devicesService.rotateSecret(user.id, farmId, deviceId);
   }
 
   @Post(':id/test-signal')
