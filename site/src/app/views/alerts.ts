@@ -30,6 +30,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       <p>${a.message}</p>
       <p class="caption muted">${a.animalName ?? ''}${a.penName ? ` · ${a.penName}` : ''} ${timeEl(a.createdAt)}</p>
       <div class="alert-actions">
+        ${a.animalId ? html`<a class="btn btn-secondary btn-sm" href="/app/herd/${a.animalId}">${t('a.co.toProfile')}</a>` : ''}
         ${a.lat != null && a.lng != null ? html`<a class="btn btn-ghost btn-sm" href="/app/map?at=${a.lat},${a.lng}${a.animalId ? `&animal=${a.animalId}` : ''}">${t('a.map.showOnMap')}</a>` : ''}
         ${a.status === 'ACTIVE' ? html`<button type="button" class="btn btn-secondary btn-sm" data-set="ACKNOWLEDGED" data-write>${t('a.al.accept')}</button>` : ''}
         ${a.status !== 'RESOLVED' ? html`<button type="button" class="btn btn-secondary btn-sm" data-set="RESOLVED" data-write>${t('a.al.close')}</button>` : ''}

@@ -2,11 +2,37 @@ import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { getLang, langSwitcherHtml, bindLangSwitch, applyI18n, t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
-import { ApiError, del, get, patch, post, put, setSession, simApi, type DataMode, type FarmDto, type InvitationDto, type MembersResponse, type SignalLimitDto, type SimulationDto } from '../api';
-import { modeName, retryBusy, setSim } from '../demo';
+import { ApiError, del, get, patch, post, put, setSession, simApi, type AnimalDto, type CollarResponseDto, type DataMode, type FarmDto, type InvitationDto, type MembersResponse, type PenDto, type SignalLimitDto, type SimEvent, type SimSpeed, type SimulationDto } from '../api';
+import { collarResponseText, modeName, retryBusy, setSim } from '../demo';
 import { confirmDialog, copyText, errText, loadInto, offlineGuard, timeEl, toast } from '../common';
 
 type Tab = 'farm' | 'data' | 'people' | 'signals' | 'account';
+
+// local flat-earth geometry: a point `insideM` metres inside the nearest border of the pen
+function nearestBorderInside(pen: PenDto, lat: number, lng: number, insideM: number): { lat: number; lng: number } | null {
+  if (!pen.polygon?.coordinates?.[0]) return null;
+  const ring = pen.polygon.coordinates[0];
+  const kx = Math.cos((lat * Math.PI) / 180) * 111320;
+  const ky = 110574;
+  const P = { x: lng * kx, y: lat * ky };
+  let best: { x: number; y: number; d: number } | null = null;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const A = { x: ring[i][0] * kx, y: ring[i][1] * ky };
+    const B = { x: ring[i + 1][0] * kx, y: ring[i + 1][1] * ky };
+    const dx = B.x - A.x;
+    const dy = B.y - A.y;
+    const len2 = dx * dx + dy * dy || 1;
+    const u = Math.max(0, Math.min(1, ((P.x - A.x) * dx + (P.y - A.y) * dy) / len2));
+    const Q = { x: A.x + u * dx, y: A.y + u * dy };
+    const d = Math.hypot(P.x - Q.x, P.y - Q.y);
+    if (!best || d < best.d) best = { ...Q, d };
+  }
+  if (!best) return null;
+  const d = best.d || 1;
+  const ux = (P.x - best.x) / d;
+  const uy = (P.y - best.y) / d;
+  return { lat: (best.y + uy * insideM) / ky, lng: (best.x + ux * insideM) / kx };
+}
 
 export const mount: AppView['mount'] = (el, ctx) => {
   ctx.setTitle(t('a.set.title'));
@@ -51,39 +77,307 @@ function farmTab(el: HTMLElement, ctx: AppCtx): void {
   });
 }
 
-const MODES: DataMode[] = ['REAL', 'MANUAL', 'AUTO'];
+const MODES: { v: DataMode; label: string }[] = [
+  { v: 'REAL', label: 'Реальный' },
+  { v: 'MANUAL', label: 'Пилотный' },
+  { v: 'AUTO', label: 'Автоматический' },
+];
+const SPEEDS: SimSpeed[] = [1, 2, 5, 10];
+const EVENTS: { v: SimEvent; label: string }[] = [
+  { v: 'BREACH', label: 'Выход за границу' },
+  { v: 'ESCAPE', label: 'Побег' },
+  { v: 'RETURN', label: 'Возврат' },
+  { v: 'GPS_LOST', label: 'Потеря GPS' },
+  { v: 'COLLAR_OFFLINE', label: 'Ошейник молчит' },
+  { v: 'COLLAR_ONLINE', label: 'Связь есть' },
+];
 
-/** Data mode of the farm: owners switch, workers see the current mode. Leaving a demo mode deletes the demo data, so it asks first. */
+/** Data mode & simulation controls (matching mobile ModeSection.tsx). Owners switch and test, workers inspect. */
 function dataTab(el: HTMLElement, ctx: AppCtx): void {
   const fid = ctx.farm.id;
-  void loadInto(el, () => simApi.get(fid), (s0) => {
+  let selectedId: string | null = null;
+  let latS = '';
+  let lngS = '';
+  let speed: SimSpeed = 1;
+  let last: CollarResponseDto | null = null;
+  let busy = false;
+  let msg: { text: string; error?: boolean } | null = null;
+
+  void loadInto(el, async () => {
+    const [s, animals, pens] = await Promise.all([
+      simApi.get(fid),
+      get<AnimalDto[]>('/animals?limit=100').catch(() => [] as AnimalDto[]),
+      get<PenDto[]>('/geofences').catch(() => [] as PenDto[]),
+    ]);
+    return { s, animals, pens };
+  }, ({ s: s0, animals: a0, pens: p0 }) => {
     let s: SimulationDto = s0;
+    let animals: AnimalDto[] = a0;
+    let pens: PenDto[] = p0;
     setSim(s, fid);
-    const draw = (err = '') => {
+    speed = (s.speed as SimSpeed) || 1;
+
+    const reloadData = async () => {
+      try {
+        const [freshS, freshA, freshP] = await Promise.all([
+          simApi.get(fid),
+          get<AnimalDto[]>('/animals?limit=100').catch(() => [] as AnimalDto[]),
+          get<PenDto[]>('/geofences').catch(() => [] as PenDto[]),
+        ]);
+        s = freshS; animals = freshA; pens = freshP;
+        setSim(s, fid);
+        draw();
+      } catch {}
+    };
+
+    const run = async (fn: () => Promise<string | void>) => {
+      busy = true; msg = null;
+      draw();
+      try {
+        const text = await fn();
+        if (text) msg = { text };
+      } catch (e) {
+        msg = { text: errText(e), error: true };
+      } finally {
+        busy = false;
+        draw();
+      }
+    };
+
+    const draw = () => {
+      const demoAnimals = animals.filter((a) => a.isDemo);
+      if (!selectedId && demoAnimals.length > 0) {
+        selectedId = demoAnimals[0].id;
+      }
+      const current = demoAnimals.find((a) => a.id === selectedId);
+      if (current && current.lat != null && current.lng != null && !latS && !lngS) {
+        latS = current.lat.toFixed(5);
+        lngS = current.lng.toFixed(5);
+      }
+
       const locked = !ctx.isOwner || !s.enabled;
-      setHtml(el, html`<form class="form narrow-form" id="dm" novalidate>
-        <h2 class="title-2">${t('a.set.data.title')}</h2>
-        <p class="muted">${t('a.set.data.intro')}</p>
-        <fieldset class="mode-set" aria-describedby="dm-note"><legend class="sr-only">${t('a.set.data.title')}</legend>
-          ${MODES.map((m) => html`<label class="mode-opt ${m === s.dataMode ? 'on' : ''}"><input type="radio" name="mode" value="${m}" ${m === s.dataMode ? raw('checked') : ''} ${locked ? raw('disabled') : ''}><span><strong>${t(`a.set.data.${m}` as 'a.set.data.REAL')}</strong><span class="caption muted">${t(`a.set.data.${m}.d` as 'a.set.data.REAL.d')}</span></span></label>`)}
-        </fieldset>
-        <p class="hint" id="dm-note">${!s.enabled ? t('a.set.data.off') : !ctx.isOwner ? t('a.set.data.worker') : t('a.set.data.current', { mode: modeName(s.dataMode) })}</p>
-        <p class="field-error" role="alert" ${err ? '' : raw('hidden')}>${err}</p>
-      </form>`);
-      $$<HTMLInputElement>('input[name="mode"]', el).forEach((r) => r.addEventListener('change', async () => {
-        const mode = r.value as DataMode;
-        if (mode === s.dataMode) return;
-        if (mode === 'REAL' && !await confirmDialog({ title: t('a.set.data.confirmTitle'), text: t('a.set.data.confirmText'), confirmLabel: t('a.set.data.confirm'), danger: true })) { draw(); return; }
-        $$<HTMLInputElement>('input[name="mode"]', el).forEach((x) => { x.disabled = true; });
-        try {
-          s = await retryBusy(() => simApi.setMode(fid, mode), () => toast(t('a.demo.retrying')));
-          setSim(s, fid);
+
+      setHtml(el, html`
+        <div class="panel-block">
+          <h2 class="title-2">${t('a.set.data.title')}</h2>
+          <p class="muted" style="margin-bottom:1rem;">${t('a.set.data.intro')}</p>
+
+          <!-- Селектор режимов -->
+          <div class="chips" role="group" aria-label="${t('a.set.data.title')}" style="margin-bottom:1rem;">
+            ${MODES.map((m) => html`
+              <button type="button" class="chip-btn ${m.v === s.dataMode ? 'active' : ''}" data-mode="${m.v}" ${locked ? raw('disabled') : ''} style="min-height:40px;padding:0.4rem 1rem;font-weight:600;border-radius:var(--radius-pill);cursor:pointer;background:${m.v === s.dataMode ? 'var(--primary)' : 'var(--surface-2)'};color:${m.v === s.dataMode ? '#fff' : 'inherit'};border:1px solid var(--border-subtle);">
+                ${m.label}
+              </button>
+            `)}
+          </div>
+
+          <!-- Режим: REAL -->
+          ${s.dataMode === 'REAL' ? html`
+            <p class="caption muted">${t('a.set.data.REAL.d')}</p>
+          ` : ''}
+
+          <!-- Режим: AUTO (Автоматическая симуляция сценариев) -->
+          ${s.dataMode === 'AUTO' ? html`
+            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--border-subtle);">
+              <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <span class="badge ${s.running ? 'badge-online' : ''}"><span class="dot"></span> ${s.running ? t('a.demo.running') : t('a.demo.stopped')}</span>
+                <span class="caption muted">животных: <strong class="num">${s.demo.animals}</strong> · демо-оповещений: <strong class="num">${s.demo.alerts}</strong></span>
+                ${s.until ? html`<span class="caption muted">(${t('a.demo.left')}: ${new Date(s.until).toLocaleTimeString()})</span>` : ''}
+              </div>
+
+              <div>
+                <label class="caption muted" style="display:block;margin-bottom:0.35rem;font-weight:600;">${t('a.demo.speed')}:</label>
+                <div class="chips" style="gap:0.4rem;">
+                  ${SPEEDS.map((sp) => html`
+                    <button type="button" class="btn btn-secondary btn-sm" data-speed="${sp}" style="${speed === sp ? 'background:var(--primary);color:#fff;border-color:var(--primary);' : ''}min-width:44px;font-weight:700;">
+                      x${sp}
+                    </button>
+                  `)}
+                </div>
+              </div>
+
+              <div class="row-actions" style="flex-wrap:wrap;gap:0.5rem;margin-top:0.25rem;">
+                ${s.running
+                  ? html`<button type="button" class="btn btn-secondary btn-sm" id="btn-stop-sim" ${busy ? raw('disabled') : ''}>${t('a.demo.stop')}</button>`
+                  : html`<button type="button" class="btn btn-primary btn-sm" id="btn-start-sim" ${busy ? raw('disabled') : ''}>${t('a.demo.start')}</button>`}
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-sim" ${busy ? raw('disabled') : ''}>${t('a.demo.reset')}</button>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Режим: MANUAL (Пилотный - ручное управление и события) -->
+          ${s.dataMode === 'MANUAL' ? html`
+            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--border-subtle);">
+              <div>
+                <label class="caption muted" style="display:block;margin-bottom:0.35rem;font-weight:600;">${t('a.demo.animal')}:</label>
+                <div class="chips" style="gap:0.4rem;flex-wrap:wrap;">
+                  ${demoAnimals.map((da) => html`
+                    <button type="button" class="btn btn-sm ${selectedId === da.id ? 'btn-primary' : 'btn-secondary'}" data-select-demo="${da.id}">
+                      ${da.name}
+                    </button>
+                  `)}
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-add-demo" ${busy ? raw('disabled') : ''}>+ ${t('a.demo.add')}</button>
+                </div>
+              </div>
+
+              ${current ? html`
+                <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:0.75rem;border:1px solid var(--border-subtle);">
+                  <p class="caption muted" style="margin-bottom:0.4rem;">
+                    <strong>${current.name}</strong> · ${t('a.demo.pos')}:
+                    <span class="font-mono num">${current.lat != null && current.lng != null ? `${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}` : 'не задана'}</span>
+                  </p>
+                  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                    <input type="text" class="input font-mono num" id="sim-lat" placeholder="${t('a.demo.lat')}" value="${latS}" style="max-width:140px;min-height:38px;">
+                    <input type="text" class="input font-mono num" id="sim-lng" placeholder="${t('a.demo.lng')}" value="${lngS}" style="max-width:140px;min-height:38px;">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-send-pos" ${busy ? raw('disabled') : ''}>${t('a.demo.send')}</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-to-border" ${busy ? raw('disabled') : ''}>${t('a.demo.stepBorder')}</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-out-border" ${busy ? raw('disabled') : ''}>${t('a.demo.stepOut')}</button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="caption muted" style="display:block;margin-bottom:0.35rem;font-weight:600;">${t('a.demo.events')}:</label>
+                  <div class="chips" style="gap:0.4rem;flex-wrap:wrap;">
+                    ${EVENTS.map((ev) => html`
+                      <button type="button" class="btn btn-secondary btn-sm" data-fire-event="${ev.v}" ${busy ? raw('disabled') : ''}>
+                        ${ev.label}
+                      </button>
+                    `)}
+                  </div>
+                </div>
+
+                ${last ? html`
+                  <p class="caption muted font-mono" style="background:var(--surface-0);padding:0.5rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                    ${t('a.demo.r.prefix', { text: collarResponseText(last) })}
+                  </p>
+                ` : ''}
+              ` : ''}
+            </div>
+          ` : ''}
+
+          ${msg ? html`<p class="caption ${msg.error ? 'field-error' : 'form-ok'}" style="margin-top:0.75rem;">${msg.text}</p>` : ''}
+        </div>
+      `);
+
+      // Event handlers
+      $$('[data-mode]', el).forEach((btn) => btn.addEventListener('click', async () => {
+        const m = (btn as HTMLElement).dataset.mode as DataMode;
+        if (m === s.dataMode || busy) return;
+        if (m === 'REAL' && !await confirmDialog({ title: t('a.set.data.confirmTitle'), text: t('a.set.data.confirmText'), confirmLabel: t('a.set.data.confirm'), danger: true })) return;
+        void run(async () => {
+          if (m === 'AUTO') {
+            s = await retryBusy(() => simApi.start(fid, { speed }), () => toast(t('a.demo.retrying')));
+          } else {
+            s = await retryBusy(() => simApi.setMode(fid, m), () => toast(t('a.demo.retrying')));
+          }
           ctx.farm.dataMode = s.dataMode;
-          draw();
-          toast(t('a.set.data.done', { mode: modeName(s.dataMode) }));
-        } catch (e) { draw(errText(e)); }
+          await reloadData();
+          return t('a.set.data.done', { mode: modeName(s.dataMode) });
+        });
+      }));
+
+      $$('[data-speed]', el).forEach((btn) => btn.addEventListener('click', () => {
+        const sp = Number((btn as HTMLElement).dataset.speed) as SimSpeed;
+        speed = sp;
+        void run(async () => {
+          if (s.running) s = await simApi.setSpeed(fid, sp);
+        });
+      }));
+
+      $('#btn-start-sim', el)?.addEventListener('click', () => void run(async () => {
+        s = await simApi.start(fid, { speed });
+        await reloadData();
+        return t('a.demo.running');
+      }));
+
+      $('#btn-stop-sim', el)?.addEventListener('click', () => void run(async () => {
+        s = await simApi.stop(fid);
+        await reloadData();
+        return t('a.demo.stopped');
+      }));
+
+      $('#btn-reset-sim', el)?.addEventListener('click', async () => {
+        if (!await confirmDialog({ title: t('a.demo.resetTitle'), text: t('a.demo.resetText'), confirmLabel: t('a.demo.reset'), danger: true })) return;
+        void run(async () => {
+          s = await simApi.reset(fid);
+          await reloadData();
+          return t('a.demo.resetDone');
+        });
+      });
+
+      $$('[data-select-demo]', el).forEach((btn) => btn.addEventListener('click', () => {
+        selectedId = (btn as HTMLElement).dataset.selectDemo!;
+        const curr = animals.find((a) => a.id === selectedId);
+        if (curr && curr.lat != null && curr.lng != null) {
+          latS = curr.lat.toFixed(5);
+          lngS = curr.lng.toFixed(5);
+        }
+        draw();
+      }));
+
+      $('#btn-add-demo', el)?.addEventListener('click', () => void run(async () => {
+        const added = await simApi.addAnimal(fid, {});
+        selectedId = added.id;
+        await reloadData();
+        return t('a.demo.added', { name: added.name });
+      }));
+
+      $('#btn-send-pos', el)?.addEventListener('click', () => {
+        const latVal = parseFloat(($('#sim-lat', el) as HTMLInputElement)?.value.replace(',', '.') ?? '');
+        const lngVal = parseFloat(($('#sim-lng', el) as HTMLInputElement)?.value.replace(',', '.') ?? '');
+        if (!isFinite(latVal) || !isFinite(lngVal) || Math.abs(latVal) > 90 || Math.abs(lngVal) > 180) {
+          toast(t('a.demo.coordsBad'));
+          return;
+        }
+        if (!selectedId) return;
+        latS = latVal.toFixed(5);
+        lngS = lngVal.toFixed(5);
+        void run(async () => {
+          last = await simApi.telemetry(fid, { animalId: selectedId!, lat: latVal, lng: lngVal });
+          await reloadData();
+          return t('a.demo.r.ok');
+        });
+      });
+
+      $('#btn-to-border', el)?.addEventListener('click', () => {
+        const pen = pens.find((p) => p.id === current?.penId) ?? pens.find((p) => p.isDemo) ?? pens[0];
+        if (!pen || !current || current.lat == null || current.lng == null) {
+          toast(t('a.demo.noPen'));
+          return;
+        }
+        const pt = nearestBorderInside(pen, current.lat, current.lng, 3);
+        if (!pt) { toast(t('a.demo.noPen')); return; }
+        latS = pt.lat.toFixed(5);
+        lngS = pt.lng.toFixed(5);
+        void run(async () => {
+          last = await simApi.telemetry(fid, { animalId: selectedId!, lat: pt.lat, lng: pt.lng });
+          await reloadData();
+          return t('a.demo.stepBorder');
+        });
+      });
+
+      $('#btn-out-border', el)?.addEventListener('click', () => {
+        if (!selectedId) return;
+        void run(async () => {
+          const res = await simApi.event(fid, { animalId: selectedId!, event: 'BREACH' });
+          last = 'zone' in res ? res : null;
+          await reloadData();
+          return t('a.demo.stepOut');
+        });
+      });
+
+      $$('[data-fire-event]', el).forEach((btn) => btn.addEventListener('click', () => {
+        const ev = (btn as HTMLElement).dataset.fireEvent as SimEvent;
+        if (!selectedId) return;
+        void run(async () => {
+          const res = await simApi.event(fid, { animalId: selectedId!, event: ev });
+          last = 'zone' in res ? res : null;
+          await reloadData();
+          return t('a.demo.r.ok');
+        });
       }));
     };
+
     draw();
   });
 }

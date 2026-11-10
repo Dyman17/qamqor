@@ -1,4 +1,4 @@
-import { $, html, raw, setHtml, type Safe } from '../../dom';
+import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
@@ -20,6 +20,7 @@ export async function openAnimalForm(ctx: AppCtx, animal: AnimalDto | undefined,
     body: html`
       <div class="field"><label for="af-name">${t('a.animal.f.name')}</label><input class="input" id="af-name" name="name" required value="${animal?.name ?? ''}" autocomplete="off"></div>
       <div class="field"><label for="af-tag">${t('a.animal.f.tag')}</label><input class="input" id="af-tag" name="tag" required value="${animal?.tag ?? ''}" autocomplete="off"></div>
+      <div class="field"><label for="af-breed">${t('a.animal.f.breed')}</label><input class="input" id="af-breed" name="breed" value="${animal?.breed ?? ''}" autocomplete="off"></div>
       <div class="field"><label for="af-sp">${t('a.animal.f.species')}</label><select class="select" id="af-sp" name="species">${SPECIES.map((s) => html`<option value="${s}" ${animal?.species === s ? raw('selected') : ''}>${speciesName(s)}</option>`)}</select></div>
       <div class="field"><label for="af-pen">${t('a.animal.f.pen')}</label><select class="select" id="af-pen" name="penId"><option value="">${t('a.animal.f.none')}</option>${pens.map((p) => html`<option value="${p.id}" ${animal?.penId === p.id ? raw('selected') : ''}>${p.name}</option>`)}</select></div>
       <div class="field"><label for="af-col">${t('a.animal.f.collar')}</label><select class="select" id="af-col" name="collarId"><option value="">${t('a.animal.f.none')}</option>${free.map((c) => html`<option value="${c.deviceId}" ${animal?.collarId === c.deviceId ? raw('selected') : ''}>${c.deviceId}</option>`)}</select></div>`,
@@ -29,6 +30,7 @@ export async function openAnimalForm(ctx: AppCtx, animal: AnimalDto | undefined,
       try {
         if (!animal) {
           const body: Record<string, string> = { name: v('name'), tag: v('tag'), species: v('species') };
+          if (v('breed')) body.breed = v('breed');
           if (v('penId')) body.penId = v('penId');
           if (v('collarId')) body.collarId = v('collarId');
           await post<AnimalDto>('/animals', body);
@@ -36,6 +38,7 @@ export async function openAnimalForm(ctx: AppCtx, animal: AnimalDto | undefined,
           const body: Record<string, string | null> = {};
           if (v('name') !== animal.name) body.name = v('name');
           if (v('tag') !== animal.tag) body.tag = v('tag');
+          if (v('breed') !== (animal.breed ?? '')) body.breed = v('breed') || null;
           if (v('species') !== animal.species) body.species = v('species');
           if ((v('penId') || null) !== animal.penId) body.penId = v('penId') || null;
           if ((v('collarId') || null) !== animal.collarId && v('collarId')) body.collarId = v('collarId');
@@ -97,24 +100,31 @@ export const mount: AppView['mount'] = (el, ctx) => {
   };
 
   void loadInto(el, async () => {
-    const [animal, ev, pens] = await Promise.all([
+    const [animal, ev, pens, collars] = await Promise.all([
       get<AnimalDto>(`/animals/${id}`),
       get<EventsDto>(`/animals/${id}/events`).catch(() => null),
       get<PenDto[]>('/geofences').catch(() => [] as PenDto[]),
+      get<CollarDto[]>('/devices').catch(() => [] as CollarDto[]),
     ]);
-    return { animal, ev, pens };
-  }, ({ animal: a, ev, pens }) => {
+    return { animal, ev, pens, collars };
+  }, ({ animal: a, ev, pens, collars }) => {
     ctx.setTitle(`${a.name} · ${a.tag}`);
     ctx.setActions(html`<button type="button" class="btn btn-secondary btn-sm" id="edit" data-write>${t('a.animal.edit')}</button><button type="button" class="btn btn-danger btn-sm" id="remove" data-write>${t('a.animal.delete')}</button>`);
     const pen = pens.find((p) => p.id === a.penId);
     const sig = ev?.signals;
     const lim = (l: number | null) => (l == null ? t('a.animal.noLimit') : t('a.animal.limit', { n: l }));
     const pi = pulseInfo(a.lastHeartRate, a.lastHeartRateAt);
+    const freeCollars = collars.filter((c) => !c.animalId);
+    const collar = a.collarId ? collars.find((c) => c.deviceId === a.collarId) : undefined;
 
     setHtml(el, html`
       <p><a href="/app/herd">${t('a.animal.back')}</a></p>
-      <div class="profile-head">
-        <div id="badge-wrap">${animalBadge(a)}</div>
+      <div class="profile-head" style="align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+        <div style="flex:1;min-width:240px;">
+          <div id="badge-wrap" style="margin-bottom:0.4rem;">${animalBadge(a)}</div>
+          <h1 class="title-1" style="font-size:1.85rem;margin:0 0 0.25rem 0;">${a.name} ${a.isDemo ? html`<span class="badge" style="font-size:0.75rem;">${t('a.demo.tag')}</span>` : ''}</h1>
+          <p class="muted" style="margin:0;font-size:1rem;">${a.breed ? html`<strong>${a.breed}</strong> · ` : ''}${t('a.animal.f.tag')} <strong class="num">${a.tag}</strong> · ${speciesName(a.species)}</p>
+        </div>
         <div class="row-actions">
           <span class="badge badge-online" id="stream-indicator" title="Server-Sent Events active"><span class="dot"></span> ${t('a.animal.streamLive')}</span>
           <a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}">${t('a.map.showOnMap')}</a>
@@ -139,12 +149,33 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <p class="num" id="pos-val">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
           <p class="muted" id="pos-sub">${t('a.animal.accuracy')}: ${a.accuracyM != null ? `${Math.round(a.accuracyM)} m` : '—'} · ${timeEl(a.lastSeenAt)}</p>
           <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid var(--border-subtle,#333);display:flex;justify-content:space-between;align-items:center;">
-            <span id="col-val"><strong>${t('a.animal.collar')}:</strong> ${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>` : t('a.herd.noCollar')}</span>
+            <span id="col-val"><strong>${t('a.animal.collar')}:</strong> ${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>${collar ? html` <span class="badge badge-sm ${collar.status === 'ONLINE' ? 'badge-online' : ''}">${collar.status}</span>` : ''}` : t('a.herd.noCollar')}</span>
             ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}
           </div>
         </section>
 
-        <!-- 3. Единый блок управления: СМЕНА РЕЖИМОВ (Автоматический / Ручной) -->
+        <!-- 3. Если ошейник не привязан — блок быстрой привязки (как в приложении) -->
+        ${!a.collarId ? html`
+          <section class="panel-block" id="assign-card" style="grid-column: 1 / -1; border-left: 4px solid var(--primary);">
+            <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('cpu', 20))} ${t('a.animal.assignCollarTitle')}</h2>
+            ${freeCollars.length === 0
+              ? html`<p class="caption muted">${t('a.animal.noFreeCollars')}</p>`
+              : html`
+                <p class="caption muted" style="margin-bottom:0.75rem;">${t('a.animal.pickFreeCollar')}</p>
+                <div class="row-actions" style="flex-wrap:wrap;gap:0.6rem;">
+                  ${freeCollars.map((c) => html`
+                    <div style="display:inline-flex;align-items:center;gap:0.75rem;padding:0.5rem 0.85rem;background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border-subtle);">
+                      <span class="font-mono num" style="font-weight:700;font-size:1.05rem;">${c.code ?? c.deviceId}</span>
+                      <span class="badge badge-sm ${c.status === 'ONLINE' ? 'badge-online' : ''}">${c.status}</span>
+                      <button type="button" class="btn btn-primary btn-sm" data-assign-collar="${c.deviceId}">${t('a.animal.assignBtn')}</button>
+                    </div>
+                  `)}
+                </div>
+              `}
+          </section>
+        ` : ''}
+
+        <!-- 4. Единый блок управления: СМЕНА РЕЖИМОВ (Автоматический / Ручной) -->
         <section class="panel-block" id="ctrl-mode-card" style="grid-column: 1 / -1;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-2);">
             <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
@@ -337,8 +368,28 @@ export const mount: AppView['mount'] = (el, ctx) => {
       try { await del(`/animals/${a.id}`); void navigate('/app/herd', { replace: true }); } catch (e) { toast((e as Error).message); }
     });
     $('#unlink', el)?.addEventListener('click', async () => {
-      try { await post(`/animals/${a.id}/unassign-collar`); void navigate(location.pathname, { replace: true }); } catch (e) { toast((e as Error).message); }
+      if (!await confirmDialog({ title: t('a.animal.unlinkTitle'), text: t('a.animal.unlinkText'), confirmLabel: t('a.animal.unlink'), danger: true })) return;
+      try {
+        await post(`/animals/${a.id}/unassign-collar`);
+        toast(t('a.animal.unlinkedOk'));
+        void navigate(location.pathname, { replace: true });
+      } catch (e) {
+        toast((e as Error).message);
+      }
     });
+
+    $$<HTMLElement>('[data-assign-collar]', el).forEach((btn) => btn.addEventListener('click', async () => {
+      const devId = btn.dataset.assignCollar!;
+      btn.setAttribute('disabled', 'true');
+      try {
+        await patch(`/devices/${encodeURIComponent(devId)}`, { animalId: a.id });
+        toast(t('a.animal.assignedOk'));
+        void navigate(location.pathname, { replace: true });
+      } catch (err) {
+        toast(errText(err));
+        btn.removeAttribute('disabled');
+      }
+    }));
   }, { alive });
 
   return () => {

@@ -29,7 +29,7 @@ export interface AnimalDto {
   lastHeartRate?: number | null; lastHeartRateAt?: string | null;
   pulseThreat?: PulseThreatDto | null;
 }
-export interface CollarDto { deviceId: string; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
+export interface CollarDto { deviceId: string; code?: string | null; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
 export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number; isDemo?: boolean }
 export type AlertType = 'GEOFENCE_BREACH' | 'GEOFENCE_RETURN' | 'DEVICE_OFFLINE' | 'DEVICE_RESTORED' | 'SIGNAL_LIMIT_REACHED' | 'GPS_LOST';
 export interface AlertDto {
