@@ -2,9 +2,10 @@ import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
-import { get, request, type AnimalDto, type PenDto } from '../api';
+import { del, get, post, request, type AnimalDto, type PenDto } from '../api';
 import { demoTag } from '../demo';
-import { absTime, animalBadge, emptyState, errorState, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
+import { absTime, animalBadge, confirmDialog, emptyState, errorState, errText, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
+import { formModal } from '../forms';
 import { openAnimalForm } from './animal';
 import { getSim, onSim } from '../demo';
 import { mountDemoPanel } from './demo-panel';
@@ -73,17 +74,32 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   let placeHandler: ((id: string, lng: number, lat: number) => void) | null = null;
   let dragging = false;
 
+  // Режим рисования загона на карте
+  let drawing = false;
+  let drawPoints: [number, number][] = [];
+  let drawMarkers: import('maplibre-gl').Marker[] = [];
+
   setHtml(el, html`
     <div class="map-wrap">
       <div class="map-area">
         <div class="map" id="map" role="region" aria-label="${t('a.map.container')}"></div>
         <p class="map-hint" id="map-hint" hidden>${t('a.demo.hint')}</p>
         <p class="map-notice glass-light" id="map-notice" role="status" hidden>${t('a.map.mapFail')}</p>
+
+        <!-- Верхняя плашка рисования загона -->
+        <div class="draw-bar glass-light" id="draw-bar" role="toolbar" style="display:none;">
+          <span class="draw-hint" id="draw-hint">${t('a.map.drawHint')}</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="draw-undo" disabled>${t('a.map.drawUndo')}</button>
+          <button type="button" class="btn btn-primary btn-sm" id="draw-finish" disabled>${t('a.map.drawFinish')}</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="draw-cancel" style="color:var(--text);">${t('a.map.drawCancel')}</button>
+        </div>
+
         <div class="map-controls">
           <button type="button" class="map-btn glass-light" id="m-in" aria-label="${t('a.map.zoomIn')}">${raw(icon('plus', 22))}</button>
           <button type="button" class="map-btn glass-light" id="m-out" aria-label="${t('a.map.zoomOut')}">${raw(icon('minus', 22))}</button>
           <button type="button" class="map-btn glass-light" id="m-fit" aria-label="${t('a.map.fitAll')}">${raw(icon('corners-out', 22))}</button>
           <button type="button" class="map-btn glass-light" id="m-loc" aria-label="${t('a.map.locate')}">${raw(icon('crosshair-simple', 22))}</button>
+          <button type="button" class="map-btn glass-light" id="m-draw" aria-label="${t('a.map.draw')}" title="${t('a.map.draw')}">${raw(icon('pencil-simple', 22))}</button>
         </div>
       </div>
       <aside class="map-panel glass-light" id="panel" data-sheet="peek" aria-label="${t('a.map.sheet')}">
@@ -124,7 +140,39 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       ${animals.length ? html`<div class="search"><label class="sr-only" for="mq">${t('a.map.search')}</label>${raw(icon('magnifying-glass', 20, 'search-ico'))}<input class="input" id="mq" type="search" placeholder="${t('a.map.search')}" value="${query}" autocomplete="off"></div>
         <ul class="plist" aria-label="${t('a.map.list')}">${list.map((a) => html`<li><button type="button" class="prow ${a.id === selected ? 'sel' : ''}" data-id="${a.id}"><span class="mk ${statusClass(a)}${a.isDemo ? ' demo' : ''}" aria-hidden="true"></span><span class="prow-main"><strong>${a.name}${demoTag(a.isDemo)}</strong><span class="caption muted">${a.tag}${a.lat == null ? ` · ${t('a.map.noPos')}` : ''}</span></span><span class="prow-side">${animalBadge(a)}</span></button></li>`)}</ul>`
         : emptyState(t('a.map.empty'), undefined, html`<button type="button" class="btn btn-primary btn-sm" id="p-add" data-write>${t('a.herd.add')}</button>`)}
-      ${pens.length ? html`<h3 class="title-3">${t('a.map.pens')}</h3><ul class="pen-list">${pens.map((p) => html`<li>${p.name} <span class="caption muted">· ${p.animalsCount}</span></li>`)}</ul>` : html`<p class="muted">${t('a.map.noPens')}</p>`}`.s;
+      ${pens.length
+        ? html`
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.25rem;margin-bottom:0.5rem;">
+            <h3 class="title-3" style="margin:0;">${t('a.map.pens')} (${pens.length})</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-draw-inline" style="display:inline-flex;align-items:center;gap:0.3rem;">
+              ${raw(icon('pencil-simple', 16))} ${t('a.map.draw')}
+            </button>
+          </div>
+          <ul class="pen-list" style="margin:0;padding:0;list-style:none;">
+            ${pens.map((p) => html`
+              <li style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.2rem;border-bottom:1px solid var(--border-subtle);gap:0.5rem;">
+                <span class="row-link" data-fit-pen="${p.id}" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:0.4rem;overflow:hidden;text-overflow:ellipsis;" title="${p.name}">
+                  <span class="dot" style="background:${p.color || 'var(--primary)'};display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;"></span>
+                  <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</strong>
+                  <span class="caption muted" style="white-space:nowrap;">· ${p.animalsCount} ж.${p.areaHa ? ` · ${p.areaHa.toFixed(1)} га` : ''}</span>
+                </span>
+                ${!p.isDemo ? html`
+                  <button type="button" class="btn btn-ghost btn-sm" data-delete-pen="${p.id}" data-name="${p.name}" title="Удалить загон" style="padding:4px 6px;color:var(--danger, #dc2626);flex-shrink:0;">
+                    ${raw(icon('trash', 16))}
+                  </button>
+                ` : ''}
+              </li>
+            `)}
+          </ul>
+        `
+        : html`
+          <div style="margin-top:1.25rem;">
+            <p class="muted">${t('a.map.noPens')}</p>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-draw-inline" style="margin-top:0.5rem;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:0.4rem;">
+              ${raw(icon('pencil-simple', 18))} ${t('a.map.draw')}
+            </button>
+          </div>
+        `}`.s;
     $<HTMLInputElement>('#mq', panelBody)?.addEventListener('input', (e) => {
       query = (e.target as HTMLInputElement).value;
       const pos = (e.target as HTMLInputElement).selectionStart;
@@ -133,6 +181,36 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     });
     $$('.prow', panelBody).forEach((b) => b.addEventListener('click', () => select(b.dataset.id!, true)));
     $('#p-add', panelBody)?.addEventListener('click', () => void openAnimalForm(ctx, undefined, () => location.reload()));
+    $('#btn-draw-inline', panelBody)?.addEventListener('click', () => {
+      startDrawing();
+    });
+    $$('[data-fit-pen]', panelBody).forEach((sp) => sp.addEventListener('click', () => {
+      const pid = (sp as HTMLElement).dataset.fitPen!;
+      const p = pens.find((x) => x.id === pid);
+      if (!p || !map || !ML) return;
+      const b = new ML.LngLatBounds();
+      p.polygon.coordinates[0]?.forEach((c) => b.extend([c[0], c[1]]));
+      map.fitBounds(b, { padding: 80, maxZoom: 16, duration: 600 });
+    }));
+    $$('[data-delete-pen]', panelBody).forEach((btn) => btn.addEventListener('click', async () => {
+      const pid = (btn as HTMLElement).dataset.deletePen!;
+      const pname = (btn as HTMLElement).dataset.name!;
+      if (!await confirmDialog({
+        title: t('a.map.penTitle'),
+        text: t('a.map.penDeleteConfirm', { name: pname }),
+        confirmLabel: t('a.animal.delete'),
+        danger: true,
+      })) return;
+      try {
+        await del(`/geofences/${pid}`);
+        pens = pens.filter((x) => x.id !== pid);
+        drawPens();
+        drawPanel();
+        toast(t('a.map.penDeleted'));
+      } catch (err) {
+        toast(errText(err));
+      }
+    }));
   }
 
   function select(id: string, fly: boolean): void {
@@ -218,6 +296,182 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     });
   }
 
+  function updateDrawLayers(): void {
+    if (!map || !mapReady) return;
+    const prim = cssVar('--primary') || '#10B981';
+    const src = map.getSource('draw-temp') as import('maplibre-gl').GeoJSONSource | undefined;
+    let feat: any = null;
+    if (drawPoints.length >= 3) {
+      feat = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[...drawPoints, drawPoints[0]]] } };
+    } else if (drawPoints.length === 2) {
+      feat = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: drawPoints } };
+    } else if (drawPoints.length === 1) {
+      feat = { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: drawPoints[0] } };
+    }
+    const fc = { type: 'FeatureCollection', features: feat ? [feat] : [] };
+    if (src) {
+      src.setData(fc as any);
+    } else {
+      map.addSource('draw-temp', { type: 'geojson', data: fc as any });
+      map.addLayer({ id: 'draw-fill', type: 'fill', source: 'draw-temp', paint: { 'fill-color': prim, 'fill-opacity': 0.25 } });
+      map.addLayer({ id: 'draw-line', type: 'line', source: 'draw-temp', paint: { 'line-color': prim, 'line-width': 3, 'line-dasharray': [2, 1] } });
+    }
+  }
+
+  function updateDrawToolbar(): void {
+    const undoBtn = $<HTMLButtonElement>('#draw-undo', el);
+    const finishBtn = $<HTMLButtonElement>('#draw-finish', el);
+    const hintEl = $('#draw-hint', el);
+    const drawBtn = $('#m-draw', el);
+
+    if (drawBtn) drawBtn.classList.toggle('active', drawing);
+    if (undoBtn) undoBtn.disabled = drawPoints.length === 0;
+    if (finishBtn) finishBtn.disabled = drawPoints.length < 3;
+    if (hintEl) {
+      hintEl.textContent = drawPoints.length < 3
+        ? `Поставьте точки на карте: ${drawPoints.length} из 3 минимум`
+        : `Точек: ${drawPoints.length}. Кликните первую точку или нажмите «Завершить и сохранить».`;
+    }
+  }
+
+  function addDrawPoint(lng: number, lat: number): void {
+    if ('vibrate' in navigator) { try { navigator.vibrate([15]); } catch {} }
+    drawPoints.push([lng, lat]);
+    const idx = drawPoints.length - 1;
+    const isFirst = idx === 0;
+
+    const dot = document.createElement('div');
+    dot.className = 'draw-vertex';
+    dot.style.background = isFirst ? '#2563EB' : 'var(--primary, #10B981)';
+    if (isFirst) {
+      dot.title = 'Кликните на первую точку, чтобы замкнуть загон';
+    }
+
+    dot.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (isFirst && drawPoints.length >= 3) {
+        finishDrawing();
+      }
+    });
+
+    const mk = new ML!.Marker({ element: dot }).setLngLat([lng, lat]).addTo(map!);
+    drawMarkers.push(mk);
+
+    updateDrawLayers();
+    updateDrawToolbar();
+  }
+
+  function undoDrawPoint(): void {
+    if (drawPoints.length === 0) return;
+    drawPoints.pop();
+    const mk = drawMarkers.pop();
+    mk?.remove();
+    updateDrawLayers();
+    updateDrawToolbar();
+  }
+
+  function startDrawing(): void {
+    if (!mapReady || !map) return;
+    if ('vibrate' in navigator) { try { navigator.vibrate([20]); } catch {} }
+    drawing = true;
+    drawPoints = [];
+    drawMarkers.forEach((m) => m.remove());
+    drawMarkers = [];
+    const bar = $('#draw-bar', el);
+    if (bar) bar.style.display = 'flex';
+    map.getCanvas().style.cursor = 'crosshair';
+    updateDrawLayers();
+    updateDrawToolbar();
+    toast(t('a.map.drawHint'));
+  }
+
+  function stopDrawing(): void {
+    drawing = false;
+    drawPoints = [];
+    drawMarkers.forEach((m) => m.remove());
+    drawMarkers = [];
+    const bar = $('#draw-bar', el);
+    if (bar) bar.style.display = 'none';
+    const drawBtn = $('#m-draw', el);
+    if (drawBtn) drawBtn.classList.remove('active');
+    if (map) {
+      map.getCanvas().style.cursor = '';
+      const src = map.getSource('draw-temp') as import('maplibre-gl').GeoJSONSource | undefined;
+      if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    }
+  }
+
+  function finishDrawing(): void {
+    if (drawPoints.length < 3) {
+      toast(t('a.map.penMinPoints'));
+      return;
+    }
+    const closedRing: [number, number][] = [...drawPoints, drawPoints[0]];
+
+    formModal({
+      title: t('a.map.penTitle'),
+      submitLabel: t('a.map.penSave'),
+      body: html`
+        <div class="field">
+          <label for="pen-name">${t('a.map.penName')}</label>
+          <input class="input" id="pen-name" name="name" required placeholder="Например, Северный выпас" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="pen-color">${t('a.map.penColor')}</label>
+          <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.35rem;">
+            <input type="color" id="pen-color" name="color" value="#10B981" style="width:48px;height:40px;padding:2px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border-subtle);background:var(--surface-2);">
+            <span class="caption muted">${t('a.map.penColor')}</span>
+          </div>
+        </div>
+        ${animals.length > 0 ? html`
+          <div class="field">
+            <label>${t('a.map.penAnimals')}</label>
+            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:0.5rem;background:var(--surface-0);display:flex;flex-direction:column;gap:0.35rem;">
+              ${animals.map((a) => html`
+                <label class="check" style="margin:0;font-size:0.9rem;">
+                  <input type="checkbox" name="animalId" value="${a.id}">
+                  <span><strong>${a.name}</strong> · Бирка ${a.tag} (${speciesName(a.species)})</span>
+                </label>
+              `)}
+            </div>
+          </div>
+        ` : ''}
+      `,
+      async onSubmit(form) {
+        const v = (n: string) => (form.elements.namedItem(n) as HTMLInputElement)?.value?.trim();
+        const name = v('name');
+        if (!name) return t('a.err.required');
+        const color = v('color') || '#10B981';
+        const animalCheckboxes = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="animalId"]:checked'));
+        const animalIds = animalCheckboxes.map((cb) => cb.value);
+
+        try {
+          const created = await post<PenDto>('/geofences', {
+            name,
+            color,
+            polygon: {
+              type: 'Polygon',
+              coordinates: [closedRing],
+            },
+            ...(animalIds.length > 0 ? { animalIds } : {}),
+          });
+          pens.push(created);
+          if (animalIds.length > 0) {
+            animals.forEach((a) => {
+              if (animalIds.includes(a.id)) a.penId = created.id;
+            });
+          }
+          drawPens();
+          drawPanel();
+          toast(t('a.map.penSaved'));
+          stopDrawing();
+        } catch (e) {
+          throw e;
+        }
+      },
+    });
+  }
+
   async function initMap(): Promise<void> {
     try {
       const [mod, worker] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl-worker.mjs?url'), import('maplibre-gl/dist/maplibre-gl.css')]);
@@ -248,6 +502,10 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       map.on('zoomend', renderMarkers);
       // click-to-place: "Поставить на карте" picks for the panel's animal, otherwise the animal selected on the map is placed (pilot mode)
       const placeAtPoint = (lng: number, lat: number): void => {
+        if (drawing) {
+          addDrawPoint(lng, lat);
+          return;
+        }
         if (pickHandler) { pickHandler(lng, lat); return; }
         const a = placeHandler && selected ? animals.find((x) => x.id === selected) : undefined;
         if (placeHandler && a?.isDemo) placeHandler(a.id, lng, lat);
@@ -290,6 +548,13 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       map.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: Math.max(map.getZoom(), 15) });
     }, () => toast(t('a.map.locateFail')), { enableHighAccuracy: true, timeout: 10000 });
   });
+  $('#m-draw', el)?.addEventListener('click', () => {
+    if (drawing) stopDrawing();
+    else startDrawing();
+  });
+  $('#draw-undo', el)?.addEventListener('click', undoDrawPoint);
+  $('#draw-finish', el)?.addEventListener('click', finishDrawing);
+  $('#draw-cancel', el)?.addEventListener('click', stopDrawing);
   const panel = $('#panel', el)!;
   const toggle = $('#sheet-toggle', el)!;
   toggle.addEventListener('click', () => {

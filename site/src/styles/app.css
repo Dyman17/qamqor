@@ -233,7 +233,12 @@ html[data-motion="on"] .pulse-dot { animation: pulse 1.2s ease-in-out infinite; 
 .map-loading { padding: var(--space-4); }
 .map-notice { position: absolute; z-index: 5; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 18px; border-radius: var(--r-card); font-size: 14px; font-weight: 600; width: max-content; max-width: 90%; }
 .map-controls { position: absolute; z-index: 5; top: 88px; left: 20px; display: grid; gap: var(--space-2); }
-.map-btn { width: 48px; height: 48px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); }
+.map-btn { width: 48px; height: 48px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); cursor: pointer; }
+.map-btn.active { background: var(--primary); color: #fff; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35); }
+.draw-bar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: var(--space-2); padding: 8px 16px; border-radius: 9999px; box-shadow: 0 4px 20px rgba(0,0,0,0.45); max-width: 92vw; flex-wrap: wrap; background: rgba(18,24,20,0.88); border: 1px solid var(--line-soft); }
+.draw-hint { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; margin-right: 4px; }
+.draw-vertex { width: 14px; height: 14px; border-radius: 50%; background: var(--primary, #10B981); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.15s ease; }
+.draw-vertex:hover { transform: scale(1.4); }
 .map-panel { position: absolute; z-index: 6; right: 20px; top: 76px; bottom: 20px; width: 360px; border-radius: 32px; display: flex; flex-direction: column; overflow: hidden; }
 .sheet-handle { display: none; }
 .panel-scroll { overflow-y: auto; padding: var(--space-5); display: grid; gap: var(--space-3); align-content: start; flex: 1; }

@@ -24,8 +24,12 @@ import i_plant from '@phosphor-icons/core/assets/regular/plant.svg?raw';
 import i_speaker_high from '@phosphor-icons/core/assets/regular/speaker-high.svg?raw';
 import i_vibrate from '@phosphor-icons/core/assets/regular/vibrate.svg?raw';
 import i_heartbeat from '@phosphor-icons/core/assets/regular/heartbeat.svg?raw';
+import i_pencil_simple from '@phosphor-icons/core/assets/regular/pencil-simple.svg?raw';
+import i_trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 
 const RAW: Record<string, string> = {
+  'pencil-simple': i_pencil_simple,
+  'trash': i_trash,
   'speaker-high': i_speaker_high,
   'vibrate': i_vibrate,
   'heartbeat': i_heartbeat,
