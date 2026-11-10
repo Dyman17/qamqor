@@ -29,8 +29,10 @@ import i_trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 import i_arrow_u_up_left from '@phosphor-icons/core/assets/regular/arrow-u-up-left.svg?raw';
 import i_check from '@phosphor-icons/core/assets/regular/check.svg?raw';
 import i_clock from '@phosphor-icons/core/assets/regular/clock.svg?raw';
+import i_cpu from '@phosphor-icons/core/assets/regular/cpu.svg?raw';
 
 const RAW: Record<string, string> = {
+  'cpu': i_cpu,
   'clock': i_clock,
   'arrow-u-up-left': i_arrow_u_up_left,
   'check': i_check,

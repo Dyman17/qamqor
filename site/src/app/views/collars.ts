@@ -21,8 +21,83 @@ export const mount: AppView['mount'] = (el, ctx) => {
   let pollTimer: number | null = null;
   let adding = false;
   let busy = false;
+  let lastListHash = '';
 
-  function renderList(list: CollarDto[]): void {
+  const addBox: Safe = ctx.isOwner
+    ? html`
+      <div id="add-collar-panel" class="panel-block" style="margin-bottom:var(--space-4);border-left:4px solid var(--primary);display:none;">
+        <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('cpu', 20))} ${t('a.co.quickAdd')}</h2>
+        <p class="caption muted">${t('a.co.codeHint')}</p>
+        <form id="collar-code-form" style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;margin-top:0.75rem;" novalidate>
+          <input type="text" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" class="input font-mono num" id="collar-code-input" placeholder="${t('a.co.codePlaceholder')}" style="max-width:220px;font-size:1.25rem;letter-spacing:0.12em;font-weight:700;padding:0.4rem 0.75rem;" autocomplete="off" required>
+          <button type="submit" class="btn btn-primary" id="btn-submit-code">${t('a.co.addBtn')}</button>
+        </form>
+        <p class="field-error" id="code-err" role="alert" style="margin-top:0.5rem;" hidden></p>
+      </div>`
+    : html``;
+
+  el.innerHTML = html`
+    ${addBox}
+    <div id="collars-list-wrap"></div>
+  `.s;
+
+  const listWrap = $('#collars-list-wrap', el)!;
+  const panel = $('#add-collar-panel', el);
+  const form = $<HTMLFormElement>('#collar-code-form', el);
+  const codeInp = $<HTMLInputElement>('#collar-code-input', el);
+  const errEl = $('#code-err', el);
+
+  const toggle = () => {
+    adding = !adding;
+    if (panel) panel.style.display = adding ? 'block' : 'none';
+    if (adding && codeInp) codeInp.focus();
+  };
+
+  $('#btn-toggle-add')?.addEventListener('click', toggle);
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!codeInp || busy) return;
+    const code = codeInp.value.trim().replace(/[^0-9]/g, '');
+    if (code.length !== 8) {
+      if (errEl) { errEl.textContent = t('a.co.codeBad'); errEl.hidden = false; }
+      return;
+    }
+    if (errEl) errEl.hidden = true;
+    busy = true;
+    const btn = $('#btn-submit-code', el) as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    try {
+      await post<{ collar: CollarDto }>('/devices', { code });
+      toast(t('a.co.added', { code }));
+      adding = false;
+      if (panel) panel.style.display = 'none';
+      codeInp.value = '';
+      const fresh = await get<CollarDto[]>('/devices');
+      renderTableAndCards(fresh);
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err instanceof ApiError && err.code === 'CONFLICT' ? t('a.cn.idTaken') : errText(err);
+        errEl.hidden = false;
+      }
+    } finally {
+      busy = false;
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  function renderTableAndCards(list: CollarDto[]): void {
+    lastListHash = list.map((c) => `${c.deviceId}:${c.status}:${c.animalId}:${c.lastSeenAt}`).join('|');
+    if (!list.length) {
+      listWrap.innerHTML = emptyState(
+        t('a.co.empty'),
+        ctx.isOwner ? undefined : t('a.co.workerHint'),
+        ctx.isOwner ? html`<button type="button" class="btn btn-primary" id="btn-empty-add">${t('a.co.quickAdd')}</button>` : undefined,
+      ).s;
+      $('#btn-empty-add', listWrap)?.addEventListener('click', toggle);
+      return;
+    }
+
     const showFw = list.some((c) => c.firmwareVersion);
     const table: Safe = html`
       <table class="table collars-table">
@@ -74,84 +149,13 @@ export const mount: AppView['mount'] = (el, ctx) => {
           </li>`)}
       </ul>`;
 
-    const addBox: Safe = ctx.isOwner
-      ? html`
-        <div id="add-collar-panel" class="panel-block" style="margin-bottom:var(--space-4);border-left:4px solid var(--primary);${adding ? '' : 'display:none;'}">
-          <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('cpu', 20))} ${t('a.co.quickAdd')}</h2>
-          <p class="caption muted">${t('a.co.codeHint')}</p>
-          <form id="collar-code-form" style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;margin-top:0.75rem;" novalidate>
-            <input type="text" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" class="input font-mono num" id="collar-code-input" placeholder="${t('a.co.codePlaceholder')}" style="max-width:220px;font-size:1.25rem;letter-spacing:0.12em;font-weight:700;padding:0.4rem 0.75rem;" autocomplete="off" required>
-            <button type="submit" class="btn btn-primary" id="btn-submit-code" ${busy ? raw('disabled') : ''}>${t('a.co.addBtn')}</button>
-          </form>
-          <p class="field-error" id="code-err" role="alert" style="margin-top:0.5rem;" hidden></p>
-        </div>`
-      : html``;
+    listWrap.innerHTML = html`
+      ${table}
+      ${cards}
+      <p class="caption muted rule">${t('a.co.offlineRule')}</p>
+    `.s;
 
-    if (!list.length) {
-      el.innerHTML = html`
-        ${addBox}
-        ${emptyState(t('a.co.empty'), ctx.isOwner ? undefined : t('a.co.workerHint'), ctx.isOwner ? html`<button type="button" class="btn btn-primary" id="btn-empty-add">${t('a.co.quickAdd')}</button>` : undefined)}
-      `.s;
-    } else {
-      el.innerHTML = html`
-        ${addBox}
-        ${table}
-        ${cards}
-        <p class="caption muted rule">${t('a.co.offlineRule')}</p>
-      `.s;
-    }
-
-    bindEvents();
-  }
-
-  function bindEvents(): void {
-    const toggleBtn = $('#btn-toggle-add');
-    const emptyAddBtn = $('#btn-empty-add', el);
-    const panel = $('#add-collar-panel', el);
-    const form = $<HTMLFormElement>('#collar-code-form', el);
-    const codeInp = $<HTMLInputElement>('#collar-code-input', el);
-    const errEl = $('#code-err', el);
-
-    const toggle = () => {
-      adding = !adding;
-      if (panel) panel.style.display = adding ? 'block' : 'none';
-      if (adding && codeInp) codeInp.focus();
-    };
-
-    toggleBtn?.addEventListener('click', toggle);
-    emptyAddBtn?.addEventListener('click', toggle);
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!codeInp || busy) return;
-      const code = codeInp.value.trim().replace(/[^0-9]/g, '');
-      if (code.length !== 8) {
-        if (errEl) { errEl.textContent = t('a.co.codeBad'); errEl.hidden = false; }
-        return;
-      }
-      if (errEl) errEl.hidden = true;
-      busy = true;
-      const btn = $('#btn-submit-code', el) as HTMLButtonElement | null;
-      if (btn) btn.disabled = true;
-      try {
-        await post<{ collar: CollarDto }>('/devices', { code });
-        toast(t('a.co.added', { code }));
-        adding = false;
-        codeInp.value = '';
-        const fresh = await get<CollarDto[]>('/devices');
-        renderList(fresh);
-      } catch (err) {
-        if (errEl) {
-          errEl.textContent = err instanceof ApiError && err.code === 'CONFLICT' ? t('a.cn.idTaken') : errText(err);
-          errEl.hidden = false;
-        }
-      } finally {
-        busy = false;
-        if (btn) btn.disabled = false;
-      }
-    });
-
-    el.querySelectorAll<HTMLElement>('tr.row-link').forEach((tr) => {
+    listWrap.querySelectorAll<HTMLElement>('tr.row-link').forEach((tr) => {
       tr.addEventListener('click', (e) => {
         if (!(e.target as Element).closest('a')) {
           ($('a', tr) as HTMLElement)?.click();
@@ -160,18 +164,22 @@ export const mount: AppView['mount'] = (el, ctx) => {
     });
   }
 
-  void loadInto(el, () => get<CollarDto[]>('/devices'), (list) => {
-    renderList(list);
+  void loadInto(listWrap, () => get<CollarDto[]>('/devices'), (list) => renderTableAndCards(list));
 
-    pollTimer = window.setInterval(async () => {
-      if (!alive() || document.hidden || busy) return;
-      try {
-        const fresh = await get<CollarDto[]>('/devices');
-        if (!alive() || busy) return;
-        renderList(fresh);
-      } catch {}
-    }, 3000);
-  });
+  // polling lives outside the render callback: it starts even if the first load failed, and is cleared on unmount
+  let polling = false;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = window.setInterval(async () => {
+    if (!alive() || document.hidden || busy || polling) return;
+    polling = true;
+    try {
+      const fresh = await get<CollarDto[]>('/devices');
+      if (!alive() || busy) return;
+      const hash = fresh.map((c) => `${c.deviceId}:${c.status}:${c.animalId}:${c.lastSeenAt}`).join('|');
+      // also recovers a first load that failed (the error block is still on screen)
+      if (hash !== lastListHash || listWrap.querySelector('.state-block.error')) renderTableAndCards(fresh);
+    } catch { /* the shell banner reports the network state */ } finally { polling = false; }
+  }, 5000);
 
   return () => {
     if (pollTimer) clearInterval(pollTimer);

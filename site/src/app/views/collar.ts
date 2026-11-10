@@ -63,6 +63,6 @@ export const mount: AppView['mount'] = (el, ctx) => {
       if (!await confirmDialog({ title: t('a.co.deleteTitle', { id }), text: t('a.co.deleteText'), confirmLabel: t('a.co.delete'), danger: true, typeValue: id })) return;
       try { await del(`/devices/${encodeURIComponent(id)}`); void navigate('/app/collars', { replace: true }); } catch (e) { toast(errText(e)); }
     });
-  });
+  }, { backHref: '/app/collars', backLabel: t('a.co.back') });
   return stop;
 };

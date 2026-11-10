@@ -1,5 +1,5 @@
-import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
-import { t } from '../../i18n';
+import { $, $$, esc, html, raw, setHtml, type Safe } from '../../dom';
+import { getLang, t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { collarControlApi, del, get, post, request, type AnimalDto, type PenDto, type PulseThreatDto } from '../api';
@@ -9,6 +9,8 @@ import { formModal } from '../forms';
 import { openAnimalForm } from './animal';
 import { getSim, onSim } from '../demo';
 import { mountDemoPanel } from './demo-panel';
+import { enterGpsManual } from '../manual-place';
+import { openStream, type StreamHandle } from '../stream';
 
 // MapLibre is loaded lazily, only on this route (site-brief 8). Base map: OpenFreeMap (no key), OSM attribution from the style.
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
@@ -18,15 +20,16 @@ const cssVar = (n: string): string => getComputedStyle(document.documentElement)
 type MLMap = import('maplibre-gl').Map;
 
 async function fetchAll(): Promise<AnimalDto[]> {
-  const out: AnimalDto[] = [];
+  // server max page size is 100 (server/src/common/pagination.ts PAGE_MAX_LIMIT): one request for a normal herd
+  const byId = new Map<string, AnimalDto>();
   let cursor: string | null = null;
   for (let i = 0; i < 10; i++) {
     const r: { data: AnimalDto[]; next: string | null } = await request<AnimalDto[]>('GET', `/animals?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
-    out.push(...r.data);
+    for (const a of r.data) byId.set(a.id, a);
     cursor = r.next;
     if (!cursor) break;
   }
-  return out;
+  return [...byId.values()];
 }
 
 const centroid = (p: PenDto): [number, number] => {
@@ -41,21 +44,10 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   ctx.setActions('');
   el.classList.add('map-page');
   const stopGuard = offlineGuard(document.body);
-  setHtml(el, html`<div class="map-wrap"><div class="map-loading" role="status">${t('a.map.loading')}</div>${skeleton(3)}</div>`);
-
   let animals: AnimalDto[] = [];
   let pens: PenDto[] = [];
   let updatedAt = Date.now();
-  try {
-    [animals, pens] = await Promise.all([fetchAll(), get<PenDto[]>('/geofences')]);
-  } catch (e) {
-    if (!el.isConnected) return;
-    setHtml(el, html`<div class="map-wrap">${errorState(e)}</div>`);
-    $('#retry', el)?.addEventListener('click', () => { void mount(el, ctx); });
-    return () => { el.classList.remove('map-page'); stopGuard(); };
-  }
-  if (!el.isConnected) return;
-  updatedAt = Date.now();
+  let dataReady = false;
 
   let selected: string | null = ctx.query.get('animal');
   let query = '';
@@ -73,6 +65,8 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   let dragDrop: (id: string, lng: number, lat: number) => void = () => undefined;
   let placeHandler: ((id: string, lng: number, lat: number) => void) | null = null;
   let dragging = false;
+  // animals whose dragged point is being saved: stale poll/stream data must not move them back
+  const pendingDrag = new Set<string>();
 
   // Режим рисования загона на карте
   let drawing = false;
@@ -122,7 +116,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       </div>
       <aside class="map-panel glass-light" id="panel" data-sheet="peek" aria-label="${t('a.map.sheet')}">
         <button type="button" class="sheet-handle" id="sheet-toggle" aria-label="${t('a.map.expand')}"><span aria-hidden="true"></span></button>
-        <div class="panel-scroll"><div id="demo-box" class="demo-box" hidden></div><div class="panel-inner" id="panel-body"></div></div>
+        <div class="panel-scroll"><div id="demo-box" class="demo-box" hidden></div><div class="panel-inner" id="panel-body">${skeleton(3)}</div></div>
       </aside>
     </div>`);
 
@@ -148,30 +142,41 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         </div>
         <p style="margin:0.25rem 0;">${animalBadge(sel)}</p>
         <p class="muted">${speciesName(sel.species)} · ${sel.penId ? pens.find((p) => p.id === sel.penId)?.name ?? '' : t('a.map.noPen')}</p>
-        <p>${sel.lastHeartRate != null ? html`${pulseThreatBadge(sel.pulseThreat)} <span class="num">${sel.lastHeartRate} уд/мин</span> · ` : ''}<span class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</span></p>
+        <p>${sel.lastHeartRate != null ? html`${pulseThreatBadge(sel.pulseThreat)} <span class="num">${t('a.animal.bpm', { n: sel.lastHeartRate })}</span> · ` : ''}<span class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</span></p>
         ${sel.pulseThreat?.sourceNoteRu ? html`<p class="caption muted" style="font-size:0.78rem;background:var(--surface-1);padding:0.4rem 0.6rem;border-radius:var(--r-card);border:1px solid var(--line-soft);margin:0.4rem 0;">${sel.pulseThreat.sourceNoteRu}</p>` : ''}
         ${isManualGps ? html`<p class="caption" style="color:var(--warning);font-weight:600;margin:0.4rem 0;">${t('a.map.dragHintManual')}</p>` : ''}
         <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem;">
           <a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a>
           ${sel.collarId ? html`
             <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ctrl-mode" style="display:inline-flex;align-items:center;gap:0.35rem;">
-              ${isManualGps ? raw(icon('map-trifold', 16) + ' Включить AUTO') : raw(icon('crosshair-simple', 16) + ' GPS вручную')}
+              ${isManualGps ? raw(icon('map-trifold', 16) + ' ' + esc(t('a.map.ctrlAuto'))) : raw(icon('crosshair-simple', 16) + ' ' + esc(t('a.map.ctrlGpsManual')))}
             </button>` : ''}
         </div>`.s;
       $('#back', panelBody)!.addEventListener('click', () => { selected = null; drawPanel(); renderMarkers(); });
       $('#btn-toggle-ctrl-mode', panelBody)?.addEventListener('click', async () => {
         if (!sel.collarId) return;
-        const nextMode = isManualGps ? 'AUTO' : 'GPS_MANUAL';
+        const btn = $<HTMLButtonElement>('#btn-toggle-ctrl-mode', panelBody);
+        if (btn) btn.disabled = true;
         try {
-          const res = await collarControlApi.setMode(sel.collarId, nextMode);
-          sel.controlMode = nextMode;
-          sel.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
-          sel.positionSource = nextMode === 'GPS_MANUAL' ? 'MANUAL' : 'GPS';
-          toast(t('a.animal.modeChanged', { mode: nextMode }));
+          if (isManualGps) {
+            const res = await collarControlApi.setMode(sel.collarId, 'AUTO');
+            sel.controlMode = 'AUTO';
+            sel.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
+            sel.positionSource = 'GPS';
+            toast(t('a.animal.modeChanged', { mode: 'AUTO' }));
+          } else {
+            const r = await enterGpsManual(sel, {
+              pens,
+              mapCenter: () => { const c = map?.getCenter(); return c ? [c.lng, c.lat] : null; },
+            });
+            if (!r.placed) toast(t('a.animal.modeChanged', { mode: 'GPS_MANUAL' }));
+            if (r.placed && map && r.lng != null && r.lat != null) map.flyTo({ center: [r.lng, r.lat], zoom: Math.max(map.getZoom(), 15), essential: false });
+          }
           drawPanel();
           renderMarkers();
         } catch (e) {
           toast(errText(e));
+          if (btn) btn.disabled = false;
         }
       });
       return;
@@ -227,7 +232,14 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       const n = $<HTMLInputElement>('#mq', panelBody)!; n.focus(); if (pos != null) n.setSelectionRange(pos, pos);
     });
     $$('.prow', panelBody).forEach((b) => b.addEventListener('click', () => select(b.dataset.id!, true)));
-    $('#p-add', panelBody)?.addEventListener('click', () => void openAnimalForm(ctx, undefined, () => location.reload()));
+    $('#p-add', panelBody)?.addEventListener('click', () => void openAnimalForm(ctx, undefined, async () => {
+      try {
+        animals = await fetchAll();
+        drawPanel();
+        renderMarkers();
+        ctx.refreshChrome();
+      } catch {}
+    }));
     $('#btn-draw-inline', panelBody)?.addEventListener('click', () => {
       startDrawing();
     });
@@ -298,16 +310,28 @@ export const mount: AppView['mount'] = async (el, ctx) => {
           dragging = false;
           const p = mk.getLngLat();
           if (isGpsManual && aObj?.collarId) {
+            const prev = { lat: aObj.lat, lng: aObj.lng, src: aObj.positionSource };
+            aObj.lat = p.lat;
+            aObj.lng = p.lng;
+            aObj.positionSource = 'MANUAL';
+            pendingDrag.add(aObj.id);
             try {
               await collarControlApi.setManualPosition(aObj.collarId, p.lat, p.lng);
-              aObj.lat = p.lat;
-              aObj.lng = p.lng;
-              aObj.positionSource = 'MANUAL';
               toast(t('a.map.markerMoved'));
-              if (selected === aObj.id) drawPanel();
             } catch (err) {
-              toast(errText(err));
+              const cur = animals.find((x) => x.id === aObj.id) ?? aObj;
+              cur.lat = prev.lat;
+              cur.lng = prev.lng;
+              cur.positionSource = prev.src;
+              toast(`${t('a.map.markerMoveFail')} ${errText(err)}`);
+              pendingDrag.delete(aObj.id);
+              renderMarkers();
+              if (selected === aObj.id) drawPanel();
+              return;
             }
+            pendingDrag.delete(aObj.id);
+            lastTickHash = '';
+            if (selected === aObj.id) drawPanel();
           } else {
             dragDrop(id!, p.lng, p.lat);
           }
@@ -566,21 +590,41 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         center: start ? [start.lng!, start.lat!] : [51.15, 43.65], zoom: start ? 14 : 8,
         dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0, attributionControl: { compact: false },
       });
+      if (disposed) {
+        map.remove();
+        map = null;
+        return;
+      }
       map.touchZoomRotate.disableRotation();
       map.keyboard.enable();
       map.getCanvas().setAttribute('aria-label', t('a.map.container'));
       timers.push(window.setTimeout(() => { if (!mapReady) $('#map-notice', el)!.hidden = false; }, 10000));
       map.on('load', () => {
+        if (disposed) return;
         mapReady = true;
         $('#map-notice', el)!.hidden = true;
-        drawPens(); renderMarkers();
-        const at = ctx.query.get('at')?.split(',').map(Number);
-        const sel = animals.find((a) => a.id === selected);
-        if (sel && sel.lat != null && sel.lng != null) map!.jumpTo({ center: [sel.lng, sel.lat], zoom: 16 });
-        else if (at && at.length === 2 && at.every(Number.isFinite)) map!.jumpTo({ center: [at[1], at[0]], zoom: 16 });
-        else fitAll();
+        if (dataReady) {
+          drawPens(); renderMarkers();
+          const at = ctx.query.get('at')?.split(',').map(Number);
+          const sel = animals.find((a) => a.id === selected);
+          if (sel && sel.lat != null && sel.lng != null && map) map.jumpTo({ center: [sel.lng, sel.lat], zoom: 16 });
+          else if (at && at.length === 2 && at.every(Number.isFinite) && map) map.jumpTo({ center: [at[1], at[0]], zoom: 16 });
+          else fitAll();
+        }
       });
       map.on('zoomend', renderMarkers);
+      // style or tile failures must not leave a silent blank map: show the notice (the panel list keeps working)
+      let mapErrAt = 0;
+      map.on('error', (e) => {
+        console.warn('[site] map error:', e?.error?.message ?? e);
+        if (disposed) return;
+        mapErrAt = Date.now();
+        const n = $('#map-notice', el); if (n) n.hidden = false;
+      });
+      map.on('idle', () => {
+        if (disposed || !mapReady || Date.now() - mapErrAt < 1500) return;
+        const n = $('#map-notice', el); if (n) n.hidden = true;
+      });
       // click-to-place: "Поставить на карте" picks for the panel's animal, otherwise the animal selected on the map is placed (pilot mode)
       const placeAtPoint = (lng: number, lat: number): void => {
         if (drawing) {
@@ -613,7 +657,33 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     }
   }
 
-  drawPanel();
+  const loadInitialData = async (): Promise<void> => {
+    try {
+      [animals, pens] = await Promise.all([fetchAll(), get<PenDto[]>('/geofences')]);
+      if (disposed || !el.isConnected) return;
+      dataReady = true;
+      updatedAt = Date.now();
+      drawPanel();
+      if (mapReady) {
+        drawPens();
+        renderMarkers();
+        const at = ctx.query.get('at')?.split(',').map(Number);
+        const sel = animals.find((a) => a.id === selected);
+        if (sel && sel.lat != null && sel.lng != null && map) map.jumpTo({ center: [sel.lng, sel.lat], zoom: 16 });
+        else if (at && at.length === 2 && at.every(Number.isFinite) && map) map.jumpTo({ center: [at[1], at[0]], zoom: 16 });
+        else fitAll();
+      }
+    } catch (e) {
+      if (disposed || !el.isConnected) return;
+      panelBody.innerHTML = errorState(e).s;
+      $('#retry', panelBody)?.addEventListener('click', () => {
+        panelBody.innerHTML = skeleton(3).s;
+        void loadInitialData();
+      });
+    }
+  };
+
+  void loadInitialData();
   void initMap();
 
   $('#m-in', el)!.addEventListener('click', () => map?.zoomIn());
@@ -686,25 +756,26 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   });
 
   // Live SSE stream for instant sub-second animal movements and pulse on the tactical map
-  let mapEventSource: EventSource | null = null;
+  let mapEventSource: StreamHandle | null = null;
   let lastPulseAlertAt = 0;
   function notifyCriticalPulse(name: string, bpm: number, pt?: PulseThreatDto | null) {
     const now = Date.now();
     if (now - lastPulseAlertAt < 25000) return;
     lastPulseAlertAt = now;
     if ('vibrate' in navigator) { try { navigator.vibrate([200, 100, 200]); } catch {} }
-    toast(`⚠️ ${name}: Тревога пульса! ${bpm} уд/мин (${pt?.labelRu ?? 'Острый стресс / угроза'})`);
+    const lang = getLang();
+    const label = (lang === 'en' ? pt?.labelEn : lang === 'kk' ? pt?.labelKk : pt?.labelRu) || t('a.map.pulseStress');
+    toast(t('a.map.pulseAlarm', { name, bpm: t('a.animal.bpm', { n: bpm }), label }));
   }
 
   try {
-    mapEventSource = new EventSource('/api/v1/device/stream');
-    mapEventSource.onmessage = (evt) => {
+    mapEventSource = openStream({}, (evt) => {
       try {
         const msg = JSON.parse(evt.data);
         if (msg.type === 'telemetry' && (msg.animalId || msg.deviceId)) {
           const target = animals.find((x) => (msg.animalId && x.id === msg.animalId) || (msg.deviceId && x.collarId === msg.deviceId));
           if (target) {
-            if (msg.latitude != null && msg.longitude != null) {
+            if (msg.latitude != null && msg.longitude != null && !pendingDrag.has(target.id) && !(dragging && selected === target.id)) {
               target.lat = msg.latitude;
               target.lng = msg.longitude;
             }
@@ -724,23 +795,36 @@ export const mount: AppView['mount'] = async (el, ctx) => {
           }
         }
       } catch {}
-    };
+    });
   } catch {}
 
-  // live positions: 3 s in REAL and demo modes for real-time tracking without manual refresh
+  // live positions poll (the SSE stream above carries the sub-second updates)
+  let lastTickHash = '';
   const tick = async () => {
-    if (!document.hidden && !disposed) {
+    if (!document.hidden && !disposed && dataReady && !dragging) {
       try {
-        animals = await fetchAll();
-        updatedAt = Date.now();
-        if (!panelBody.querySelector('#mq:focus')) drawPanel();
-        renderMarkers();
-        demo.update();
+        const fresh = await fetchAll();
+        if (disposed) return;
+        const hash = fresh.map((a) => `${a.id}:${a.lat}:${a.lng}:${a.status}:${a.lastHeartRate}:${a.controlMode}`).join('|');
+        if (hash !== lastTickHash) {
+          lastTickHash = hash;
+          if (pendingDrag.size) {
+            for (const f of fresh) {
+              const cur = animals.find((x) => x.id === f.id);
+              if (cur && pendingDrag.has(f.id)) { f.lat = cur.lat; f.lng = cur.lng; f.positionSource = cur.positionSource; }
+            }
+          }
+          animals = fresh;
+          updatedAt = Date.now();
+          if (!panelBody.querySelector('#mq:focus')) drawPanel();
+          renderMarkers();
+          demo.update();
+        }
       } catch { /* the shell banner reports the network state */ }
     }
-    if (!disposed) timers.push(window.setTimeout(() => void tick(), 3000));
+    if (!disposed) timers.push(window.setTimeout(() => void tick(), 5000));
   };
-  timers.push(window.setTimeout(() => void tick(), 3000));
+  timers.push(window.setTimeout(() => void tick(), 5000));
 
   return () => {
     disposed = true;
@@ -752,6 +836,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     penMarkers.forEach((m) => m.remove());
     me?.remove();
     map?.remove();
+    map = null;
     el.classList.remove('map-page');
     stopGuard();
   };

@@ -6,6 +6,8 @@ import { ApiError, collarControlApi, del, get, patch, post, type AlertDto, type 
 import { animalBadge, confirmDialog, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
 import { formModal } from '../forms';
 import { icon } from '../../ui/icons';
+import { enterGpsManual } from '../manual-place';
+import { openStream, type StreamHandle } from '../stream';
 
 /** Create or edit an animal in a modal form (POST /animals, PATCH /animals/:id). */
 export async function openAnimalForm(ctx: AppCtx, animal: AnimalDto | undefined, onSaved: () => void): Promise<void> {
@@ -73,7 +75,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
   const id = ctx.params.id;
   const alive = () => el.isConnected;
   let pollTimer: number | null = null;
-  let eventSource: EventSource | null = null;
+  let eventSource: StreamHandle | null = null;
+  let lastZoneAt = 0; // last time the stream gave a zone: the status poll must not overwrite a fresher zone with "unknown"
   let lastCritAlertTime = 0;
 
   const pulseInfo = (hr: number | null | undefined, at: string | null | undefined) => {
@@ -127,7 +130,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       return html`<span class="badge badge-danger"><span class="dot"></span> ${t('a.animal.zoneBreach')}</span>`;
     }
     if (zone === 'ESCAPE') {
-      return html`<span class="badge" style="background:var(--surface-3);color:var(--text-muted);"><span class="dot"></span> ${t('a.animal.zoneEscape')}</span>`;
+      return html`<span class="badge badge-danger" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;"><span class="dot" style="background:#dc2626;"></span> ${t('a.animal.zoneEscape')}</span>`;
     }
     return html`<span class="caption muted">${t('a.st.ok')}</span>`;
   };
@@ -311,8 +314,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
     // 1. Потоковое обновление через Server-Sent Events (SSE) в реальном времени (0 ms задержки)
     try {
-      eventSource = new EventSource(`/api/v1/device/stream?animalId=${encodeURIComponent(id)}`);
-      eventSource.onmessage = (evt) => {
+      eventSource = openStream({ animalId: id }, (evt) => {
         try {
           const msg = JSON.parse(evt.data);
           if (msg.type === 'telemetry') {
@@ -327,7 +329,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
                 if (now - lastCritAlertTime > 25000) {
                   lastCritAlertTime = now;
                   if ('vibrate' in navigator) { try { navigator.vibrate([150, 75, 150]); } catch {} }
-                  toast(`⚠️ ${a.name}: Опасность! Пульс ${msg.heartRate} уд/мин (Острый стресс!)`);
+                  toast(t('a.animal.pulseAlarm', { name: a.name, bpm: t('a.animal.bpm', { n: msg.heartRate }) }));
                 }
               }
             }
@@ -340,24 +342,24 @@ export const mount: AppView['mount'] = (el, ctx) => {
               updateModeUi(msg.controlMode);
             }
 
+            if (msg.zone != null || msg.inFence != null) lastZoneAt = Date.now();
             applyUpdate(a, msg.zone, msg.inFence);
           }
         } catch {}
-      };
-      eventSource.onerror = () => {
-        // SSE переподключится автоматически; фоновый опрос подстрахует
-      };
+      });
     } catch {}
 
-    // 2. Фоновый синхронизатор (каждую 1 сек) для обновления относительного времени и подстраховки SSE
+    // 2. Фоновый синхронизатор (каждые 5 сек) для обновления относительного времени и подстраховки SSE
     pollTimer = window.setInterval(async () => {
       if (!alive() || document.hidden) return;
       try {
         const fresh = await get<AnimalDto>(`/animals/${id}`);
         Object.assign(a, fresh);
-        applyUpdate(a, null, a.status !== 'danger');
+        // keep the zone the stream gave a moment ago; fall back to the status only when the stream is silent
+        if (Date.now() - lastZoneAt < 30000) applyUpdate(a);
+        else applyUpdate(a, null, a.status !== 'danger');
       } catch {}
-    }, 1000);
+    }, 5000);
 
     // 3. Обработчики ручного управления ошейником (Оператор) с тактильным виброоткликом (Haptic Feedback)
     const triggerSignal = async (signal: 'SPEAKER' | 'BUZZER' | 'VIBRATION', btn: HTMLButtonElement) => {
@@ -367,7 +369,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       btn.disabled = true;
       if (statusEl) {
         statusEl.textContent = t('a.animal.cmdWait');
-        statusEl.style.color = 'var(--text-muted)';
+        statusEl.style.color = 'var(--ink-3)';
       }
       try {
         await post(`/devices/${encodeURIComponent(a.collarId)}/test-signal`, { signal });
@@ -433,10 +435,17 @@ export const mount: AppView['mount'] = (el, ctx) => {
       }
       if ('vibrate' in navigator) { try { navigator.vibrate([18]); } catch {} }
       try {
+        if (m === 'GPS_MANUAL') {
+          // switch the mode and put the animal's point on the map (browser geolocation, else pen centre) so it can be dragged there
+          const r = await enterGpsManual(a);
+          updateModeUi('GPS_MANUAL');
+          if (!r.placed) toast(t('a.animal.modeChanged', { mode: m }));
+          return;
+        }
         const res = await collarControlApi.setMode(a.collarId, m);
         a.controlMode = m;
         a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
-        a.positionSource = res.collar.positionSource ?? (m === 'GPS_MANUAL' ? 'MANUAL' : 'GPS');
+        a.positionSource = res.collar.positionSource ?? 'GPS';
         updateModeUi(m);
         toast(t('a.animal.modeChanged', { mode: m }));
       } catch (e) {
@@ -476,7 +485,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         btn.removeAttribute('disabled');
       }
     }));
-  }, { alive });
+  }, { alive, backHref: '/app/herd', backLabel: t('a.animal.back') });
 
   return () => {
     if (pollTimer) clearInterval(pollTimer);

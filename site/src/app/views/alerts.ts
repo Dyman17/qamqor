@@ -15,6 +15,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
   const stop = offlineGuard(document.body);
   const st = { status: 'ACTIVE' as 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED', type: '', items: [] as AlertDto[], next: null as string | null, loaded: false };
   let seq = 0;
+  let lastHash = '';
+  const hashOf = (items: AlertDto[], next: string | null) => items.map((a) => `${a.id}:${a.status}:${a.isRead}:${a.severity}`).join('|') + `#${next ?? ''}`;
 
   setHtml(el, html`
     <div class="toolbar">
@@ -26,7 +28,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
   const card = (a: AlertDto): Safe => html`
     <li class="alert-card sev-${a.severity.toLowerCase()} ${a.isRead ? '' : 'unread'}" data-id="${a.id}">
-      <div class="alert-head">${raw(icon(TYPE_ICON[a.type], 22))}<h2 class="alert-title">${t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST')}${demoTag(a.isDemo)}</h2>${a.isRead ? '' : html`<span class="sr-only">${t('a.al.unread')}</span>`}</div>
+      <div class="alert-head">${raw(icon(TYPE_ICON[a.type] || 'warning', 22))}<h2 class="alert-title">${t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST')}${demoTag(a.isDemo)}</h2>${a.isRead ? '' : html`<span class="sr-only">${t('a.al.unread')}</span>`}</div>
       <p>${a.message}</p>
       <p class="caption muted">${a.animalName ?? ''}${a.penName ? ` · ${a.penName}` : ''} ${timeEl(a.createdAt)}</p>
       <div class="alert-actions">
@@ -66,6 +68,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       if (my !== seq || !el.isConnected) return;
       st.items = reset ? r.data : st.items.concat(r.data);
       st.next = r.next; st.loaded = true;
+      lastHash = hashOf(st.items, st.next);
       draw();
     } catch (e) {
       if (my !== seq || !el.isConnected) return;
@@ -94,7 +97,11 @@ export const mount: AppView['mount'] = (el, ctx) => {
       if (st.type) p.set('type', st.type);
       try {
         const r = await request<AlertDto[]>('GET', `/alerts?${p}`);
-        if (my === seq && el.isConnected) { st.items = r.data; st.next = r.next; draw(); ctx.refreshChrome(); }
+        if (my === seq && el.isConnected) {
+          // unchanged list: leave the DOM (and the buttons under the cursor) alone
+          const h = hashOf(r.data, r.next);
+          if (h !== lastHash) { lastHash = h; st.items = r.data; st.next = r.next; draw(); ctx.refreshChrome(); }
+        }
       } catch { /* the shell banner reports the network state */ }
     }
     if (el.isConnected) timer = window.setTimeout(() => void poll(), 5000);

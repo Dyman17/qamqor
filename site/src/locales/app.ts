@@ -10,6 +10,7 @@ export const app = def({
 
     'a.banner.offline': 'Нет подключения к сети. Показаны данные на {time}',
     'a.banner.server': 'Не удаётся связаться с сервером', 'a.banner.retry': 'Повторить',
+'a.banner.waking': 'Сервер просыпается, это может занять до минуты. Данные скоро появятся', 'a.err.waking': 'Сервер просыпается, подождите немного',    'a.map.pulseAlarm': '⚠️ {name}: Тревога пульса! {bpm} ({label})', 'a.animal.pulseAlarm': '⚠️ {name}: Опасность! Пульс {bpm} (Острый стресс!)',    'a.map.ctrlAuto': 'Включить AUTO', 'a.map.ctrlGpsManual': 'GPS вручную', 'a.map.pulseStress': 'Острый стресс / угроза',    'a.route.loadFail': 'Сбой загрузки страницы', 'a.route.loadFailHint': 'Проверьте подключение к сети или обновите страницу.', 'a.route.renderFail': 'Ошибка отображения', 'a.route.renderFailHint': 'Не удалось отрисовать компонент.', 'a.route.reload': 'Обновить страницу',
     'a.banner.rate': 'Слишком много запросов. Подождите минуту.', 'a.banner.more': '+{n}',
     'a.offline.disabled': 'Недоступно без сети',
 
@@ -95,6 +96,13 @@ export const app = def({
     'a.map.posSourceManual': 'GPS вручную (Оператор)',
     'a.map.dragHintManual': 'Режим GPS_MANUAL: перетащите маркер животного на карте для теста зон',
     'a.map.markerMoved': 'Позиция животного обновлена вручную',
+    'a.map.manualPlacedBrowser': 'Точка поставлена по геолокации этого устройства. Перетащите маркер на карте',
+    'a.map.manualPlacedPen': 'Геолокация недоступна: точка поставлена в центр загона. Перетащите маркер',
+    'a.map.manualPlacedFarm': 'Геолокация недоступна: точка поставлена в центр загона фермы. Перетащите маркер',
+    'a.map.manualPlacedMap': 'Геолокация недоступна: точка поставлена в центр карты. Перетащите маркер',
+    'a.map.manualNoPoint': 'Режим включён, но точку поставить не удалось: нет геолокации, загонов и карты',
+    'a.map.manualPlaceFail': 'Режим включён, но точку поставить не удалось.',
+    'a.map.markerMoveFail': 'Не удалось сохранить позицию, маркер возвращён',
     'a.animal.spkBtn': 'Левый динамик', 'a.animal.buzBtn': 'Правый зуммер', 'a.animal.vibBtn': 'Вибрация',
     'a.animal.cmdSent': 'Команда передана ошейнику', 'a.animal.cmdWait': 'Ожидание пинга ошейника (~1 сек)...',
     'a.animal.zoneSafe': 'GREEN · Безопасный выпас (сигналов нет)',
@@ -261,6 +269,7 @@ export const app = def({
 
     'a.banner.offline': 'No network connection. Showing data from {time}',
     'a.banner.server': 'Cannot reach the server', 'a.banner.retry': 'Retry',
+'a.banner.waking': 'The server is waking up, this can take up to a minute. Data will appear shortly', 'a.err.waking': 'The server is waking up, please wait a moment',    'a.map.pulseAlarm': '⚠️ {name}: Heart-rate alarm! {bpm} ({label})', 'a.animal.pulseAlarm': '⚠️ {name}: Danger! Heart rate {bpm} (acute stress!)',    'a.map.ctrlAuto': 'Switch to AUTO', 'a.map.ctrlGpsManual': 'Manual GPS', 'a.map.pulseStress': 'Acute stress / threat',    'a.route.loadFail': 'Page failed to load', 'a.route.loadFailHint': 'Check your connection or reload the page.', 'a.route.renderFail': 'Display error', 'a.route.renderFailHint': 'The component could not be rendered.', 'a.route.reload': 'Reload page',
     'a.banner.rate': 'Too many requests. Wait a minute.', 'a.banner.more': '+{n}',
     'a.offline.disabled': 'Not available offline',
 
@@ -346,6 +355,13 @@ export const app = def({
     'a.map.posSourceManual': 'Manual GPS (Operator)',
     'a.map.dragHintManual': 'GPS_MANUAL active: drag animal marker anywhere on map to test geofence zones',
     'a.map.markerMoved': 'Animal position updated manually',
+    'a.map.manualPlacedBrowser': 'Point placed at this device location. Drag the marker on the map',
+    'a.map.manualPlacedPen': 'Location unavailable: point placed at the centre of the pen. Drag the marker',
+    'a.map.manualPlacedFarm': 'Location unavailable: point placed at the centre of a farm pen. Drag the marker',
+    'a.map.manualPlacedMap': 'Location unavailable: point placed at the map centre. Drag the marker',
+    'a.map.manualNoPoint': 'Mode enabled, but no point could be placed: no location, pens or map',
+    'a.map.manualPlaceFail': 'Mode enabled, but the point could not be placed.',
+    'a.map.markerMoveFail': 'Could not save the position, marker restored',
     'a.animal.spkBtn': 'Left speaker', 'a.animal.buzBtn': 'Right buzzer', 'a.animal.vibBtn': 'Vibration',
     'a.animal.cmdSent': 'Command sent to collar', 'a.animal.cmdWait': 'Waiting for collar ping (~1s)...',
     'a.animal.zoneSafe': 'GREEN · Safe grazing (no signals)',

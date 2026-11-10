@@ -7,7 +7,10 @@ import { demoTag } from './demo';
 
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return t('a.rel.never');
-  const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+  const d = new Date(iso);
+  const time = d.getTime();
+  if (Number.isNaN(time)) return t('a.rel.never');
+  const diff = (time - Date.now()) / 1000;
   const abs = Math.abs(diff);
   if (abs < 45) return t('a.rel.now');
   const rtf = new Intl.RelativeTimeFormat(getLang() === 'kk' ? 'ru' : getLang(), { numeric: 'auto' });
@@ -17,13 +20,15 @@ export function timeAgo(iso: string | null | undefined): string {
 }
 export function absTime(iso: string | null | undefined): string {
   if (!iso) return '';
-  return new Date(iso).toLocaleString(getLang() === 'kk' ? 'ru' : getLang(), { dateStyle: 'medium', timeStyle: 'short' });
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(getLang() === 'kk' ? 'ru' : getLang(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 export const timeEl = (iso: string | null | undefined): Safe => html`<time datetime="${iso ?? ''}" title="${absTime(iso)}">${timeAgo(iso)}</time>`;
 
 export function errText(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.network) return t('a.err.network');
+    if (e.network) return navigator.onLine ? t('a.err.waking') : t('a.err.network');
     if (e.code === 'RATE_LIMITED') return t('a.err.rate');
     if (e.status >= 500) return t('a.err.server');
     return e.message || t('a.err.generic');
@@ -37,8 +42,12 @@ export function emptyState(title: string, text?: string, action?: Safe): Safe {
   return html`<div class="state-block empty">${raw(icon('plant', 72, 'grass'))}<h2 class="title-2">${title}</h2>${text ? html`<p>${text}</p>` : ''}${action ?? ''}</div>`;
 }
 
-export function errorState(e: unknown, retryId = 'retry'): Safe {
+export function errorState(e: unknown, retryId = 'retry', backHref?: string, backLabel?: string): Safe {
+  const is404 = e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND');
   const code = e instanceof ApiError ? e.code : 'ERROR';
+  if (is404) {
+    return html`<div class="state-block notfound" role="alert"><h2 class="title-2">${errText(e)}</h2><p class="muted">${t('a.state.errorHint')}</p><a class="btn btn-primary" href="${backHref || '/app/herd'}">${backLabel || t('a.state.toHerd')}</a></div>`;
+  }
   return html`<div class="state-block error" role="alert"><h2 class="title-2">${t('a.state.error')}</h2><p>${errText(e)}. ${t('a.state.errorHint')}</p><button type="button" class="btn btn-primary" id="${retryId}">${t('a.state.retry')}</button><p class="caption muted">${t('a.state.code', { code })}</p></div>`;
 }
 
@@ -152,7 +161,7 @@ export { esc };
  * Standard page loading: skeleton (+ "slow" hint after 8 s), then render(data) or an error block with retry.
  * `alive` stops late responses from writing into a page the user has left.
  */
-export async function loadInto<T>(el: HTMLElement, loader: () => Promise<T>, render: (d: T) => void, opts: { rows?: number; alive?: () => boolean } = {}): Promise<void> {
+export async function loadInto<T>(el: HTMLElement, loader: () => Promise<T>, render: (d: T) => void, opts: { rows?: number; alive?: () => boolean; backHref?: string; backLabel?: string } = {}): Promise<void> {
   const alive = opts.alive ?? (() => el.isConnected);
   el.innerHTML = skeleton(opts.rows ?? 4).s;
   const slow = window.setTimeout(() => { if (alive()) el.insertAdjacentHTML('beforeend', `<p class="muted slow-hint" role="status">${esc(t('a.state.slow'))}</p>`); }, 8000);
@@ -166,7 +175,7 @@ export async function loadInto<T>(el: HTMLElement, loader: () => Promise<T>, ren
     console.error('loadInto failed:', e);
     window.clearTimeout(slow);
     if (!alive() || (e as Error).name === 'AbortError') return;
-    el.innerHTML = errorState(e).s;
+    el.innerHTML = errorState(e, 'retry', opts.backHref, opts.backLabel).s;
     el.querySelector('#retry')?.addEventListener('click', () => void loadInto(el, loader, render, opts));
   }
 }

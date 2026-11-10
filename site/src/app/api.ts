@@ -79,8 +79,9 @@ let farmId: string | null = ssGet(FARM_KEY);
 const authListeners = new Set<() => void>();
 const netListeners = new Set<(s: NetState) => void>();
 
-export interface NetState { offline: boolean; server: boolean; rateLimited: boolean; lastOk: number }
-export const net: NetState = { offline: !navigator.onLine, server: false, rateLimited: false, lastOk: Date.now() };
+/** waking: a request failed or timed out while the browser is online (typically a Render free-tier cold start). */
+export interface NetState { offline: boolean; server: boolean; waking: boolean; rateLimited: boolean; lastOk: number }
+export const net: NetState = { offline: !navigator.onLine, server: false, waking: false, rateLimited: false, lastOk: Date.now() };
 function setNet(p: Partial<NetState>): void {
   Object.assign(net, p);
   netListeners.forEach((l) => l(net));
@@ -101,6 +102,16 @@ export function setFarmId(id: string | null): void {
 }
 export function onUnauthenticated(cb: () => void): () => void { authListeners.add(cb); return () => authListeners.delete(cb); }
 
+/** Same auth headers as request(); used by the SSE stream helper. */
+export function authHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  if (farmId) h['x-farm-id'] = farmId;
+  return h;
+}
+
+export const REQUEST_TIMEOUT_MS = 20000;
+
 export interface Res<T> { data: T; next: string | null }
 
 export async function request<T>(method: string, path: string, body?: unknown, opts: { farm?: boolean; auth?: boolean; signal?: AbortSignal } = {}): Promise<Res<T>> {
@@ -108,29 +119,45 @@ export async function request<T>(method: string, path: string, body?: unknown, o
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.auth !== false && token) headers.Authorization = `Bearer ${token}`;
   if (opts.farm !== false && farmId) headers['x-farm-id'] = farmId;
+  // hard timeout so nothing hangs forever; the caller's own signal (if any) still aborts too
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, REQUEST_TIMEOUT_MS);
+  const onCallerAbort = () => ctl.abort();
+  if (opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener('abort', onCallerAbort, { once: true }); }
+  const done = () => { window.clearTimeout(timer); opts.signal?.removeEventListener('abort', onCallerAbort); };
   let res: Response;
-  try {
-    res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: opts.signal, cache: 'no-store' });
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') throw e;
-    setNet({ offline: !navigator.onLine, server: navigator.onLine });
-    throw new ApiError(0, 'NETWORK', 'network');
-  }
-  setNet({ server: false, rateLimited: res.status === 429, ...(res.ok ? { lastOk: Date.now(), offline: false } : {}) });
-  if (res.status === 204) return { data: undefined as T, next: null };
   let json: unknown = null;
-  try { json = await res.json(); } catch { /* empty or not JSON */ }
+  try {
+    res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctl.signal, cache: 'no-store' });
+    if (res.ok) setNet({ server: false, waking: false, offline: false, rateLimited: false, lastOk: Date.now() });
+    else setNet({ rateLimited: res.status === 429, server: res.status >= 500, waking: false });
+    if (res.status !== 204) { try { json = await res.json(); } catch { /* empty or not JSON */ } }
+  } catch (e) {
+    done();
+    if ((e as Error).name === 'AbortError' && !timedOut) throw e;
+    const online = navigator.onLine;
+    setNet({ offline: !online, server: false, waking: online });
+    throw new ApiError(0, 'NETWORK', timedOut ? 'timeout' : 'network');
+  }
+  done();
+  if (res.status === 204) return { data: undefined as T, next: null };
   if (!res.ok) {
     const j = (json ?? {}) as { code?: string; message?: string | string[] };
     const code = j.code ?? (res.status === 401 ? 'UNAUTHENTICATED' : res.status === 429 ? 'RATE_LIMITED' : res.status >= 500 ? 'SERVER' : 'ERROR');
-    if (res.status >= 500) setNet({ server: true });
     if (res.status === 401 && opts.auth !== false && token) { setSession(null); authListeners.forEach((l) => l()); }
     throw new ApiError(res.status, code, Array.isArray(j.message) ? j.message.join(', ') : (j.message ?? code));
   }
   return { data: json as T, next: res.headers.get('X-Next-Cursor') };
 }
 
-export const get = <T>(p: string, o?: { farm?: boolean; signal?: AbortSignal }) => request<T>('GET', p, undefined, o).then((r) => r.data);
+export const get = <T>(p: string, o?: { farm?: boolean; signal?: AbortSignal }): Promise<T> =>
+  request<T>('GET', p, undefined, o).then((r) => {
+    if (r.data && typeof r.data === 'object' && !Array.isArray(r.data) && Array.isArray((r.data as { data?: unknown }).data)) {
+      return (r.data as unknown as { data: T }).data;
+    }
+    return r.data;
+  });
 export const post = <T>(p: string, b?: unknown, o?: { farm?: boolean; auth?: boolean }) => request<T>('POST', p, b ?? {}, o).then((r) => r.data);
 export const patch = <T>(p: string, b: unknown) => request<T>('PATCH', p, b).then((r) => r.data);
 export const put = <T>(p: string, b: unknown) => request<T>('PUT', p, b).then((r) => r.data);

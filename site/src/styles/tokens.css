@@ -38,13 +38,16 @@
   --ok: #0D6B3A;
   --ok-dot: #14934F;
   --warning: #7A4A00;
+  --danger: #B52C08;
   --disabled-text: #586A5E;
+  --text-muted: #46594D;
   --line: #5F7568;
   --line-soft: rgba(11, 26, 18, .10);
   --surface-0: #F6FAF4;
   --surface-1: #E1EEDF;
   --surface-2: #FDFEFB;
   --surface-2-white: #FFFFFF;
+  --surface-3: #14603A;
   --surface-3-a: #14603A;
   --surface-3-b: #0D4A2B;
   --surface-3-c: #0A3D24;
@@ -97,7 +100,7 @@
   /* ---- Space (step 4), radii (nested), sizes ---- */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px;
   --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px; --space-24: 96px;
-  --r-block: 24px; --r-card: 20px; --r-btn: 20px; --r-field: 16px; --r-chip: 12px; --r-header: 28px; --r-pill: 999px;
+  --r-block: 24px; --r-card: 20px; --r-btn: 20px; --r-field: 16px; --r-chip: 12px; --r-header: 28px; --r-pill: 999px; --r-lg: 20px; --r-md: 16px;
   --btn-h: 56px;
   --touch: 48px;
   --page-gutter: 16px;
