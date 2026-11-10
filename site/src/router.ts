@@ -69,14 +69,26 @@ export function setLeaveGuard(fn: (() => boolean | Promise<boolean>) | null): vo
 
 export function currentPath(): string { return location.pathname; }
 
-export async function navigate(to: string, opts: { replace?: boolean } = {}): Promise<void> {
+/** stay: re-render the current page in place after a mutation (keeps the scroll position). */
+export async function navigate(to: string, opts: { replace?: boolean; stay?: boolean } = {}): Promise<void> {
   if (leaveGuard) {
     const ok = await leaveGuard();
     if (!ok) return;
     leaveGuard = null;
   }
   if (opts.replace) history.replaceState(null, '', to); else history.pushState(null, '', to);
-  await render(true);
+  const y = opts.stay ? window.scrollY : 0;
+  await render(!opts.stay);
+  if (opts.stay && y > 0) restoreScroll(y);
+}
+
+/** The re-mounted view fills in asynchronously: retry until the page is tall enough to scroll back to the old position. */
+function restoreScroll(y: number): void {
+  let n = 0;
+  const id = window.setInterval(() => {
+    window.scrollTo(0, y);
+    if (Math.abs(window.scrollY - y) < 2 || ++n > 25) window.clearInterval(id);
+  }, 80);
 }
 
 async function render(moved: boolean): Promise<void> {

@@ -80,6 +80,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         const animalId = $<HTMLSelectElement>('#dan', el)!.value;
         const r = await registerCollarByCode(input.value, animalId || undefined);
         deviceId = r.collar.deviceId;
+        ctx.refreshChrome();
         wipe();
         step3();
       } catch (er) {
@@ -182,6 +183,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       try {
         await patch(`/devices/${encodeURIComponent(id)}`, { animalId: sel.value });
         box.innerHTML = html`<p role="status"><strong>${t('a.cn.bound')}</strong></p>${link}`.s;
+        ctx.refreshChrome();
       } catch (e) { const er = $('#bind-err', el)!; er.textContent = errText(e); er.hidden = false; go.disabled = false; }
     });
   }

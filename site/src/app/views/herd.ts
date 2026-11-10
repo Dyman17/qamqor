@@ -63,7 +63,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         ? emptyState(t('a.herd.noMatch'), undefined, html`<button type="button" class="btn btn-secondary" id="reset">${t('a.herd.reset')}</button>`)
         : emptyState(t('a.herd.empty'), undefined, html`<button type="button" class="btn btn-primary" id="empty-add" data-write>${t('a.herd.add')}</button>`)).s;
       $('#reset', results)?.addEventListener('click', () => { st.search = ''; st.status = ''; st.pen = ''; q.value = ''; clear.hidden = true; $<HTMLSelectElement>('#pen', el)!.value = ''; syncChips(); void load(true); });
-      $('#empty-add', results)?.addEventListener('click', () => openAnimalForm(ctx, undefined, () => void load(true)));
+      $('#empty-add', results)?.addEventListener('click', () => openAnimalForm(ctx, undefined, () => { void load(true, true); ctx.refreshChrome(); }));
       return;
     }
     results.innerHTML = (html`${rowsDesktop(st.items)}${rowsCards(st.items)}${st.next ? html`<p class="more"><button type="button" class="btn btn-secondary" id="more">${t('a.herd.more')}</button></p>` : ''}`).s;
@@ -71,11 +71,12 @@ export const mount: AppView['mount'] = (el, ctx) => {
     $$('tr.row-link', results).forEach((tr) => tr.addEventListener('click', (e) => { if (!(e.target as Element).closest('a')) { const a = $('a', tr) as HTMLAnchorElement; void navigate(a.pathname); } }));
   }
 
-  async function load(reset: boolean): Promise<void> {
+  async function load(reset: boolean, silent = false): Promise<void> {
     if (st.loading && !reset) return;
     const my = ++seq;
     st.loading = true;
-    if (reset) { st.items = []; st.next = null; st.loaded = false; paged = false; draw(); } else paged = true;
+    if (reset && silent) paged = false; // refresh after a mutation: keep the rows and scroll until the fresh page arrives
+    else if (reset) { st.items = []; st.next = null; st.loaded = false; paged = false; draw(); } else paged = true;
     const p = new URLSearchParams({ limit: '50' });
     if (st.search) p.set('search', st.search);
     if (st.status) p.set('status', st.status);
@@ -101,7 +102,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
   clear.addEventListener('click', () => { q.value = ''; clear.hidden = true; st.search = ''; void load(true); q.focus(); });
   $$('.chip-btn', el).forEach((b) => b.addEventListener('click', () => { st.status = b.dataset.status ?? ''; syncChips(); void load(true); }));
   $<HTMLSelectElement>('#pen', el)!.addEventListener('change', (e) => { st.pen = (e.target as HTMLSelectElement).value; void load(true); });
-  $('#add')!.addEventListener('click', () => openAnimalForm(ctx, undefined, () => void load(true)));
+  $('#add')!.addEventListener('click', () => openAnimalForm(ctx, undefined, () => { void load(true, true); ctx.refreshChrome(); }));
   void load(true);
 
   // Фоновое автообновление списка каждые 3 секунды без потери фокуса/поиска

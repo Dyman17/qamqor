@@ -4,7 +4,7 @@ import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { patch, post, request, type AlertDto, type AlertType } from '../api';
 import { demoTag } from '../demo';
-import { emptyState, errorState, offlineGuard, skeleton, timeEl, toast } from '../common';
+import { emptyState, errorState, offlineGuard, skeleton, timeEl, toast, withBusy } from '../common';
 
 const TYPES: AlertType[] = ['GEOFENCE_BREACH', 'GEOFENCE_RETURN', 'DEVICE_OFFLINE', 'DEVICE_RESTORED', 'SIGNAL_LIMIT_REACHED', 'GPS_LOST'];
 const TYPE_ICON: Record<AlertType, string> = { GEOFENCE_BREACH: 'warning', GEOFENCE_RETURN: 'check-circle', DEVICE_OFFLINE: 'wifi-slash', DEVICE_RESTORED: 'check-circle', SIGNAL_LIMIT_REACHED: 'warning-circle', GPS_LOST: 'cloud-slash' };
@@ -47,13 +47,15 @@ export const mount: AppView['mount'] = (el, ctx) => {
     $$('[data-set]', list).forEach((b) => b.addEventListener('click', async () => {
       const id = b.closest<HTMLElement>('[data-id]')!.dataset.id!;
       if ('vibrate' in navigator) { try { navigator.vibrate([25]); } catch {} }
-      b.setAttribute('aria-busy', 'true');
-      try {
-        await patch<AlertDto>(`/alerts/${id}/status`, { status: b.dataset.set });
-        st.items = st.items.filter((x) => x.id !== id);
-        draw();
-        ctx.refreshChrome();
-      } catch (e) { toast((e as Error).message); b.removeAttribute('aria-busy'); }
+      await withBusy(b, async () => {
+        try {
+          await patch<AlertDto>(`/alerts/${id}/status`, { status: b.dataset.set });
+          st.items = st.items.filter((x) => x.id !== id);
+          lastHash = hashOf(st.items, st.next);
+          draw();
+          ctx.refreshChrome();
+        } catch (e) { toast((e as Error).message); }
+      });
     }));
   }
 
@@ -84,9 +86,9 @@ export const mount: AppView['mount'] = (el, ctx) => {
     void load(true);
   }));
   $<HTMLSelectElement>('#al-type', el)!.addEventListener('change', (e) => { st.type = (e.target as HTMLSelectElement).value; void load(true); });
-  $('#read-all')!.addEventListener('click', async () => {
-    try { await post('/alerts/read-all'); void load(true); ctx.refreshChrome(); } catch (e) { toast((e as Error).message); }
-  });
+  $('#read-all')!.addEventListener('click', (ev) => withBusy(ev.currentTarget as HTMLElement, async () => {
+    try { await post('/alerts/read-all'); await load(true); ctx.refreshChrome(); } catch (e) { toast((e as Error).message); }
+  }));
   void load(true);
 
   // Auto-refresh alerts: 5 s in REAL mode, 10 s in AUTO mode; the first page only, so "load more" is not reset needlessly

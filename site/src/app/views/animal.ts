@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
 import { ApiError, collarControlApi, del, get, patch, post, type AlertDto, type AnimalDto, type CollarControlMode, type CollarDto, type EventsDto, type PenDto } from '../api';
-import { animalBadge, collarBadge, confirmDialog, controlModeLabel, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
+import { animalBadge, collarBadge, confirmDialog, controlModeLabel, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast, withBusy } from '../common';
 import { formModal } from '../forms';
 import { icon } from '../../ui/icons';
 import { enterGpsManual } from '../manual-place';
@@ -462,20 +462,22 @@ export const mount: AppView['mount'] = (el, ctx) => {
     tabGpsManual?.addEventListener('click', () => void setMode('GPS_MANUAL'));
     tabManual?.addEventListener('click', () => void setMode('MANUAL'));
 
-    $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true })));
-    $('#remove')!.addEventListener('click', async () => {
+    $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true, stay: true })));
+    $('#remove')!.addEventListener('click', async (ev) => {
       if (!await confirmDialog({ title: t('a.animal.deleteTitle'), text: t('a.animal.deleteText', { name: a.name }), confirmLabel: t('a.animal.delete'), danger: true })) return;
-      try { await del(`/animals/${a.id}`); void navigate('/app/herd', { replace: true }); } catch (e) { toast((e as Error).message); }
+      await withBusy(ev.currentTarget as HTMLElement, async () => { try { await del(`/animals/${a.id}`); void navigate('/app/herd', { replace: true }); } catch (e) { toast((e as Error).message); } });
     });
-    $('#unlink', el)?.addEventListener('click', async () => {
+    $('#unlink', el)?.addEventListener('click', async (ev) => {
       if (!await confirmDialog({ title: t('a.animal.unlinkTitle'), text: t('a.animal.unlinkText'), confirmLabel: t('a.animal.unlink'), danger: true })) return;
-      try {
-        await post(`/animals/${a.id}/unassign-collar`);
-        toast(t('a.animal.unlinkedOk'));
-        void navigate(location.pathname, { replace: true });
-      } catch (e) {
-        toast((e as Error).message);
-      }
+      await withBusy(ev.currentTarget as HTMLElement, async () => {
+        try {
+          await post(`/animals/${a.id}/unassign-collar`);
+          toast(t('a.animal.unlinkedOk'));
+          void navigate(location.pathname, { replace: true, stay: true });
+        } catch (e) {
+          toast((e as Error).message);
+        }
+      });
     });
 
     $$<HTMLElement>('[data-assign-collar]', el).forEach((btn) => btn.addEventListener('click', async () => {
@@ -484,7 +486,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       try {
         await patch(`/devices/${encodeURIComponent(devId)}`, { animalId: a.id });
         toast(t('a.animal.assignedOk'));
-        void navigate(location.pathname, { replace: true });
+        void navigate(location.pathname, { replace: true, stay: true });
       } catch (err) {
         toast(errText(err));
         btn.removeAttribute('disabled');

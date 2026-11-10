@@ -4,7 +4,7 @@ import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
 import { ApiError, del, get, patch, post, put, setSession, simApi, type AnimalDto, type CollarResponseDto, type DataMode, type FarmDto, type InvitationDto, type MembersResponse, type PenDto, type SignalLimitDto, type SimEvent, type SimSpeed, type SimulationDto } from '../api';
 import { collarResponseText, modeName, retryBusy, setSim } from '../demo';
-import { confirmDialog, copyText, errText, loadInto, offlineGuard, timeEl, toast } from '../common';
+import { confirmDialog, copyText, errText, loadInto, offlineGuard, timeEl, toast, withBusy } from '../common';
 
 type Tab = 'farm' | 'data' | 'people' | 'signals' | 'account';
 
@@ -63,8 +63,9 @@ function farmTab(el: HTMLElement, ctx: AppCtx): void {
     <label class="check"><input type="checkbox" id="fw" ${f.workerCanEditBoundaries ? raw('checked') : ''} aria-describedby="fw-h"><span>${t('a.set.workerEdit')}</span></label><p class="hint" id="fw-h">${t('a.set.workerEditHint')}</p>
     <p class="field-error" id="ferr" role="alert" hidden></p><p class="form-ok" id="fok" role="status" hidden></p>
     <button class="btn btn-primary btn-save" type="submit" data-write>${t('a.set.save')}</button></form></section>`);
-  $<HTMLFormElement>('#ff', el)!.addEventListener('submit', async (e) => {
+  $<HTMLFormElement>('#ff', el)!.addEventListener('submit', (e) => {
     e.preventDefault();
+    return withBusy($('.btn-save', el), async () => {
     const err = $('#ferr', el)!, ok = $('#fok', el)!;
     err.hidden = true; ok.hidden = true;
     const name = $<HTMLInputElement>('#fn', el)!.value.trim();
@@ -72,8 +73,10 @@ function farmTab(el: HTMLElement, ctx: AppCtx): void {
     try {
       const nf = await patch<FarmDto>(`/farms/${f.id}`, { name, description: $<HTMLInputElement>('#fd', el)!.value.trim(), timezone: $<HTMLInputElement>('#ftz', el)!.value.trim(), workerCanEditBoundaries: $<HTMLInputElement>('#fw', el)!.checked });
       Object.assign(ctx.farm, nf);
+      ctx.refreshChrome(); // sidebar farm name
       ok.textContent = t('a.set.saved'); ok.hidden = false;
     } catch (er) { err.textContent = errText(er); err.hidden = false; }
+    });
   });
 }
 
@@ -135,6 +138,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
       draw();
       try {
         const text = await fn();
+        ctx.refreshChrome(); // badge, connection counter, demo strip follow the new data mode
         if (text) msg = { text };
       } catch (e) {
         msg = { text: errText(e), error: true };
@@ -398,9 +402,9 @@ function peopleTab(el: HTMLElement, ctx: AppCtx): void {
     const reload = () => peopleTab(el, ctx);
     $$('[data-remove]', el).forEach((b) => b.addEventListener('click', async () => {
       if (!await confirmDialog({ title: t('a.set.removeTitle'), text: t('a.set.removeText', { name: b.dataset.name! }), confirmLabel: t('a.set.remove'), danger: true })) return;
-      try { await del(`/farms/${fid}/members/${b.dataset.remove}`); reload(); } catch (e) { toast(errText(e)); }
+      await withBusy(b, async () => { try { await del(`/farms/${fid}/members/${b.dataset.remove}`); reload(); } catch (e) { toast(errText(e)); } });
     }));
-    $$('[data-revoke]', el).forEach((b) => b.addEventListener('click', async () => { try { await del(`/farms/${fid}/invitations/${b.dataset.revoke}`); reload(); } catch (e) { toast(errText(e)); } }));
+    $$('[data-revoke]', el).forEach((b) => b.addEventListener('click', () => withBusy(b, async () => { try { await del(`/farms/${fid}/invitations/${b.dataset.revoke}`); reload(); } catch (e) { toast(errText(e)); } })));
     $<HTMLFormElement>('#inv', el)!.addEventListener('submit', async (e) => {
       e.preventDefault();
       const err = $('#ierr', el)!, res = $('#iresult', el)!;
@@ -448,8 +452,10 @@ function signalsTab(el: HTMLElement, ctx: AppCtx): void {
       }
       if (bad) return;
       const imp = find('IMPULSE'); if (imp) out.push(imp); // not shown, sent back unchanged
+      const sb = $('.btn-save', el) as HTMLButtonElement; sb.disabled = true; sb.setAttribute('aria-busy', 'true');
       try { await put<SignalLimitDto[]>(`/farms/${fid}/signal-limits`, out); const ok = $('#sok', el)!; ok.textContent = t('a.set.saved'); ok.hidden = false; }
       catch (er) { const se = $('#serr', el)!; se.textContent = errText(er); se.hidden = false; }
+      finally { sb.disabled = false; sb.removeAttribute('aria-busy'); }
     });
   });
 }

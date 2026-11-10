@@ -264,6 +264,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       try {
         await del(`/geofences/${pid}`);
         pens = pens.filter((x) => x.id !== pid);
+        animals.forEach((a) => { if (a.penId === pid) a.penId = null; });
         drawPens();
         drawPanel();
         toast(t('a.map.penDeleted'));

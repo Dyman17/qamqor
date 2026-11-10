@@ -263,7 +263,7 @@ export function mountDemoPanel(box: HTMLElement, host: DemoHost): { update(): vo
     });
     $$('[data-speed]', box).forEach((b) => b.addEventListener('click', () => {
       speed = Number(b.dataset.speed) as SimSpeed;
-      if (sim()?.running) void guarded(async () => { setSim(await simApi.setSpeed(farm, speed), farm); });
+      if (sim()?.running) void guarded(async () => { setSim(await simApi.setSpeed(farm, speed), farm); await refreshAll(); });
       else render(true);
     }));
   }

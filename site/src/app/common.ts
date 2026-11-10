@@ -197,3 +197,13 @@ export function offlineGuard(root: HTMLElement): () => void {
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   return () => mo.disconnect();
 }
+
+/** Runs a mutation with the button marked busy and disabled (no double submits); restores it afterwards, also on error. */
+export async function withBusy(btn: Element | null | undefined, fn: () => Promise<void>): Promise<void> {
+  const b = btn as HTMLButtonElement | null | undefined;
+  if (!b) { await fn(); return; }
+  if (b.getAttribute('aria-busy') === 'true') return;
+  b.setAttribute('aria-busy', 'true');
+  b.disabled = true;
+  try { await fn(); } finally { if (b.isConnected) { b.removeAttribute('aria-busy'); b.disabled = false; } }
+}

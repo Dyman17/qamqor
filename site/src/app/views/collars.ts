@@ -75,6 +75,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       codeInp.value = '';
       const fresh = await get<CollarDto[]>('/devices');
       renderTableAndCards(fresh);
+      ctx.refreshChrome();
     } catch (err) {
       if (errEl) {
         errEl.textContent = err instanceof ApiError && err.code === 'CONFLICT' ? t('a.cn.idTaken') : errText(err);
