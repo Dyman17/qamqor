@@ -121,7 +121,7 @@ Status: approved
 - [x] Протокол ESP32: 8-значный код, сервер возвращает код в каждом ответе — docs/architecture/device-code-protocol.md
 - [x] Сквозной тест на одноразовой базе — docs/frontend/qa/2026-11-09-e2e-demo-modes.md
 - [x] Фаза 3a (сервер): исправления ревью фазы 1 (SSE завершается по exp JWT и потере членства, GPS_LOST закрывается любым надёжным фиксом, restoreDevice после рестарта, защита OFFLINE от гонки с пингом) и режимы ошейника AUTO / GPS_MANUAL / MANUAL (`PATCH /devices/:id/control-mode`, `PUT /devices/:id/manual-position`), эскалация сигналов, повторная отдача команд (миграция `0015_control_modes`, применится на Render `prisma migrate deploy`)
-- [ ] Фаза 3b: веб и приложение: переключатель режима и перетаскивание точки животного на карте (`controlMode`, `positionSource` в DTO и потоке)
+- [x] Фаза 3b: веб и приложение: переключатель режима и перетаскивание точки животного на карте (`controlMode`, `positionSource` в DTO и потоке), физиологические нормы пульса Merck Veterinary Manual с явными допущениями, мгновенные алерты и подсказки на сайте
 
 ## Этап 6. Прошивка ESP (`esp/`)
 

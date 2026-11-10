@@ -71,8 +71,11 @@ async function run() {
     await page.setViewport({ width: 1280, height: 800 });
 
     await page.setRequestInterception(true);
+    page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+    page.on('pageerror', (err) => console.log('PAGE ERR:', err.message));
     page.on('request', (req) => {
       const url = req.url();
+      if (url.includes('/api/')) console.log('REQ:', req.method(), url);
       if (url.includes('/api/v1/auth/me')) {
         req.respond({
           status: 200,
@@ -85,13 +88,49 @@ async function run() {
           contentType: 'application/json',
           body: JSON.stringify([{ id: 'f1', name: 'Dumans farm', timezone: 'Asia/Almaty', myRole: 'OWNER', workerCanEditBoundaries: true, dataMode: 'REAL' }])
         });
+      } else if (url.includes('/api/v1/animals/a1/events')) {
+        req.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ alerts: [], signals: { day: '2026-11-10', sound: { used: 3, limit: 10 }, vibration: { used: 1, limit: 5 } } })
+        });
+      } else if (url.includes('/api/v1/animals/a1')) {
+        req.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'a1', farmId: 'f1', name: 'Esp32 (Акбас)', tag: '12345678', species: 'CATTLE', status: 'ok',
+            collarId: '12345678', lat: 43.6521, lng: 51.1584, accuracyM: 4.2, lastSeenAt: new Date().toISOString(),
+            lastHeartRate: 74, lastHeartRateAt: new Date().toISOString(),
+            controlMode: 'GPS_MANUAL',
+            controlModeSince: new Date(Date.now() - 600000).toISOString(),
+            controlModeExpiresAt: new Date(Date.now() + 7100000).toISOString(),
+            positionSource: 'MANUAL',
+            pulseThreat: {
+              level: 'NORMAL',
+              score: 18,
+              labelRu: 'В норме (покой)',
+              labelKk: 'Қалыпты (тыныш)',
+              labelEn: 'Normal (resting)',
+              normalMin: 60,
+              normalMax: 84,
+              baseline: 70,
+              deltaPercent: 6,
+              source: 'Merck Veterinary Manual (Physiologic Constants: Cattle)',
+              sourceNoteRu: 'Взрослый КРС в покое: 60–84 уд/мин (телята: 100–120 уд/мин). Пульс > 105 указывает на острый стресс / угрозу хищника.',
+              isAssumption: false
+            }
+          })
+        });
       } else if (url.includes('/api/v1/animals')) {
         req.respond({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([{
-            id: 'a1', farmId: 'f1', name: 'Esp32', tag: '12345678', species: 'CATTLE', status: 'offline',
-            collarId: '12345678', lat: null, lng: null, accuracyM: null, lastSeenAt: null
+            id: 'a1', farmId: 'f1', name: 'Esp32 (Акбас)', tag: '12345678', species: 'CATTLE', status: 'ok',
+            collarId: '12345678', lat: 43.6521, lng: 51.1584, accuracyM: 4.2, lastSeenAt: new Date().toISOString(),
+            controlMode: 'GPS_MANUAL', positionSource: 'MANUAL', lastHeartRate: 74,
+            pulseThreat: { level: 'NORMAL', score: 18, labelRu: 'В норме (покой)', normalMin: 60, normalMax: 84, baseline: 70, deltaPercent: 6 }
           }])
         });
       } else if (url.includes('/api/v1/geofences')) {
@@ -149,6 +188,13 @@ async function run() {
 
     await page.screenshot({ path: path.join(OUT_DIR, '03_desktop_map_drawing_ready.png') });
     console.log('Saved 03_desktop_map_drawing_ready.png');
+
+    // Animal Profile Test (Desktop): Merck pulse norm + 3 collar modes
+    await page.goto('http://127.0.0.1:4188/app/herd/a1', { waitUntil: 'networkidle0' });
+    await new Promise((r) => setTimeout(r, 600));
+    await page.screenshot({ path: path.join(OUT_DIR, '03b_desktop_animal_profile.png') });
+    console.log('Saved 03b_desktop_animal_profile.png');
+
     await page.close();
 
     // 2. Mobile Test (iPhone 14 / modern Android 390x844)
@@ -171,13 +217,49 @@ async function run() {
           contentType: 'application/json',
           body: JSON.stringify([{ id: 'f1', name: 'Dumans farm', timezone: 'Asia/Almaty', myRole: 'OWNER', workerCanEditBoundaries: true, dataMode: 'REAL' }])
         });
+      } else if (url.includes('/api/v1/animals/a1/events')) {
+        req.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ alerts: [], signals: { day: '2026-11-10', sound: { used: 3, limit: 10 }, vibration: { used: 1, limit: 5 } } })
+        });
+      } else if (url.includes('/api/v1/animals/a1')) {
+        req.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'a1', farmId: 'f1', name: 'Esp32 (Акбас)', tag: '12345678', species: 'CATTLE', status: 'ok',
+            collarId: '12345678', lat: 43.6521, lng: 51.1584, accuracyM: 4.2, lastSeenAt: new Date().toISOString(),
+            lastHeartRate: 74, lastHeartRateAt: new Date().toISOString(),
+            controlMode: 'GPS_MANUAL',
+            controlModeSince: new Date(Date.now() - 600000).toISOString(),
+            controlModeExpiresAt: new Date(Date.now() + 7100000).toISOString(),
+            positionSource: 'MANUAL',
+            pulseThreat: {
+              level: 'NORMAL',
+              score: 18,
+              labelRu: 'В норме (покой)',
+              labelKk: 'Қалыпты (тыныш)',
+              labelEn: 'Normal (resting)',
+              normalMin: 60,
+              normalMax: 84,
+              baseline: 70,
+              deltaPercent: 6,
+              source: 'Merck Veterinary Manual (Physiologic Constants: Cattle)',
+              sourceNoteRu: 'Взрослый КРС в покое: 60–84 уд/мин (телята: 100–120 уд/мин). Пульс > 105 указывает на острый стресс / угрозу хищника.',
+              isAssumption: false
+            }
+          })
+        });
       } else if (url.includes('/api/v1/animals')) {
         req.respond({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([{
-            id: 'a1', farmId: 'f1', name: 'Esp32', tag: '12345678', species: 'CATTLE', status: 'offline',
-            collarId: '12345678', lat: null, lng: null, accuracyM: null, lastSeenAt: null
+            id: 'a1', farmId: 'f1', name: 'Esp32 (Акбас)', tag: '12345678', species: 'CATTLE', status: 'ok',
+            collarId: '12345678', lat: 43.6521, lng: 51.1584, accuracyM: 4.2, lastSeenAt: new Date().toISOString(),
+            controlMode: 'GPS_MANUAL', positionSource: 'MANUAL', lastHeartRate: 74,
+            pulseThreat: { level: 'NORMAL', score: 18, labelRu: 'В норме (покой)', normalMin: 60, normalMax: 84, baseline: 70, deltaPercent: 6 }
           }])
         });
       } else if (url.includes('/api/v1/geofences')) {
@@ -231,6 +313,12 @@ async function run() {
 
     await mobilePage.screenshot({ path: path.join(OUT_DIR, '06_mobile_map_drawing_ready.png') });
     console.log('Saved 06_mobile_map_drawing_ready.png');
+
+    // Animal Profile Test (Mobile): Merck pulse norm + 3 collar modes
+    await mobilePage.goto('http://127.0.0.1:4188/app/herd/a1', { waitUntil: 'networkidle0' });
+    await new Promise((r) => setTimeout(r, 600));
+    await mobilePage.screenshot({ path: path.join(OUT_DIR, '06b_mobile_animal_profile.png') });
+    console.log('Saved 06b_mobile_animal_profile.png');
 
     await mobilePage.close();
   } finally {

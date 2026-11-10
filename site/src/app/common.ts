@@ -64,10 +64,17 @@ function animalBadgeBase(a: AnimalDto): Safe {
 export function pulseThreatBadge(t?: PulseThreatDto | null): Safe {
   if (!t || t.level === 'UNKNOWN') return statusBadge('none', 'Нет данных');
   const label = getLang() === 'en' ? t.labelEn : getLang() === 'kk' ? t.labelKk : t.labelRu;
-  if (t.level === 'CRITICAL') return statusBadge('danger', label);
-  if (t.level === 'ELEVATED') return statusBadge('warning', label);
-  if (t.level === 'LOW') return statusBadge('warning', label);
-  return statusBadge('online', label);
+  const tip = t.sourceNoteRu ? `${label} (${t.source ?? 'Merck'}). ${t.sourceNoteRu}` : `${label} (${t.source ?? 'Merck'})`;
+  if (t.level === 'CRITICAL') {
+    return html`<span class="badge badge-danger pulse-crit-badge" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
+  }
+  if (t.level === 'ELEVATED') {
+    return html`<span class="badge badge-warn" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
+  }
+  if (t.level === 'LOW') {
+    return html`<span class="badge badge-warn" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
+  }
+  return html`<span class="badge badge-online" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
 }
 
 export function collarBadge(c: CollarDto): Safe {
@@ -156,6 +163,7 @@ export async function loadInto<T>(el: HTMLElement, loader: () => Promise<T>, ren
     el.innerHTML = '';
     render(d);
   } catch (e) {
+    console.error('loadInto failed:', e);
     window.clearTimeout(slow);
     if (!alive() || (e as Error).name === 'AbortError') return;
     el.innerHTML = errorState(e).s;

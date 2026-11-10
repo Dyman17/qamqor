@@ -2,7 +2,7 @@ import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
-import { ApiError, del, get, patch, post, type AlertDto, type AnimalDto, type CollarDto, type EventsDto, type PenDto } from '../api';
+import { ApiError, collarControlApi, del, get, patch, post, type AlertDto, type AnimalDto, type CollarControlMode, type CollarDto, type EventsDto, type PenDto } from '../api';
 import { animalBadge, confirmDialog, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
 import { formModal } from '../forms';
 import { icon } from '../../ui/icons';
@@ -55,6 +55,17 @@ export async function openAnimalForm(ctx: AppCtx, animal: AnimalDto | undefined,
 
 const alertLabel = (a: AlertDto) => t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST');
 
+function formatTtl(iso?: string | null): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return '0 мин';
+  const min = Math.ceil(ms / 60000);
+  if (min < 60) return `${min} мин`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+}
+
 export const mount: AppView['mount'] = (el, ctx) => {
   ctx.setTitle(t('a.animal.title'));
   ctx.setActions('');
@@ -63,6 +74,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
   const alive = () => el.isConnected;
   let pollTimer: number | null = null;
   let eventSource: EventSource | null = null;
+  let lastCritAlertTime = 0;
 
   const pulseInfo = (hr: number | null | undefined, at: string | null | undefined) => {
     const isLive = at ? Date.now() - new Date(at).getTime() < 15000 : false;
@@ -75,9 +87,30 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
   const threatDetails = (a: AnimalDto): Safe => {
     const pt = a.pulseThreat;
-    if (!pt || pt.level === 'UNKNOWN') return html`<span class="caption muted">Норма вида (${speciesName(a.species)}): ${pt?.normalMin ?? '—'}–${pt?.normalMax ?? '—'} уд/мин</span>`;
+    if (!pt || pt.level === 'UNKNOWN') {
+      return html`
+        <div class="pulse-source-box">
+          <div class="pulse-source-head">
+            <span>Норма вида (${speciesName(a.species)}): <strong>${pt?.normalMin ?? '—'}–${pt?.normalMax ?? '—'} уд/мин</strong></span>
+            <span class="pulse-source-tag">${pt?.source ?? 'Merck'}</span>
+          </div>
+          <span class="caption muted">Физиологические показатели покоя (Merck Veterinary Manual).</span>
+        </div>`;
+    }
     const sign = pt.deltaPercent > 0 ? '+' : '';
-    return html`<span class="caption muted">Норма: <strong class="num">${pt.normalMin}–${pt.normalMax}</strong> уд/мин · База: <strong class="num">${pt.baseline}</strong> (${sign}${pt.deltaPercent}%)</span>`;
+    const isCrit = pt.level === 'CRITICAL';
+    const isElev = pt.level === 'ELEVATED';
+    return html`
+      <div class="pulse-source-box" style="${isCrit ? 'border-color:#fca5a5;background:#fff5f5;' : isElev ? 'border-color:#fed7aa;background:#fffaf0;' : ''}">
+        <div class="pulse-source-head">
+          <span>Норма: <strong class="num">${pt.normalMin}–${pt.normalMax}</strong> уд/мин · База: <strong class="num">${pt.baseline}</strong> (${sign}${pt.deltaPercent}%)</span>
+          <span class="pulse-source-tag ${pt.isAssumption ? 'is-assumption' : ''}">
+            ${pt.source ?? 'Merck Veterinary Manual'}${pt.isAssumption ? ' (допущение)' : ''}
+          </span>
+        </div>
+        ${pt.sourceNoteRu ? html`<p class="caption muted" style="margin:0.25rem 0 0 0;font-size:0.8rem;">${pt.sourceNoteRu}</p>` : ''}
+        ${isCrit ? html`<div style="margin-top:0.4rem;font-weight:600;color:#991b1b;display:flex;align-items:center;gap:0.35rem;font-size:0.84rem;">${raw(icon('warning-circle', 16))} Острый стресс / угроза хищника или бегство! Проверьте животное на пастбище!</div>` : ''}
+      </div>`;
   };
 
   const zoneBadge = (zone?: string | null, inFence?: boolean | null): Safe => {
@@ -116,6 +149,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const pi = pulseInfo(a.lastHeartRate, a.lastHeartRateAt);
     const freeCollars = collars.filter((c) => !c.animalId);
     const collar = a.collarId ? collars.find((c) => c.deviceId === a.collarId) : undefined;
+    const currentMode: CollarControlMode = a.controlMode ?? collar?.controlMode ?? 'AUTO';
 
     setHtml(el, html`
       <p><a href="/app/herd">${t('a.animal.back')}</a></p>
@@ -175,23 +209,33 @@ export const mount: AppView['mount'] = (el, ctx) => {
           </section>
         ` : ''}
 
-        <!-- 4. Единый блок управления: СМЕНА РЕЖИМОВ (Автоматический / Ручной) -->
+        <!-- 4. Единый блок управления: СМЕНА РЕЖИМОВ (AUTO / GPS_MANUAL / MANUAL) -->
         <section class="panel-block" id="ctrl-mode-card" style="grid-column: 1 / -1;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-2);">
-            <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
-            <!-- Переключатель режимов -->
-            <div class="tabs" role="tablist" style="margin:0;gap:4px;">
-              <button type="button" class="tab" id="mode-tab-auto" role="tab" aria-current="true" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+              <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;margin:0;">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
+              <div id="mode-ttl-wrap">
+                ${a.controlModeExpiresAt && currentMode !== 'AUTO' ? html`
+                  <span class="mode-ttl-badge" title="Срок действия">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>
+                ` : ''}
+              </div>
+            </div>
+            <!-- Переключатель 3 режимов -->
+            <div class="tabs" role="tablist" style="margin:0;gap:4px;flex-wrap:wrap;">
+              <button type="button" class="tab" id="mode-tab-auto" role="tab" aria-current="${currentMode === 'AUTO' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
                 ${raw(icon('map-trifold', 18))} ${t('a.animal.modeAuto')}
               </button>
-              <button type="button" class="tab" id="mode-tab-manual" role="tab" aria-current="false" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+              <button type="button" class="tab" id="mode-tab-gps-manual" role="tab" aria-current="${currentMode === 'GPS_MANUAL' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+                ${raw(icon('crosshair-simple', 18))} ${t('a.animal.modeGpsManual')}
+              </button>
+              <button type="button" class="tab" id="mode-tab-manual" role="tab" aria-current="${currentMode === 'MANUAL' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
                 ${raw(icon('speaker-high', 18))} ${t('a.animal.modeManual')}
               </button>
             </div>
           </div>
 
           <!-- Режим 1: Автоматический (Геозона) -->
-          <div id="mode-content-auto" style="display:block;">
+          <div id="mode-content-auto" style="display:${currentMode === 'AUTO' ? 'block' : 'none'};">
             <p class="caption muted">${t('a.animal.modeAutoHint')}</p>
             <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin:0.75rem 0;">
               <div id="zone-wrap">${zoneBadge(null, a.status !== 'danger')}</div>
@@ -202,8 +246,19 @@ export const mount: AppView['mount'] = (el, ctx) => {
             </div>
           </div>
 
-          <!-- Режим 2: Ручное управление (Оператор) -->
-          <div id="mode-content-manual" style="display:none;">
+          <!-- Режим 2: GPS вручную (Перетаскивание точки оператором) -->
+          <div id="mode-content-gps-manual" style="display:${currentMode === 'GPS_MANUAL' ? 'block' : 'none'};">
+            <p class="caption muted">${t('a.animal.modeGpsManualHint')}</p>
+            <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin:0.75rem 0;">
+              <a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}&drag=1" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;">
+                ${raw(icon('crosshair-simple', 18))} ${t('a.animal.dragOnMap')}
+              </a>
+              <span class="caption muted">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</span>
+            </div>
+          </div>
+
+          <!-- Режим 3: Ручной стимул (Оператор) -->
+          <div id="mode-content-manual" style="display:${currentMode === 'MANUAL' ? 'block' : 'none'};">
             <p class="caption muted">${t('a.animal.modeManualHint')}</p>
             <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;">
               <button type="button" class="btn btn-secondary btn-sm" id="btn-spk" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('speaker-high', 18))} ${t('a.animal.spkBtn')}</button>
@@ -265,11 +320,25 @@ export const mount: AppView['mount'] = (el, ctx) => {
               a.lastHeartRate = msg.heartRate;
               a.lastHeartRateAt = msg.lastHeartRateAt || msg.serverTime;
             }
-            if (msg.pulseThreat) a.pulseThreat = msg.pulseThreat;
+            if (msg.pulseThreat) {
+              a.pulseThreat = msg.pulseThreat;
+              if (msg.pulseThreat.level === 'CRITICAL') {
+                const now = Date.now();
+                if (now - lastCritAlertTime > 25000) {
+                  lastCritAlertTime = now;
+                  if ('vibrate' in navigator) { try { navigator.vibrate([150, 75, 150]); } catch {} }
+                  toast(`⚠️ ${a.name}: Опасность! Пульс ${msg.heartRate} уд/мин (Острый стресс!)`);
+                }
+              }
+            }
             if (msg.latitude != null) a.lat = msg.latitude;
             if (msg.longitude != null) a.lng = msg.longitude;
             if (msg.accuracyM != null) a.accuracyM = msg.accuracyM;
             if (msg.lastSeenAt) a.lastSeenAt = msg.lastSeenAt;
+            if (msg.controlMode && msg.controlMode !== a.controlMode) {
+              a.controlMode = msg.controlMode;
+              updateModeUi(msg.controlMode);
+            }
 
             applyUpdate(a, msg.zone, msg.inFence);
           }
@@ -330,37 +399,54 @@ export const mount: AppView['mount'] = (el, ctx) => {
     if (btnBuz) btnBuz.addEventListener('click', () => void triggerSignal('BUZZER', btnBuz));
     if (btnVib) btnVib.addEventListener('click', () => void triggerSignal('VIBRATION', btnVib));
 
-    // 4. Переключатель режимов: Автоматический (Геозона) <-> Ручной (Оператор)
+    // 4. Переключатель 3 режимов: AUTO / GPS_MANUAL / MANUAL
     const tabAuto = $<HTMLButtonElement>('#mode-tab-auto', el);
+    const tabGpsManual = $<HTMLButtonElement>('#mode-tab-gps-manual', el);
     const tabManual = $<HTMLButtonElement>('#mode-tab-manual', el);
     const contentAuto = $('#mode-content-auto', el);
+    const contentGpsManual = $('#mode-content-gps-manual', el);
     const contentManual = $('#mode-content-manual', el);
+    const ttlWrap = $('#mode-ttl-wrap', el);
 
-    const setMode = (m: 'AUTO' | 'MANUAL') => {
-      if ('vibrate' in navigator) { try { navigator.vibrate([18]); } catch {} }
-      try { localStorage.setItem('qamqor_ctrl_mode_' + id, m); } catch {}
-      if (tabAuto && tabManual && contentAuto && contentManual) {
-        if (m === 'AUTO') {
-          tabAuto.setAttribute('aria-current', 'true');
-          tabManual.setAttribute('aria-current', 'false');
-          contentAuto.style.display = 'block';
-          contentManual.style.display = 'none';
+    const updateModeUi = (m: CollarControlMode) => {
+      tabAuto?.setAttribute('aria-current', m === 'AUTO' ? 'true' : 'false');
+      tabGpsManual?.setAttribute('aria-current', m === 'GPS_MANUAL' ? 'true' : 'false');
+      tabManual?.setAttribute('aria-current', m === 'MANUAL' ? 'true' : 'false');
+
+      if (contentAuto) contentAuto.style.display = m === 'AUTO' ? 'block' : 'none';
+      if (contentGpsManual) contentGpsManual.style.display = m === 'GPS_MANUAL' ? 'block' : 'none';
+      if (contentManual) contentManual.style.display = m === 'MANUAL' ? 'block' : 'none';
+
+      if (ttlWrap) {
+        if (m !== 'AUTO' && a.controlModeExpiresAt) {
+          setHtml(ttlWrap, html`<span class="mode-ttl-badge" title="Срок действия">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>`);
         } else {
-          tabAuto.setAttribute('aria-current', 'false');
-          tabManual.setAttribute('aria-current', 'true');
-          contentAuto.style.display = 'none';
-          contentManual.style.display = 'block';
+          ttlWrap.innerHTML = '';
         }
       }
     };
 
-    try {
-      const saved = localStorage.getItem('qamqor_ctrl_mode_' + id);
-      if (saved === 'MANUAL') setMode('MANUAL');
-    } catch {}
+    const setMode = async (m: CollarControlMode) => {
+      if (!a.collarId) {
+        toast(t('a.animal.noCollarNotice'));
+        return;
+      }
+      if ('vibrate' in navigator) { try { navigator.vibrate([18]); } catch {} }
+      try {
+        const res = await collarControlApi.setMode(a.collarId, m);
+        a.controlMode = m;
+        a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
+        a.positionSource = res.collar.positionSource ?? (m === 'GPS_MANUAL' ? 'MANUAL' : 'GPS');
+        updateModeUi(m);
+        toast(t('a.animal.modeChanged', { mode: m }));
+      } catch (e) {
+        toast(errText(e));
+      }
+    };
 
-    tabAuto?.addEventListener('click', () => setMode('AUTO'));
-    tabManual?.addEventListener('click', () => setMode('MANUAL'));
+    tabAuto?.addEventListener('click', () => void setMode('AUTO'));
+    tabGpsManual?.addEventListener('click', () => void setMode('GPS_MANUAL'));
+    tabManual?.addEventListener('click', () => void setMode('MANUAL'));
 
     $('#edit')!.addEventListener('click', () => void openAnimalForm(ctx, a, () => void navigate(location.pathname, { replace: true })));
     $('#remove')!.addEventListener('click', async () => {

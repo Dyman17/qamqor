@@ -5,6 +5,8 @@ export type DataMode = 'REAL' | 'MANUAL' | 'AUTO';
 export type Role = 'OWNER' | 'WORKER';
 export type AnimalStatus = 'ok' | 'danger' | 'warning' | 'offline';
 export type ConnState = 'ONLINE' | 'OFFLINE' | 'UNASSIGNED';
+export type CollarControlMode = 'AUTO' | 'GPS_MANUAL' | 'MANUAL';
+export type PositionSource = 'GPS' | 'MANUAL';
 export interface UserDto { id: string; email: string; fullName: string; phone?: string }
 export interface MembershipDto { farmId: string; farmName: string; role: Role }
 export interface AuthResponse { token: string; user: UserDto; memberships: MembershipDto[] }
@@ -21,6 +23,9 @@ export interface PulseThreatDto {
   normalMax: number;
   baseline: number;
   deltaPercent: number;
+  source?: string;
+  sourceNoteRu?: string;
+  isAssumption?: boolean;
 }
 
 export interface AnimalDto {
@@ -28,8 +33,26 @@ export interface AnimalDto {
   penId: string | null; collarId: string | null; lat: number | null; lng: number | null; accuracyM: number | null; lastSeenAt: string | null; status: AnimalStatus; isDemo?: boolean;
   lastHeartRate?: number | null; lastHeartRateAt?: string | null;
   pulseThreat?: PulseThreatDto | null;
+  controlMode?: CollarControlMode | null;
+  controlModeSince?: string | null;
+  controlModeExpiresAt?: string | null;
+  positionSource?: PositionSource;
 }
-export interface CollarDto { deviceId: string; code?: string | null; status: ConnState; animalId: string | null; animalName: string | null; signalRssi: number | null; firmwareVersion: string | null; lastSeenAt: string | null; isDemo?: boolean }
+export interface CollarDto {
+  deviceId: string;
+  code?: string | null;
+  status: ConnState;
+  animalId: string | null;
+  animalName: string | null;
+  signalRssi: number | null;
+  firmwareVersion: string | null;
+  lastSeenAt: string | null;
+  isDemo?: boolean;
+  controlMode?: CollarControlMode;
+  controlModeSince?: string | null;
+  controlModeExpiresAt?: string | null;
+  positionSource?: PositionSource;
+}
 export interface PenDto { id: string; farmId: string; name: string; color: string; polygon: { type: 'Polygon'; coordinates: number[][][] }; animalsCount: number; areaHa: number; isDemo?: boolean }
 export type AlertType = 'GEOFENCE_BREACH' | 'GEOFENCE_RETURN' | 'DEVICE_OFFLINE' | 'DEVICE_RESTORED' | 'SIGNAL_LIMIT_REACHED' | 'GPS_LOST';
 export interface AlertDto {
@@ -134,4 +157,20 @@ export const simApi = {
   addAnimal: (farm: string, p: { name?: string; species?: AnimalDto['species'] }) => post<AnimalDto>(`/farms/${farm}/simulate/animals`, p),
   telemetry: (farm: string, p: { animalId: string; lat: number; lng: number; accuracyM?: number; speedKmh?: number }) => post<CollarResponseDto>(`/farms/${farm}/simulate/telemetry`, p),
   event: (farm: string, p: { animalId: string; event: SimEvent }) => post<CollarResponseDto | { ok: true }>(`/farms/${farm}/simulate/events`, p),
+};
+
+// ---- collar control modes (docs/architecture/api-contract.md) ----
+export const collarControlApi = {
+  setMode: (deviceId: string, mode: CollarControlMode) =>
+    patch<{ collar: CollarDto }>(`/devices/${encodeURIComponent(deviceId)}/control-mode`, { mode }),
+  setManualPosition: (deviceId: string, lat: number, lng: number) =>
+    put<{
+      deviceId: string;
+      controlMode: CollarControlMode;
+      positionSource: PositionSource;
+      position: { latitude: number; longitude: number; at: string };
+      zone: string;
+      inFence: boolean | null;
+      distanceToBorderMeters: number | null;
+    }>(`/devices/${encodeURIComponent(deviceId)}/manual-position`, { latitude: lat, longitude: lng }),
 };

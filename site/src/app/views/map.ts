@@ -2,7 +2,7 @@ import { $, $$, html, raw, setHtml, type Safe } from '../../dom';
 import { t } from '../../i18n';
 import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
-import { del, get, post, request, type AnimalDto, type PenDto } from '../api';
+import { collarControlApi, del, get, post, request, type AnimalDto, type PenDto, type PulseThreatDto } from '../api';
 import { demoTag } from '../demo';
 import { absTime, animalBadge, confirmDialog, emptyState, errorState, errText, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
 import { formModal } from '../forms';
@@ -137,14 +137,43 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   function drawPanel(): void {
     const sel = animals.find((a) => a.id === selected);
     if (sel) {
+      const isManualGps = sel.controlMode === 'GPS_MANUAL' || sel.positionSource === 'MANUAL';
       panelBody.innerHTML = html`
         <button type="button" class="btn btn-ghost btn-sm" id="back">${t('a.map.back')}</button>
-        <h2 class="title-2">${sel.name} · ${sel.tag}</h2>
-        <p>${animalBadge(sel)}</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+          <h2 class="title-2" style="margin:0;">${sel.name} · ${sel.tag}</h2>
+          ${isManualGps
+            ? html`<span class="badge badge-warn" title="${t('a.map.dragHintManual')}">${t('a.map.posSourceManual')}</span>`
+            : html`<span class="badge badge-sm">${t('a.map.posSourceGps')}</span>`}
+        </div>
+        <p style="margin:0.25rem 0;">${animalBadge(sel)}</p>
         <p class="muted">${speciesName(sel.species)} · ${sel.penId ? pens.find((p) => p.id === sel.penId)?.name ?? '' : t('a.map.noPen')}</p>
         <p>${sel.lastHeartRate != null ? html`${pulseThreatBadge(sel.pulseThreat)} <span class="num">${sel.lastHeartRate} уд/мин</span> · ` : ''}<span class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</span></p>
-        <p><a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a></p>`.s;
+        ${sel.pulseThreat?.sourceNoteRu ? html`<p class="caption muted" style="font-size:0.78rem;background:var(--surface-1);padding:0.4rem 0.6rem;border-radius:var(--r-card);border:1px solid var(--line-soft);margin:0.4rem 0;">${sel.pulseThreat.sourceNoteRu}</p>` : ''}
+        ${isManualGps ? html`<p class="caption" style="color:var(--warning);font-weight:600;margin:0.4rem 0;">${t('a.map.dragHintManual')}</p>` : ''}
+        <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+          <a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a>
+          ${sel.collarId ? html`
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ctrl-mode" style="display:inline-flex;align-items:center;gap:0.35rem;">
+              ${isManualGps ? raw(icon('map-trifold', 16) + ' Включить AUTO') : raw(icon('crosshair-simple', 16) + ' GPS вручную')}
+            </button>` : ''}
+        </div>`.s;
       $('#back', panelBody)!.addEventListener('click', () => { selected = null; drawPanel(); renderMarkers(); });
+      $('#btn-toggle-ctrl-mode', panelBody)?.addEventListener('click', async () => {
+        if (!sel.collarId) return;
+        const nextMode = isManualGps ? 'AUTO' : 'GPS_MANUAL';
+        try {
+          const res = await collarControlApi.setMode(sel.collarId, nextMode);
+          sel.controlMode = nextMode;
+          sel.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
+          sel.positionSource = nextMode === 'GPS_MANUAL' ? 'MANUAL' : 'GPS';
+          toast(t('a.animal.modeChanged', { mode: nextMode }));
+          drawPanel();
+          renderMarkers();
+        } catch (e) {
+          toast(errText(e));
+        }
+      });
       return;
     }
     const out = animals.filter((a) => a.status === 'danger').length;
@@ -244,7 +273,8 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   function markerEl(a: AnimalDto): HTMLElement {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `amark ${statusClass(a)}${a.isDemo ? ' demo' : ''}${a.id === selected ? ' sel' : ''}`;
+    const isDraggable = a.controlMode === 'GPS_MANUAL' || (dragOn && !!a.isDemo);
+    b.className = `amark ${statusClass(a)}${a.isDemo ? ' demo' : ''}${a.id === selected ? ' sel' : ''}${isDraggable ? ' draggable' : ''}`;
     b.setAttribute('aria-label', `${a.name}${a.isDemo ? ` (${t('a.demo.tag')})` : ''}, ${a.status === 'danger' ? t('a.st.danger') : a.status === 'offline' ? t('a.st.offline') : t('a.st.ok')}`);
     b.addEventListener('click', (e) => { e.stopPropagation(); select(a.id, false); });
     return b;
@@ -257,11 +287,31 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     const pos = animals.filter((a) => a.lat != null && a.lng != null);
     const cluster = pos.length > CLUSTER_MIN && map.getZoom() < 16;
     const add = (lng: number, lat: number, node: HTMLElement, id?: string) => {
-      const canDrag = dragOn && !!id && !!animals.find((x) => x.id === id)?.isDemo;
+      const aObj = animals.find((x) => x.id === id);
+      const isGpsManual = aObj?.controlMode === 'GPS_MANUAL';
+      const isDemoDrag = dragOn && !!aObj?.isDemo;
+      const canDrag = isDemoDrag || isGpsManual;
       const mk = new ML!.Marker({ element: node, draggable: canDrag }).setLngLat([lng, lat]).addTo(map!);
       if (canDrag) {
         mk.on('dragstart', () => { dragging = true; });
-        mk.on('dragend', () => { dragging = false; const p = mk.getLngLat(); dragDrop(id!, p.lng, p.lat); });
+        mk.on('dragend', async () => {
+          dragging = false;
+          const p = mk.getLngLat();
+          if (isGpsManual && aObj?.collarId) {
+            try {
+              await collarControlApi.setManualPosition(aObj.collarId, p.lat, p.lng);
+              aObj.lat = p.lat;
+              aObj.lng = p.lng;
+              aObj.positionSource = 'MANUAL';
+              toast(t('a.map.markerMoved'));
+              if (selected === aObj.id) drawPanel();
+            } catch (err) {
+              toast(errText(err));
+            }
+          } else {
+            dragDrop(id!, p.lng, p.lat);
+          }
+        });
       }
       markers.push(mk);
     };
@@ -637,6 +687,15 @@ export const mount: AppView['mount'] = async (el, ctx) => {
 
   // Live SSE stream for instant sub-second animal movements and pulse on the tactical map
   let mapEventSource: EventSource | null = null;
+  let lastPulseAlertAt = 0;
+  function notifyCriticalPulse(name: string, bpm: number, pt?: PulseThreatDto | null) {
+    const now = Date.now();
+    if (now - lastPulseAlertAt < 25000) return;
+    lastPulseAlertAt = now;
+    if ('vibrate' in navigator) { try { navigator.vibrate([200, 100, 200]); } catch {} }
+    toast(`⚠️ ${name}: Тревога пульса! ${bpm} уд/мин (${pt?.labelRu ?? 'Острый стресс / угроза'})`);
+  }
+
   try {
     mapEventSource = new EventSource('/api/v1/device/stream');
     mapEventSource.onmessage = (evt) => {
@@ -653,6 +712,12 @@ export const mount: AppView['mount'] = async (el, ctx) => {
             if (msg.heartRate != null) target.lastHeartRate = msg.heartRate;
             if (msg.pulseThreat) target.pulseThreat = msg.pulseThreat;
             if (msg.lastSeenAt) target.lastSeenAt = msg.lastSeenAt;
+            if (msg.controlMode) target.controlMode = msg.controlMode;
+            if (msg.positionSource) target.positionSource = msg.positionSource;
+
+            if (msg.pulseThreat?.level === 'CRITICAL') {
+              notifyCriticalPulse(target.name, msg.heartRate ?? 0, msg.pulseThreat);
+            }
 
             if (selected === target.id) drawPanel();
             renderMarkers();

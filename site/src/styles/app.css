@@ -489,3 +489,103 @@ html[data-motion="on"] .amark.out { animation: ring 1.4s ease-out 3; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Phase 3b: Pulse threat and collar control mode additions */
+.pulse-crit-badge {
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  font-weight: 700;
+  animation: pulse-crit-glow 1.4s ease-in-out infinite;
+}
+.pulse-crit-badge .dot {
+  background: #dc2626;
+  box-shadow: 0 0 8px #ef4444;
+}
+@keyframes pulse-crit-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2); }
+}
+
+.pulse-source-box {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--surface-1);
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.pulse-source-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+.pulse-source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 7px;
+  background: var(--surface-2-white);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-chip);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.pulse-source-tag.is-assumption {
+  color: var(--warning, #b45309);
+  border-color: #fde68a;
+  background: #fef3c7;
+}
+
+.mode-ttl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 3px 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.amark.draggable {
+  cursor: grab !important;
+  touch-action: none;
+  box-shadow: 0 0 0 2px var(--surface-2-white), 0 0 0 4px var(--primary);
+}
+.amark.draggable:active {
+  cursor: grabbing !important;
+}
+
+.map-live-alert {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.1rem;
+  background: #fff;
+  color: #991b1b;
+  border: 1.5px solid #f87171;
+  border-radius: var(--r-chip);
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.2);
+  font-size: 0.9rem;
+  font-weight: 600;
+  max-width: 90%;
+  animation: slide-down-fade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slide-down-fade {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+

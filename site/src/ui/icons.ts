@@ -28,8 +28,10 @@ import i_pencil_simple from '@phosphor-icons/core/assets/regular/pencil-simple.s
 import i_trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 import i_arrow_u_up_left from '@phosphor-icons/core/assets/regular/arrow-u-up-left.svg?raw';
 import i_check from '@phosphor-icons/core/assets/regular/check.svg?raw';
+import i_clock from '@phosphor-icons/core/assets/regular/clock.svg?raw';
 
 const RAW: Record<string, string> = {
+  'clock': i_clock,
   'arrow-u-up-left': i_arrow_u_up_left,
   'check': i_check,
   'pencil-simple': i_pencil_simple,
