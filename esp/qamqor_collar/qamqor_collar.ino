@@ -2,11 +2,12 @@
 // Qamqor smart collar firmware (ESP32)
 // Архитектура: ESP32 — исполнитель датчиков и актуаторов.
 // Вся бизнес-логика, геозоны и сценарии находятся на сервере.
+// Реальный Wi-Fi вписывается ТОЛЬКО в git-ignored копию esp/local/... (см. esp/README.md).
 // =====================================================================================
 
 // ---------- НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ ----------
-#define WIFI_SSID "DD"
-#define WIFI_PASS "dddddddd"
+#define WIFI_SSID "YOUR_WIFI"
+#define WIFI_PASS "YOUR_PASSWORD"
 #define DEVICE_CODE "12345678"
 // -------------------------------------------
 
@@ -20,6 +21,7 @@
 #include <TinyGPSPlus.h>
 #include <Wire.h>
 #include <time.h>
+#include "esp_heap_caps.h"
 #include "MAX30105.h"
 #include "heartRate.h"
 #include "driver/i2s.h"
@@ -37,15 +39,32 @@
 #define PIN_I2S_DIN 27
 
 // ---------- Тайминги ----------
-#define SEND_INTERVAL_SEC 1          // Опрос строго каждую секунду
+#define FIRST_INTERVAL_SEC 5         // до первого успешного ответа
+#define DEFAULT_INTERVAL_SEC 300     // если сервер не прислал nextInterval
+#define MIN_INTERVAL_SEC 1
+#define MAX_INTERVAL_SEC 3600
+#define BACKOFF_START_SEC 2          // сеть/5xx: 2, 4, 8 ... до 60
+#define BACKOFF_MAX_SEC 60
+#define RETRY_400_SEC 60
+#define RETRY_AUTH_SEC 300           // 401 / 403
+#define RETRY_429_MIN_SEC 5
+#define RETRY_429_MAX_SEC 3600
+#define KEEPALIVE_MAX_INTERVAL_SEC 15  // TLS-соединение держим, только если следующий пинг не позже
 #define GPS_MAX_AGE_MS 10000
-#define HTTP_TIMEOUT_MS 15000
-#define WIFI_CONNECT_TIMEOUT_MS 20000
-#define NTP_WAIT_MS 15000
+#define HTTP_TIMEOUT_MS 25000        // холодный старт Render до ~30 с
+#define WIFI_WAIT_MS 8000
+#define WIFI_FAILS_BEFORE_FULL_RESET 3
 #define ACCURACY_PER_HDOP_M 5.0
 #define ACCURACY_NO_FIX_M 999.0
 #define AUDIO_RATE 16000
 #define AUDIO_AMPLITUDE 9000
+
+// ---------- Ограничения актуаторов (безопасность животного, независимо от сервера) ----------
+#define SPEAKER_MAX_MS 5000          // динамик: не дольше 5 с на команду
+#define BUZZER_MAX_MS 5000           // зуммер: не дольше 5 с на команду
+#define VIB_WINDOW_SEC 30            // вибромотор: не более VIB_BUDGET_MS в скользящем окне 30 с
+#define VIB_BUDGET_MS 5000
+#define VIB_MIN_USEFUL_MS 50
 
 // ---------- Корневой сертификат GTS Root R4 ----------
 static const char ROOT_CA_PEM[] = R"PEM(
@@ -76,7 +95,7 @@ struct Snapshot {
   int heartRate;
 };
 
-// Пакет прямого управления актуаторами с сервера
+// Запрос на включение актуаторов из одного ответа сервера (длительности в мс)
 struct ActuatorCommand {
   bool has;
   uint16_t speakerHz;
@@ -91,12 +110,19 @@ static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static Snapshot g_snap = {false, false, 0, 0, ACCURACY_NO_FIX_M, 0, -1, -1, 0};
 static ActuatorCommand g_pending = {false, 0, 0, 0, 0, 0};
 
-// Времена автоматического выключения каждого актуатора (мс)
+// Состояние актуаторов (трогает только Core 1: applyActuators/audioPump)
+static bool g_speakerActive = false;
 static uint32_t g_speakerOffMs = 0;
 static uint16_t g_speakerHz = 0;
 static uint16_t g_speakerVolume = AUDIO_AMPLITUDE;
+static bool g_buzzerActive = false;
 static uint32_t g_buzzerOffMs = 0;
-static uint32_t g_vibratorOffMs = 0;
+static bool g_vibActive = false;
+static uint32_t g_vibOffMs = 0;
+
+// Учёт времени вибрации по секундным корзинам (скользящее окно VIB_WINDOW_SEC)
+static uint32_t g_vibBucketSec[VIB_WINDOW_SEC];
+static uint32_t g_vibBucketMs[VIB_WINDOW_SEC];
 
 // ---------- Датчики (Core 1) ----------
 static TinyGPSPlus gps;
@@ -125,14 +151,14 @@ static void pulseTick() {
       if (lastBeatMs != 0) {
         float bpm = 60000.0f / (float)(now - lastBeatMs);
         if (bpm >= 45 && bpm <= 190) {
-          // Если это первый замер — сразу берем точное значение без долгого ожидания
+          // Первый замер берём сразу, дальше сглаживание 0.5/0.5
           if (beatAvg <= 0) {
             beatAvg = bpm;
           } else {
             beatAvg = 0.5f * beatAvg + 0.5f * bpm;
           }
           lastGoodBeatMs = now;
-          Serial.printf("[pulse] Удар! BPM: %.0f (IR: %ld)\n", beatAvg, ir);
+          Serial.printf("[pulse] beat, BPM %.0f (IR %ld)\n", beatAvg, ir);
         }
       }
       lastBeatMs = now;
@@ -209,7 +235,7 @@ static void audioPump() {
     if (g_aoff < g_alen) return;
   }
   g_alen = g_aoff = 0;
-  if (millis() >= g_speakerOffMs || g_speakerHz <= 0) return;
+  if (!g_speakerActive || g_speakerHz == 0) return;
 
   float inc = 2.0f * PI * (float)g_speakerHz / AUDIO_RATE;
   for (int i = 0; i < 128; i++) {
@@ -224,7 +250,28 @@ static void audioPump() {
 }
 
 // ---------- Применение команд сервера (Core 1) ----------
+// Вибрация, мс, уже отработанные в скользящем окне VIB_WINDOW_SEC.
+static uint32_t vibUsedMs(uint32_t now) {
+  uint32_t sec = now / 1000;
+  uint32_t used = 0;
+  for (int i = 0; i < VIB_WINDOW_SEC; i++) {
+    if ((uint32_t)(sec - g_vibBucketSec[i]) < VIB_WINDOW_SEC) used += g_vibBucketMs[i];  // беззнаковая разница: безопасно при переполнении millis
+  }
+  return used;
+}
+
+static void vibAccount(uint32_t now, uint32_t dtMs) {
+  uint32_t sec = now / 1000;
+  int i = (int)(sec % VIB_WINDOW_SEC);
+  if (g_vibBucketSec[i] != sec) {
+    g_vibBucketSec[i] = sec;
+    g_vibBucketMs[i] = 0;
+  }
+  g_vibBucketMs[i] += dtMs;
+}
+
 static void applyActuators() {
+  static uint32_t lastTick = 0;
   ActuatorCommand cmd;
   portENTER_CRITICAL(&g_mux);
   cmd = g_pending;
@@ -232,158 +279,199 @@ static void applyActuators() {
   portEXIT_CRITICAL(&g_mux);
 
   uint32_t now = millis();
-  if (cmd.has) {
-    if (cmd.speakerMs > 0 && cmd.speakerHz > 0) {
-      g_speakerHz = cmd.speakerHz;
-      g_speakerVolume = cmd.speakerVolume > 0 ? cmd.speakerVolume : AUDIO_AMPLITUDE;
-      g_speakerOffMs = now + cmd.speakerMs;
-      Serial.printf("[act] Левый динамик: %d Гц, %d мс, громкость %u\n", cmd.speakerHz, cmd.speakerMs, g_speakerVolume);
-    }
-    if (cmd.buzzerMs > 0) {
-      g_buzzerOffMs = now + cmd.buzzerMs;
-      Serial.printf("[act] Правый зуммер: %d мс\n", cmd.buzzerMs);
-    }
-    if (cmd.vibrateMs > 0) {
-      g_vibratorOffMs = now + cmd.vibrateMs;
-      Serial.printf("[act] Вибрация: %d мс\n", cmd.vibrateMs);
+  uint32_t dt = now - lastTick;
+  lastTick = now;
+  if (dt > 100) dt = 100;
+
+  // Истечение времени (сравнение безопасно при переполнении millis)
+  if (g_speakerActive && (int32_t)(g_speakerOffMs - now) <= 0) { g_speakerActive = false; g_speakerHz = 0; }
+  if (g_buzzerActive && (int32_t)(g_buzzerOffMs - now) <= 0) g_buzzerActive = false;
+  if (g_vibActive) {
+    vibAccount(now, dt);
+    if ((int32_t)(g_vibOffMs - now) <= 0) g_vibActive = false;
+    else if (vibUsedMs(now) >= VIB_BUDGET_MS) {
+      g_vibActive = false;
+      Serial.println("[act] vibration cut by 5 s / 30 s cap");
     }
   }
 
-  // Обновление состояния пинов
-  digitalWrite(PIN_BUZZER, (millis() < g_buzzerOffMs) ? HIGH : LOW);
-  digitalWrite(PIN_VIBRATION, (millis() < g_vibratorOffMs) ? HIGH : LOW);
-  if (millis() >= g_speakerOffMs) {
-    g_speakerHz = 0;
+  // Одноразовое включение: пока актуатор работает, повторные ответы его не продлевают
+  if (cmd.has) {
+    if (cmd.speakerMs > 0 && cmd.speakerHz > 0 && !g_speakerActive) {
+      uint32_t ms = min((uint32_t)cmd.speakerMs, (uint32_t)SPEAKER_MAX_MS);
+      g_speakerHz = cmd.speakerHz;
+      g_speakerVolume = cmd.speakerVolume > 0 ? cmd.speakerVolume : AUDIO_AMPLITUDE;
+      g_speakerOffMs = now + ms;
+      g_speakerActive = true;
+      Serial.printf("[act] speaker %u Hz, %lu ms\n", cmd.speakerHz, (unsigned long)ms);
+    }
+    if (cmd.buzzerMs > 0 && !g_buzzerActive) {
+      uint32_t ms = min((uint32_t)cmd.buzzerMs, (uint32_t)BUZZER_MAX_MS);
+      g_buzzerOffMs = now + ms;
+      g_buzzerActive = true;
+      Serial.printf("[act] buzzer %lu ms\n", (unsigned long)ms);
+    }
+    if (cmd.vibrateMs > 0 && !g_vibActive) {
+      uint32_t used = vibUsedMs(now);
+      uint32_t left = used < VIB_BUDGET_MS ? VIB_BUDGET_MS - used : 0;
+      uint32_t ms = min((uint32_t)cmd.vibrateMs, left);
+      if (ms >= VIB_MIN_USEFUL_MS) {
+        g_vibOffMs = now + ms;
+        g_vibActive = true;
+        Serial.printf("[act] vibration %lu ms (budget left %lu)\n", (unsigned long)ms, (unsigned long)left);
+      } else {
+        Serial.println("[act] vibration refused: 5 s / 30 s budget used");
+      }
+    }
   }
+
+  digitalWrite(PIN_BUZZER, g_buzzerActive ? HIGH : LOW);
+  digitalWrite(PIN_VIBRATION, g_vibActive ? HIGH : LOW);
 }
 
 // ---------- Сетевая задача (Core 0) ----------
 static bool timeValid() { return time(nullptr) > 1700000000; }
 
-static bool wifiEnsure() {
-  if (WiFi.status() == WL_CONNECTED) return true;
-  Serial.printf("[wifi] connecting to \"%s\" (password: ********)\n", WIFI_SSID);
-  WiFi.disconnect(true);
+static int g_wifiFailChecks = 0;
+static bool g_ntpStarted = false;
+
+static void wifiBegin() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) vTaskDelay(250 / portTICK_PERIOD_MS);
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[wifi] connection failed");
-    return false;
-  }
-  Serial.printf("[wifi] connected, IP %s, RSSI %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-  return true;
 }
 
-static bool timeSync() {
-  if (timeValid()) return true;
-  configTime(0, 0, "pool.ntp.org", "time.google.com");
+// Wi-Fi: опираемся на автопереподключение; полный disconnect+begin только после 3 подряд неудачных проверок.
+static bool wifiEnsure() {
+  if (WiFi.status() == WL_CONNECTED) {
+    g_wifiFailChecks = 0;
+    return true;
+  }
   uint32_t start = millis();
-  while (!timeValid() && millis() - start < NTP_WAIT_MS) vTaskDelay(250 / portTICK_PERIOD_MS);
-  Serial.println(timeValid() ? "[time] NTP synced" : "[time] NTP failed");
-  return timeValid();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_WAIT_MS) vTaskDelay(250 / portTICK_PERIOD_MS);
+  if (WiFi.status() == WL_CONNECTED) {
+    g_wifiFailChecks = 0;
+    Serial.printf("[wifi] connected, IP %s, RSSI %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    return true;
+  }
+  g_wifiFailChecks++;
+  if (g_wifiFailChecks >= WIFI_FAILS_BEFORE_FULL_RESET) {
+    Serial.println("[wifi] 3 failed checks, full reconnect");
+    g_wifiFailChecks = 0;
+    WiFi.disconnect(true);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    wifiBegin();
+  } else {
+    Serial.printf("[wifi] not connected (check %d/%d), reconnect()\n", g_wifiFailChecks, WIFI_FAILS_BEFORE_FULL_RESET);
+    WiFi.reconnect();
+  }
+  return false;
+}
+
+// NTP не блокирует отправку: SNTP запускается один раз и досинхронизируется в фоне.
+static void ntpKick() {
+  if (g_ntpStarted) return;
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  g_ntpStarted = true;
 }
 
 static WiFiClientSecure g_client;
 static HTTPClient g_http;
 static bool g_httpInited = false;
+static const char *g_collectKeys[] = {"Retry-After"};
+static char g_lastCmdId[48] = "";
+static bool g_firstReplyOk = false;
+static int g_errCount = 0;
 
-static void sendTelemetry() {
-  Snapshot s;
-  portENTER_CRITICAL(&g_mux);
-  s = g_snap;
-  portEXIT_CRITICAL(&g_mux);
-
-  char ts[25];
-  time_t now = time(nullptr);
-  struct tm tmv;
-  gmtime_r(&now, &tmv);
-  strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tmv);
-
-  JsonDocument req;
-  req["code"] = DEVICE_CODE;
-  req["timestamp"] = ts;
-  if (s.haveLast) {
-    req["latitude"] = serialized(String(s.lat, 6));
-    req["longitude"] = serialized(String(s.lng, 6));
-    req["accuracy"] = serialized(String(s.fixValid ? s.accuracy : ACCURACY_NO_FIX_M, 1));
-  }
-  int rssi = WiFi.RSSI();
-  if (rssi >= -130 && rssi <= 0) req["signal"] = rssi;
-  req["speedKmh"] = serialized(String(constrain(s.fixValid ? s.speedKmh : 0.0, 0.0, 300.0), 1));
-  if (s.hdop >= 0 && s.hdop <= 99) req["hdop"] = serialized(String(s.hdop, 1));
-  if (s.satellites >= 0 && s.satellites <= 64) req["satellites"] = s.satellites;
-  if (s.heartRate > 0) req["heartRate"] = s.heartRate;
-  else req["heartRate"] = nullptr;
-  String body;
-  serializeJson(req, body);
-
-  if (!g_httpInited) {
-    g_client.setCACert(ROOT_CA_PEM);
-    g_http.setReuse(true); // Сохраняем TLS-сессию (Keep-Alive) для мгновенной отправки
-    g_http.setConnectTimeout(HTTP_TIMEOUT_MS);
-    g_http.setTimeout(HTTP_TIMEOUT_MS);
-    g_httpInited = true;
-  }
-
-  if (!g_http.connected()) {
-    g_http.end();
-    if (!g_http.begin(g_client, TELEMETRY_URL)) {
-      Serial.println("[http] begin failed");
-      return;
+// Выполняет POST; при сбое на переиспользованном соединении один раз повторяет на новом.
+static int httpPost(const String &body, String &payload, String &retryAfterHdr, uint32_t &ms) {
+  bool reused = g_http.connected();
+  int status = 0;
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (!g_http.connected()) {
+      g_http.end();
+      if (!g_http.begin(g_client, TELEMETRY_URL)) {
+        Serial.println("[http] begin failed");
+        return -1;
+      }
     }
-  }
-  g_http.addHeader("Content-Type", "application/json");
-  g_http.addHeader("X-Device-Code", DEVICE_CODE);
-
-  uint32_t t0 = millis();
-  int status = g_http.POST(body);
-  uint32_t ms = millis() - t0;
-
-  if (status <= 0) {
-    Serial.printf("[http] request failed (%u ms): %s\n", ms, HTTPClient::errorToString(status).c_str());
+    g_http.addHeader("Content-Type", "application/json");
+    g_http.addHeader("X-Device-Code", DEVICE_CODE);
+    uint32_t t0 = millis();
+    status = g_http.POST(body);
+    ms = millis() - t0;
+    if (status > 0) break;
     g_http.end();
-    return;
+    g_client.stop();
+    bool connErr = status >= -5 && status <= -1;  // refused/send/not connected/lost; таймаут (-11) не повторяем
+    if (attempt == 0 && reused && connErr) {
+      Serial.printf("[http] reused connection failed (%s), retry on a fresh one\n", HTTPClient::errorToString(status).c_str());
+      reused = false;
+      continue;
+    }
+    break;
   }
-  String payload = g_http.getString();
-
-  if (status != 200) {
-    Serial.printf("[http] status %d (%u ms): %s\n", status, ms, payload.c_str());
-    if (status >= 400 && status < 500) g_http.end();
-    return;
+  if (status > 0) {
+    payload = g_http.getString();
+    retryAfterHdr = g_http.header("Retry-After");
   }
+  return status;
+}
 
-  JsonDocument res;
-  DeserializationError err = deserializeJson(res, payload);
-  if (err || !res["success"].as<bool>()) {
-    Serial.println("[http] response invalid JSON or not success");
-    return;
-  }
+static void closeConn() {
+  g_http.end();
+  g_client.stop();
+}
 
-  const char *rcode = res["code"] | "";
-  if (strcmp(rcode, DEVICE_CODE) != 0) return;
+static uint32_t clampU32(long v, long lo, long hi) {
+  if (v < lo) v = lo;
+  if (v > hi) v = hi;
+  return (uint32_t)v;
+}
 
-  // ---------- Разбор указаний сервера ----------
+static uint32_t backoffSec() {
+  int shift = g_errCount > 1 ? g_errCount - 1 : 0;
+  if (shift > 5) shift = 5;
+  uint32_t s = (uint32_t)BACKOFF_START_SEC << shift;
+  return s > BACKOFF_MAX_SEC ? BACKOFF_MAX_SEC : s;
+}
+
+// Разбор указаний сервера. Возвращает nextInterval (сек).
+static uint32_t handleReply(JsonDocument &res) {
+  long ni = res["nextInterval"] | (long)DEFAULT_INTERVAL_SEC;
+  uint32_t interval = clampU32(ni, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC);
+
   ActuatorCommand cmd = {false, 0, 0, 0, 0, 0};
 
-  // 1. Команды тестирования
-  const char *ctype = res["command"]["type"] | "";
-  if (!strcmp(ctype, "TEST_SPEAKER") || !strcmp(ctype, "TEST_SOUND")) {
-    cmd.has = true;
-    cmd.speakerHz = 1200;
-    cmd.speakerMs = 800; // Левый динамик
-    cmd.speakerVolume = AUDIO_AMPLITUDE;
-  } else if (!strcmp(ctype, "TEST_BUZZER")) {
-    cmd.has = true;
-    cmd.buzzerMs = 500;  // Правый зуммер
-  } else if (!strcmp(ctype, "TEST_VIBRATION")) {
-    cmd.has = true;
-    cmd.vibrateMs = 1000; // Вибрация
+  // 1. Команда тестирования. Один и тот же id не выполняется дважды (сервер может переслать при потере ответа).
+  JsonVariantConst cobj = res["command"];
+  if (cobj.is<JsonObjectConst>()) {
+    const char *ctype = cobj["type"] | "";
+    String cid;
+    serializeJson(cobj["id"], cid);
+    bool known = !strcmp(ctype, "TEST_SPEAKER") || !strcmp(ctype, "TEST_SOUND") || !strcmp(ctype, "TEST_BUZZER") || !strcmp(ctype, "TEST_VIBRATION");
+    if (known && cid != "null" && cid == g_lastCmdId) {
+      Serial.printf("[cmd] id %s already executed, ignored\n", cid.c_str());
+    } else if (known) {
+      if (cid != "null") {
+        strncpy(g_lastCmdId, cid.c_str(), sizeof g_lastCmdId - 1);
+        g_lastCmdId[sizeof g_lastCmdId - 1] = 0;
+      }
+      Serial.printf("[cmd] %s id %s\n", ctype, cid.c_str());
+      cmd.has = true;
+      if (!strcmp(ctype, "TEST_SPEAKER") || !strcmp(ctype, "TEST_SOUND")) {
+        cmd.speakerHz = 1200;
+        cmd.speakerMs = 800;
+        cmd.speakerVolume = AUDIO_AMPLITUDE;
+      } else if (!strcmp(ctype, "TEST_BUZZER")) {
+        cmd.buzzerMs = 500;
+      } else {
+        cmd.vibrateMs = 1000;
+      }
+    }
   }
 
-  // 2. Прямые параметры от сервера (громкость, длительности, частоты)
+  // 2. Необязательные прямые параметры. СЕРВЕР ИХ ПОКА НЕ ШЛЁТ (возможно, позже buzzerMs); разбор безвреден.
   int spkMs = res["speakerMs"] | 0;
   int spkHz = res["speakerHz"] | 0;
   int spkVol = res["speakerVolume"] | 0;
@@ -393,7 +481,7 @@ static void sendTelemetry() {
   if (spkMs > 0 && spkHz > 0) {
     cmd.has = true;
     cmd.speakerHz = constrain(spkHz, 100, 3000);
-    cmd.speakerMs = min(spkMs, 5000);
+    cmd.speakerMs = min(spkMs, (int)SPEAKER_MAX_MS);
     if (spkVol > 0) {
       cmd.speakerVolume = (spkVol <= 100) ? (uint16_t)(spkVol * 300) : (uint16_t)constrain(spkVol, 500, 32000);
     } else {
@@ -402,7 +490,7 @@ static void sendTelemetry() {
   }
   if (buzMs > 0) {
     cmd.has = true;
-    cmd.buzzerMs = min(buzMs, 5000);
+    cmd.buzzerMs = min(buzMs, (int)BUZZER_MAX_MS);
   }
   if (vibMs > 0) {
     cmd.has = true;
@@ -427,19 +515,134 @@ static void sendTelemetry() {
 
   if (cmd.has) {
     portENTER_CRITICAL(&g_mux);
-    g_pending = cmd;
+    g_pending = cmd;  // armed at most once by Core 1 (см. applyActuators)
     portEXIT_CRITICAL(&g_mux);
   }
+
+  Serial.printf("[http] ok: mode %s, zone %s, next %lu s\n", (const char *)(res["mode"] | "?"), (const char *)(res["zone"] | "?"), (unsigned long)interval);
+  return interval;
+}
+
+// Одна попытка отправки. Возвращает паузу до следующей (сек).
+static uint32_t sendTelemetry() {
+  Snapshot s;
+  portENTER_CRITICAL(&g_mux);
+  s = g_snap;
+  portEXIT_CRITICAL(&g_mux);
+
+  bool haveTime = timeValid();
+  JsonDocument req;
+  req["code"] = DEVICE_CODE;
+  if (haveTime) {
+    char ts[25];
+    time_t now = time(nullptr);
+    struct tm tmv;
+    gmtime_r(&now, &tmv);
+    strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tmv);
+    req["timestamp"] = ts;
+  }
+  // Координаты требуют timestamp на сервере: без синхронного времени шлём только пульс (pulse-only).
+  if (haveTime && s.haveLast) {
+    req["latitude"] = serialized(String(s.lat, 6));
+    req["longitude"] = serialized(String(s.lng, 6));
+    req["accuracy"] = serialized(String(s.fixValid ? s.accuracy : ACCURACY_NO_FIX_M, 1));
+  }
+  int rssi = WiFi.RSSI();
+  if (rssi < 0 && rssi >= -130) req["signal"] = rssi;
+  req["speedKmh"] = serialized(String(constrain(s.fixValid ? s.speedKmh : 0.0, 0.0, 300.0), 1));
+  if (s.hdop >= 0 && s.hdop <= 99) req["hdop"] = serialized(String(s.hdop, 1));
+  if (s.satellites >= 0 && s.satellites <= 64) req["satellites"] = s.satellites;
+  if (s.heartRate > 0) req["heartRate"] = s.heartRate;
+  else req["heartRate"] = nullptr;
+  String body;
+  serializeJson(req, body);
+  if (!haveTime) Serial.println("[time] no NTP yet, sending pulse-only body");
+
+  if (!g_httpInited) {
+    g_client.setCACert(ROOT_CA_PEM);
+    g_http.setReuse(true);
+    g_http.setConnectTimeout(HTTP_TIMEOUT_MS);
+    g_http.setTimeout(HTTP_TIMEOUT_MS);
+    g_http.collectHeaders(g_collectKeys, 1);
+    g_httpInited = true;
+  }
+
+  String payload, retryHdr;
+  uint32_t ms = 0;
+  int status = httpPost(body, payload, retryHdr, ms);
+
+  if (status <= 0) {
+    Serial.printf("[http] request failed (%lu ms): %s\n", (unsigned long)ms, HTTPClient::errorToString(status).c_str());
+    closeConn();
+    g_errCount++;
+    return backoffSec();
+  }
+
+  if (status != 200) {
+    Serial.printf("[http] status %d (%lu ms): %s\n", status, (unsigned long)ms, payload.substring(0, 200).c_str());
+    closeConn();
+    if (status >= 500) {
+      g_errCount++;
+      return backoffSec();
+    }
+    if (status == 401 || status == 403) return RETRY_AUTH_SEC;
+    if (status == 429) {
+      long ra = 0;
+      JsonDocument eb;
+      if (!deserializeJson(eb, payload)) ra = eb["retryAfterSec"] | 0L;
+      if (ra <= 0) ra = retryHdr.toInt();
+      if (ra <= 0) ra = 60;
+      return clampU32(ra, RETRY_429_MIN_SEC, RETRY_429_MAX_SEC);
+    }
+    return RETRY_400_SEC;  // 400 и прочие 4xx
+  }
+
+  JsonDocument res;
+  DeserializationError err = deserializeJson(res, payload);
+  if (err || !(res["success"] | false)) {
+    Serial.printf("[http] reply invalid or success=false (%s)\n", err ? err.c_str() : "success=false");
+    closeConn();
+    g_errCount++;
+    return backoffSec();
+  }
+  const char *rcode = res["code"] | "";
+  if (strcmp(rcode, DEVICE_CODE) != 0) {
+    Serial.printf("[http] reply code mismatch (got \"%s\"), ignored\n", rcode);
+    closeConn();
+    g_errCount++;
+    return backoffSec();
+  }
+
+  g_errCount = 0;
+  g_firstReplyOk = true;
+  uint32_t interval = handleReply(res);
+  if (interval > KEEPALIVE_MAX_INTERVAL_SEC) closeConn();  // долгая пауза: соединение не держим
+  return interval;
+}
+
+static void logHealth() {
+  static uint32_t last = 0;
+  uint32_t now = millis();
+  if (now - last < 60000 && last != 0) return;
+  last = now;
+  Serial.printf("[sys] free heap %u, max block %u, net stack high-water %u words\n", (unsigned)ESP.getFreeHeap(),
+                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)uxTaskGetStackHighWaterMark(NULL));
 }
 
 static void netTask(void *) {
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
+  vTaskDelay(FIRST_INTERVAL_SEC * 1000 / portTICK_PERIOD_MS);  // 5 с до первой отправки
+  wifiBegin();
   for (;;) {
-    if (wifiEnsure() && timeSync()) {
-      sendTelemetry();
+    uint32_t delaySec;
+    if (wifiEnsure()) {
+      ntpKick();
+      delaySec = sendTelemetry();
+    } else {
+      g_errCount++;
+      delaySec = g_firstReplyOk ? backoffSec() : FIRST_INTERVAL_SEC;  // Wi-Fi ещё не поднят: 5 с до первого ответа
     }
-    // Строго 1 секунда между попытками
-    vTaskDelay(SEND_INTERVAL_SEC * 1000 / portTICK_PERIOD_MS);
+    logHealth();
+    vTaskDelay(delaySec * 1000 / portTICK_PERIOD_MS);
   }
 }
 
