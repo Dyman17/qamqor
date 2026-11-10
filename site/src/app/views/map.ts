@@ -307,9 +307,23 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       const canDrag = isDemoDrag || isGpsManual;
       const mk = new ML!.Marker({ element: node, draggable: canDrag }).setLngLat([lng, lat]).addTo(map!);
       if (canDrag) {
-        mk.on('dragstart', () => { dragging = true; });
+        // MapLibre's marker drag listens on the map's mousedown, so do not stop propagation;
+        // instead disable map dragPan for the duration of the gesture.
+        node.style.touchAction = 'none';
+        node.style.cursor = 'grab';
+        const panOff = () => { map?.dragPan.disable(); };
+        const panOn = () => { map?.dragPan.enable(); };
+        node.addEventListener('mousedown', panOff);
+        node.addEventListener('touchstart', panOff, { passive: true });
+        node.addEventListener('pointerdown', panOff);
+        window.addEventListener('mouseup', panOn, { once: true });
+        window.addEventListener('touchend', panOn, { once: true });
+        window.addEventListener('touchcancel', panOn, { once: true });
+        window.addEventListener('pointerup', panOn, { once: true });
+        mk.on('dragstart', () => { dragging = true; panOff(); });
         mk.on('dragend', async () => {
           dragging = false;
+          panOn();
           const p = mk.getLngLat();
           if (isGpsManual && aObj?.collarId) {
             const prev = { lat: aObj.lat, lng: aObj.lng, src: aObj.positionSource };
