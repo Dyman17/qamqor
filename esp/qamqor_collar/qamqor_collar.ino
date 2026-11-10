@@ -25,6 +25,7 @@
 #include "MAX30105.h"
 #include "heartRate.h"
 #include "driver/i2s.h"
+#include "esp_timer.h"
 
 // ---------- Пины оборудования ----------
 #define PIN_VIBRATION 18      // Вибромотор (HIGH = вкл)
@@ -62,9 +63,11 @@
 // ---------- Ограничения актуаторов (безопасность животного, независимо от сервера) ----------
 #define SPEAKER_MAX_MS 5000          // динамик: не дольше 5 с на команду
 #define BUZZER_MAX_MS 5000           // зуммер: не дольше 5 с на команду
-#define VIB_WINDOW_SEC 30            // вибромотор: не более VIB_BUDGET_MS в скользящем окне 30 с
-#define VIB_BUDGET_MS 5000
-#define VIB_MIN_USEFUL_MS 50
+#define DUTY_WINDOW_SEC 30           // вибромотор, зуммер и динамик: каждый не более DUTY_BUDGET_MS в скользящем окне 30 с
+#define DUTY_BUDGET_MS 5000
+#define DUTY_MIN_USEFUL_MS 50
+#define GUARD_STALE_MS 1000          // сторож: loop() не отметился дольше этого времени, актуаторы принудительно выключаются
+#define GUARD_OVERDUE_MS 150         // сторож: актуатор работает дольше своего дедлайна на это время, выключаем
 
 // ---------- Корневой сертификат GTS Root R4 ----------
 static const char ROOT_CA_PEM[] = R"PEM(
@@ -103,12 +106,14 @@ struct ActuatorCommand {
   uint16_t speakerVolume;
   uint16_t buzzerMs;
   uint16_t vibrateMs;
+  char type[20];  // для лога: тип команды или источник параметров
+  char id[12];
 };
 
 // ---------- Разделяемое состояние между ядрами FreeRTOS ----------
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static Snapshot g_snap = {false, false, 0, 0, ACCURACY_NO_FIX_M, 0, -1, -1, 0};
-static ActuatorCommand g_pending = {false, 0, 0, 0, 0, 0};
+static ActuatorCommand g_pending = {};
 
 // Состояние актуаторов (трогает только Core 1: applyActuators/audioPump)
 static bool g_speakerActive = false;
@@ -119,10 +124,23 @@ static bool g_buzzerActive = false;
 static uint32_t g_buzzerOffMs = 0;
 static bool g_vibActive = false;
 static uint32_t g_vibOffMs = 0;
+static bool g_audioOk = false;
 
-// Учёт времени вибрации по секундным корзинам (скользящее окно VIB_WINDOW_SEC)
-static uint32_t g_vibBucketSec[VIB_WINDOW_SEC];
-static uint32_t g_vibBucketMs[VIB_WINDOW_SEC];
+// Независимый сторож (задача на Core 0). Все поля volatile, 32-битные записи атомарны.
+// loop() пишет heartbeat и дедлайны; сторож только читает и взводит g_guardTrip.
+static volatile uint32_t g_hbMs = 0;
+static volatile bool g_hwSpkOn = false, g_hwBuzOn = false, g_hwVibOn = false;
+static volatile uint32_t g_hwSpkEnd = 0, g_hwBuzEnd = 0, g_hwVibEnd = 0;
+static volatile bool g_guardTrip = false;
+
+// Скользящее окно расхода времени: секундные корзины, время 64-бит (esp_timer, не переполняется),
+// поэтому окно корректно без допущений о переполнении millis().
+struct DutyWindow {
+  uint64_t sec[DUTY_WINDOW_SEC];
+  uint32_t ms[DUTY_WINDOW_SEC];
+};
+static DutyWindow g_dutySpk, g_dutyBuz, g_dutyVib;
+static uint64_t nowMs64() { return (uint64_t)esp_timer_get_time() / 1000ULL; }
 
 // ---------- Датчики (Core 1) ----------
 static TinyGPSPlus gps;
@@ -221,6 +239,7 @@ static void setupAudio() {
     return;
   }
   i2s_zero_dma_buffer(I2S_NUM_0);
+  g_audioOk = true;
 }
 
 static int16_t g_abuf[128];
@@ -250,24 +269,29 @@ static void audioPump() {
 }
 
 // ---------- Применение команд сервера (Core 1) ----------
-// Вибрация, мс, уже отработанные в скользящем окне VIB_WINDOW_SEC.
-static uint32_t vibUsedMs(uint32_t now) {
-  uint32_t sec = now / 1000;
+// Расход, мс, уже отработанный в скользящем окне DUTY_WINDOW_SEC.
+static uint32_t dutyUsedMs(const DutyWindow &w) {
+  uint64_t sec = nowMs64() / 1000;
   uint32_t used = 0;
-  for (int i = 0; i < VIB_WINDOW_SEC; i++) {
-    if ((uint32_t)(sec - g_vibBucketSec[i]) < VIB_WINDOW_SEC) used += g_vibBucketMs[i];  // беззнаковая разница: безопасно при переполнении millis
+  for (int i = 0; i < DUTY_WINDOW_SEC; i++) {
+    if (w.ms[i] > 0 && sec >= w.sec[i] && sec - w.sec[i] < DUTY_WINDOW_SEC) used += w.ms[i];
   }
   return used;
 }
 
-static void vibAccount(uint32_t now, uint32_t dtMs) {
-  uint32_t sec = now / 1000;
-  int i = (int)(sec % VIB_WINDOW_SEC);
-  if (g_vibBucketSec[i] != sec) {
-    g_vibBucketSec[i] = sec;
-    g_vibBucketMs[i] = 0;
+static void dutyAccount(DutyWindow &w, uint32_t dtMs) {
+  uint64_t sec = nowMs64() / 1000;
+  int i = (int)(sec % DUTY_WINDOW_SEC);
+  if (w.sec[i] != sec) {
+    w.sec[i] = sec;
+    w.ms[i] = 0;
   }
-  g_vibBucketMs[i] += dtMs;
+  w.ms[i] += dtMs;
+}
+
+static uint32_t dutyLeftMs(const DutyWindow &w) {
+  uint32_t used = dutyUsedMs(w);
+  return used < DUTY_BUDGET_MS ? DUTY_BUDGET_MS - used : 0;
 }
 
 static void applyActuators() {
@@ -278,55 +302,130 @@ static void applyActuators() {
   g_pending.has = false;
   portEXIT_CRITICAL(&g_mux);
 
+  // Сторож принудительно выключил актуаторы: сбрасываем состояние и возвращаем I2S
+  if (g_guardTrip) {
+    g_guardTrip = false;
+    g_speakerActive = g_buzzerActive = g_vibActive = false;
+    g_speakerHz = 0;
+    g_hwSpkOn = g_hwBuzOn = g_hwVibOn = false;
+    if (g_audioOk) {
+      i2s_start(I2S_NUM_0);
+      i2s_zero_dma_buffer(I2S_NUM_0);
+    }
+    Serial.println("[act] guard tripped, actuators reset");
+  }
+
   uint32_t now = millis();
   uint32_t dt = now - lastTick;
   lastTick = now;
   if (dt > 100) dt = 100;
 
-  // Истечение времени (сравнение безопасно при переполнении millis)
-  if (g_speakerActive && (int32_t)(g_speakerOffMs - now) <= 0) { g_speakerActive = false; g_speakerHz = 0; }
-  if (g_buzzerActive && (int32_t)(g_buzzerOffMs - now) <= 0) g_buzzerActive = false;
+  // Истечение времени (сравнение безопасно при переполнении millis) и лимиты 5 с / 30 с
+  if (g_speakerActive) {
+    dutyAccount(g_dutySpk, dt);
+    if ((int32_t)(g_speakerOffMs - now) <= 0) { g_speakerActive = false; g_speakerHz = 0; }
+    else if (dutyUsedMs(g_dutySpk) >= DUTY_BUDGET_MS) {
+      g_speakerActive = false;
+      g_speakerHz = 0;
+      Serial.println("[act] speaker cut by 5 s / 30 s cap");
+    }
+    if (!g_speakerActive) g_hwSpkOn = false;
+  }
+  if (g_buzzerActive) {
+    dutyAccount(g_dutyBuz, dt);
+    if ((int32_t)(g_buzzerOffMs - now) <= 0) g_buzzerActive = false;
+    else if (dutyUsedMs(g_dutyBuz) >= DUTY_BUDGET_MS) {
+      g_buzzerActive = false;
+      Serial.println("[act] buzzer cut by 5 s / 30 s cap");
+    }
+    if (!g_buzzerActive) g_hwBuzOn = false;
+  }
   if (g_vibActive) {
-    vibAccount(now, dt);
+    dutyAccount(g_dutyVib, dt);
     if ((int32_t)(g_vibOffMs - now) <= 0) g_vibActive = false;
-    else if (vibUsedMs(now) >= VIB_BUDGET_MS) {
+    else if (dutyUsedMs(g_dutyVib) >= DUTY_BUDGET_MS) {
       g_vibActive = false;
       Serial.println("[act] vibration cut by 5 s / 30 s cap");
     }
+    if (!g_vibActive) g_hwVibOn = false;
   }
 
   // Одноразовое включение: пока актуатор работает, повторные ответы его не продлевают
   if (cmd.has) {
-    if (cmd.speakerMs > 0 && cmd.speakerHz > 0 && !g_speakerActive) {
-      uint32_t ms = min((uint32_t)cmd.speakerMs, (uint32_t)SPEAKER_MAX_MS);
-      g_speakerHz = cmd.speakerHz;
-      g_speakerVolume = cmd.speakerVolume > 0 ? cmd.speakerVolume : AUDIO_AMPLITUDE;
-      g_speakerOffMs = now + ms;
-      g_speakerActive = true;
-      Serial.printf("[act] speaker %u Hz, %lu ms\n", cmd.speakerHz, (unsigned long)ms);
+    if (cmd.speakerMs > 0 && cmd.speakerHz > 0) {
+      uint32_t left = dutyLeftMs(g_dutySpk);
+      uint32_t ms = min(min((uint32_t)cmd.speakerMs, (uint32_t)SPEAKER_MAX_MS), left);
+      if (g_speakerActive || ms < DUTY_MIN_USEFUL_MS) {
+        Serial.printf("[cmd] dropped, busy: speaker, %s id %s (%s)\n", cmd.type, cmd.id, g_speakerActive ? "running" : "5 s / 30 s budget used");
+      } else {
+        g_speakerHz = cmd.speakerHz;
+        g_speakerVolume = cmd.speakerVolume > 0 ? cmd.speakerVolume : AUDIO_AMPLITUDE;
+        g_speakerOffMs = now + ms;
+        g_hwSpkEnd = g_speakerOffMs;
+        g_hwSpkOn = true;
+        g_speakerActive = true;
+        Serial.printf("[act] speaker %u Hz, %lu ms\n", cmd.speakerHz, (unsigned long)ms);
+      }
     }
-    if (cmd.buzzerMs > 0 && !g_buzzerActive) {
-      uint32_t ms = min((uint32_t)cmd.buzzerMs, (uint32_t)BUZZER_MAX_MS);
-      g_buzzerOffMs = now + ms;
-      g_buzzerActive = true;
-      Serial.printf("[act] buzzer %lu ms\n", (unsigned long)ms);
+    if (cmd.buzzerMs > 0) {
+      uint32_t left = dutyLeftMs(g_dutyBuz);
+      uint32_t ms = min(min((uint32_t)cmd.buzzerMs, (uint32_t)BUZZER_MAX_MS), left);
+      if (g_buzzerActive || ms < DUTY_MIN_USEFUL_MS) {
+        Serial.printf("[cmd] dropped, busy: buzzer, %s id %s (%s)\n", cmd.type, cmd.id, g_buzzerActive ? "running" : "5 s / 30 s budget used");
+      } else {
+        g_buzzerOffMs = now + ms;
+        g_hwBuzEnd = g_buzzerOffMs;
+        g_hwBuzOn = true;
+        g_buzzerActive = true;
+        Serial.printf("[act] buzzer %lu ms\n", (unsigned long)ms);
+      }
     }
-    if (cmd.vibrateMs > 0 && !g_vibActive) {
-      uint32_t used = vibUsedMs(now);
-      uint32_t left = used < VIB_BUDGET_MS ? VIB_BUDGET_MS - used : 0;
+    if (cmd.vibrateMs > 0) {
+      uint32_t left = dutyLeftMs(g_dutyVib);
       uint32_t ms = min((uint32_t)cmd.vibrateMs, left);
-      if (ms >= VIB_MIN_USEFUL_MS) {
+      if (g_vibActive || ms < DUTY_MIN_USEFUL_MS) {
+        Serial.printf("[cmd] dropped, busy: vibration, %s id %s (%s)\n", cmd.type, cmd.id, g_vibActive ? "running" : "5 s / 30 s budget used");
+      } else {
         g_vibOffMs = now + ms;
+        g_hwVibEnd = g_vibOffMs;
+        g_hwVibOn = true;
         g_vibActive = true;
         Serial.printf("[act] vibration %lu ms (budget left %lu)\n", (unsigned long)ms, (unsigned long)left);
-      } else {
-        Serial.println("[act] vibration refused: 5 s / 30 s budget used");
       }
     }
   }
 
   digitalWrite(PIN_BUZZER, g_buzzerActive ? HIGH : LOW);
   digitalWrite(PIN_VIBRATION, g_vibActive ? HIGH : LOW);
+}
+
+// ---------- Сторож актуаторов (отдельная задача, Core 0) ----------
+// Не зависит от loop(): если loop() завис или актуатор работает дольше дедлайна, выключает его аппаратно.
+static void guardTask(void *) {
+  bool wasStale = false;
+  for (;;) {
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    uint32_t now = millis();
+    bool stale = (uint32_t)(now - g_hbMs) > GUARD_STALE_MS;
+    bool trip = false;
+    if (stale || (g_hwVibOn && (int32_t)(now - g_hwVibEnd) > (int32_t)GUARD_OVERDUE_MS)) {
+      digitalWrite(PIN_VIBRATION, LOW);
+      trip = trip || g_hwVibOn || stale;
+    }
+    if (stale || (g_hwBuzOn && (int32_t)(now - g_hwBuzEnd) > (int32_t)GUARD_OVERDUE_MS)) {
+      digitalWrite(PIN_BUZZER, LOW);
+      trip = trip || g_hwBuzOn || stale;
+    }
+    if (stale || (g_hwSpkOn && (int32_t)(now - g_hwSpkEnd) > (int32_t)GUARD_OVERDUE_MS)) {
+      if (g_audioOk) i2s_stop(I2S_NUM_0);
+      trip = trip || g_hwSpkOn || stale;
+    }
+    if (trip) {
+      g_guardTrip = true;
+      if (!wasStale) Serial.println("[guard] actuators forced off");
+    }
+    wasStale = stale;
+  }
 }
 
 // ---------- Сетевая задача (Core 0) ----------
@@ -441,7 +540,8 @@ static uint32_t handleReply(JsonDocument &res) {
   long ni = res["nextInterval"] | (long)DEFAULT_INTERVAL_SEC;
   uint32_t interval = clampU32(ni, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC);
 
-  ActuatorCommand cmd = {false, 0, 0, 0, 0, 0};
+  ActuatorCommand cmd = {};
+  strcpy(cmd.type, "server");
 
   // 1. Команда тестирования. Один и тот же id не выполняется дважды (сервер может переслать при потере ответа).
   JsonVariantConst cobj = res["command"];
@@ -459,6 +559,8 @@ static uint32_t handleReply(JsonDocument &res) {
       }
       Serial.printf("[cmd] %s id %s\n", ctype, cid.c_str());
       cmd.has = true;
+      strncpy(cmd.type, ctype, sizeof cmd.type - 1);
+      strncpy(cmd.id, cid.c_str(), sizeof cmd.id - 1);
       if (!strcmp(ctype, "TEST_SPEAKER") || !strcmp(ctype, "TEST_SOUND")) {
         cmd.speakerHz = 1200;
         cmd.speakerMs = 800;
@@ -655,6 +757,12 @@ static bool codeIsValid(const char *c) {
 }
 
 void setup() {
+  // Первым делом: актуаторы в LOW до Serial и до проверки DEVICE_CODE (пины при загрузке плавают)
+  pinMode(PIN_VIBRATION, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+  digitalWrite(PIN_VIBRATION, LOW);
+  digitalWrite(PIN_BUZZER, LOW);
+
   Serial.begin(115200);
   delay(300);
   Serial.println("\n=== Qamqor collar (Thin Client) ===");
@@ -665,11 +773,6 @@ void setup() {
     }
   }
   Serial.printf("[main] device code: %s\n", DEVICE_CODE);
-
-  pinMode(PIN_VIBRATION, OUTPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_VIBRATION, LOW);
-  digitalWrite(PIN_BUZZER, LOW);
 
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
 
@@ -687,13 +790,16 @@ void setup() {
 
   setupAudio();
 
-  // Фоновая сетевая задача на Core 0
+  // Сторож актуаторов и сетевая задача на Core 0
+  g_hbMs = millis();
+  xTaskCreatePinnedToCore(guardTask, "guard", 3072, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(netTask, "net", 20480, NULL, 1, NULL, 0);
 }
 
 void loop() {
   static uint32_t lastSnap = 0;
 
+  g_hbMs = millis();  // heartbeat для сторожа
   pulseTick();
   gpsPump();
 
