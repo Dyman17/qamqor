@@ -161,7 +161,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
           if (isManualGps) {
             const res = await collarControlApi.setMode(sel.collarId, 'AUTO');
             sel.controlMode = 'AUTO';
-            sel.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
+            sel.controlModeExpiresAt = res.controlModeExpiresAt ?? null;
             sel.positionSource = 'GPS';
             toast(t('a.animal.modeChanged', { mode: controlModeLabel('AUTO') }));
           } else {

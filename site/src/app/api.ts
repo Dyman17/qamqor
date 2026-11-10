@@ -195,8 +195,12 @@ export const simApi = {
 
 // ---- collar control modes (docs/architecture/api-contract.md) ----
 export const collarControlApi = {
-  setMode: (deviceId: string, mode: CollarControlMode) =>
-    patch<{ collar: CollarDto }>(`/devices/${encodeURIComponent(deviceId)}/control-mode`, { mode }),
+  setMode: async (deviceId: string, mode: CollarControlMode): Promise<CollarDto> => {
+    // server returns the CollarDto directly; tolerate a { collar } wrapper too
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = await patch<any>(`/devices/${encodeURIComponent(deviceId)}/control-mode`, { mode });
+    return (r && r.collar) ? r.collar : r;
+  },
   setManualPosition: (deviceId: string, lat: number, lng: number) =>
     put<{
       deviceId: string;

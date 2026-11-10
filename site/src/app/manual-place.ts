@@ -62,7 +62,7 @@ async function enter(a: AnimalDto, collarId: string, opts: { pens?: PenDto[]; ma
   const res = await collarControlApi.setMode(collarId, 'GPS_MANUAL');
   const mode: CollarControlMode = 'GPS_MANUAL';
   a.controlMode = mode;
-  a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
+  a.controlModeExpiresAt = res.controlModeExpiresAt ?? null;
   a.positionSource = 'MANUAL';
 
   let point = await browserPosition();

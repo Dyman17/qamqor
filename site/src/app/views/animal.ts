@@ -447,8 +447,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
         }
         const res = await collarControlApi.setMode(a.collarId, m);
         a.controlMode = m;
-        a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
-        a.positionSource = res.collar.positionSource ?? 'GPS';
+        a.controlModeExpiresAt = res.controlModeExpiresAt ?? null;
+        a.positionSource = res.positionSource ?? 'GPS';
         updateModeUi(m);
         toast(t('a.animal.modeChanged', { mode: controlModeLabel(m) }));
       } catch (e) {
