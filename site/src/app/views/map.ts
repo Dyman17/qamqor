@@ -87,11 +87,29 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         <p class="map-notice glass-light" id="map-notice" role="status" hidden>${t('a.map.mapFail')}</p>
 
         <!-- Верхняя плашка рисования загона -->
-        <div class="draw-bar glass-light" id="draw-bar" role="toolbar" style="display:none;">
-          <span class="draw-hint" id="draw-hint">${t('a.map.drawHint')}</span>
-          <button type="button" class="btn btn-secondary btn-sm" id="draw-undo" disabled>${t('a.map.drawUndo')}</button>
-          <button type="button" class="btn btn-primary btn-sm" id="draw-finish" disabled>${t('a.map.drawFinish')}</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="draw-cancel" style="color:var(--text);">${t('a.map.drawCancel')}</button>
+        <div class="draw-bar" id="draw-bar" role="toolbar" style="display:none;">
+          <div class="draw-bar-top">
+            <div class="draw-bar-top-left">
+              <span class="draw-badge-icon">${raw(icon('pencil-simple', 18))}</span>
+              <div class="draw-info">
+                <span class="draw-title">${t('a.map.drawTitle')}</span>
+                <span class="draw-count" id="draw-count">${t('a.map.drawPoints', { n: 0 })}</span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm draw-btn-cancel-mobile" id="draw-cancel-mobile" aria-label="${t('a.map.drawCancel')}">${raw(icon('x', 18))}</button>
+          </div>
+          <div class="draw-divider"></div>
+          <div class="draw-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="draw-undo" disabled>
+              ${raw(icon('arrow-u-up-left', 16))} <span>${t('a.map.drawUndo')}</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="draw-finish" disabled>
+              ${raw(icon('check', 16))} <span>${t('a.map.drawFinish')}</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm draw-btn-cancel" id="draw-cancel" title="${t('a.map.drawCancel')}">
+              ${raw(icon('x', 18))} <span>${t('a.map.drawCancel')}</span>
+            </button>
+          </div>
         </div>
 
         <div class="map-controls">
@@ -150,7 +168,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
           </div>
           <ul class="pen-list" style="margin:0;padding:0;list-style:none;">
             ${pens.map((p) => html`
-              <li style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.2rem;border-bottom:1px solid var(--border-subtle);gap:0.5rem;">
+              <li style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.2rem;border-bottom:1px solid var(--line-soft);gap:0.5rem;">
                 <span class="row-link" data-fit-pen="${p.id}" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:0.4rem;overflow:hidden;text-overflow:ellipsis;" title="${p.name}">
                   <span class="dot" style="background:${p.color || 'var(--primary)'};display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;"></span>
                   <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</strong>
@@ -321,16 +339,24 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   function updateDrawToolbar(): void {
     const undoBtn = $<HTMLButtonElement>('#draw-undo', el);
     const finishBtn = $<HTMLButtonElement>('#draw-finish', el);
-    const hintEl = $('#draw-hint', el);
+    const countEl = $('#draw-count', el);
     const drawBtn = $('#m-draw', el);
 
     if (drawBtn) drawBtn.classList.toggle('active', drawing);
     if (undoBtn) undoBtn.disabled = drawPoints.length === 0;
     if (finishBtn) finishBtn.disabled = drawPoints.length < 3;
-    if (hintEl) {
-      hintEl.textContent = drawPoints.length < 3
-        ? `Поставьте точки на карте: ${drawPoints.length} из 3 минимум`
-        : `Точек: ${drawPoints.length}. Кликните первую точку или нажмите «Завершить и сохранить».`;
+    if (countEl) {
+      if (drawPoints.length < 3) {
+        countEl.textContent = t('a.map.drawPoints', { n: drawPoints.length });
+        countEl.classList.remove('ready');
+      } else {
+        countEl.textContent = t('a.map.drawReady', { n: drawPoints.length });
+        countEl.classList.add('ready');
+      }
+    }
+    if (drawMarkers.length > 0) {
+      const firstEl = drawMarkers[0].getElement();
+      if (firstEl) firstEl.classList.toggle('ready', drawPoints.length >= 3);
     }
   }
 
@@ -341,10 +367,9 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     const isFirst = idx === 0;
 
     const dot = document.createElement('div');
-    dot.className = 'draw-vertex';
-    dot.style.background = isFirst ? '#2563EB' : 'var(--primary, #10B981)';
+    dot.className = 'draw-vertex' + (isFirst ? ' first' : '');
     if (isFirst) {
-      dot.title = 'Кликните на первую точку, чтобы замкнуть загон';
+      dot.title = t('a.map.drawFinish');
     }
 
     dot.addEventListener('click', (ev) => {
@@ -378,11 +403,17 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     drawMarkers.forEach((m) => m.remove());
     drawMarkers = [];
     const bar = $('#draw-bar', el);
-    if (bar) bar.style.display = 'flex';
+    if (bar) {
+      bar.style.display = 'flex';
+      const chromeEl = document.querySelector('.chrome');
+      if (chromeEl) {
+        const rect = chromeEl.getBoundingClientRect();
+        bar.style.top = `${Math.round(rect.bottom + 12)}px`;
+      }
+    }
     map.getCanvas().style.cursor = 'crosshair';
     updateDrawLayers();
     updateDrawToolbar();
-    toast(t('a.map.drawHint'));
   }
 
   function stopDrawing(): void {
@@ -419,14 +450,14 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         <div class="field">
           <label for="pen-color">${t('a.map.penColor')}</label>
           <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.35rem;">
-            <input type="color" id="pen-color" name="color" value="#10B981" style="width:48px;height:40px;padding:2px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border-subtle);background:var(--surface-2);">
+            <input type="color" id="pen-color" name="color" value="#0D4A2B" style="width:48px;height:40px;padding:2px;border-radius:var(--r-chip,12px);cursor:pointer;border:1px solid var(--line-soft);background:var(--surface-2-white);">
             <span class="caption muted">${t('a.map.penColor')}</span>
           </div>
         </div>
         ${animals.length > 0 ? html`
           <div class="field">
             <label>${t('a.map.penAnimals')}</label>
-            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:0.5rem;background:var(--surface-0);display:flex;flex-direction:column;gap:0.35rem;">
+            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--line-soft);border-radius:var(--r-field,16px);padding:0.75rem;background:var(--surface-0);display:flex;flex-direction:column;gap:0.4rem;">
               ${animals.map((a) => html`
                 <label class="check" style="margin:0;font-size:0.9rem;">
                   <input type="checkbox" name="animalId" value="${a.id}">
@@ -555,6 +586,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
   $('#draw-undo', el)?.addEventListener('click', undoDrawPoint);
   $('#draw-finish', el)?.addEventListener('click', finishDrawing);
   $('#draw-cancel', el)?.addEventListener('click', stopDrawing);
+  $('#draw-cancel-mobile', el)?.addEventListener('click', stopDrawing);
   const panel = $('#panel', el)!;
   const toggle = $('#sheet-toggle', el)!;
   toggle.addEventListener('click', () => {

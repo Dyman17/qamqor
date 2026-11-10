@@ -26,8 +26,12 @@ import i_vibrate from '@phosphor-icons/core/assets/regular/vibrate.svg?raw';
 import i_heartbeat from '@phosphor-icons/core/assets/regular/heartbeat.svg?raw';
 import i_pencil_simple from '@phosphor-icons/core/assets/regular/pencil-simple.svg?raw';
 import i_trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
+import i_arrow_u_up_left from '@phosphor-icons/core/assets/regular/arrow-u-up-left.svg?raw';
+import i_check from '@phosphor-icons/core/assets/regular/check.svg?raw';
 
 const RAW: Record<string, string> = {
+  'arrow-u-up-left': i_arrow_u_up_left,
+  'check': i_check,
   'pencil-simple': i_pencil_simple,
   'trash': i_trash,
   'speaker-high': i_speaker_high,

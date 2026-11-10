@@ -46,3 +46,7 @@ app/.expo/
 # ESP firmware secrets and build output
 esp/local/
 esp/.pio/
+
+# QA test screenshots
+qa-screenshots/
+site/qa-screenshots/

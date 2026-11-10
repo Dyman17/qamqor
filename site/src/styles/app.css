@@ -235,10 +235,124 @@ html[data-motion="on"] .pulse-dot { animation: pulse 1.2s ease-in-out infinite; 
 .map-controls { position: absolute; z-index: 5; top: 88px; left: 20px; display: grid; gap: var(--space-2); }
 .map-btn { width: 48px; height: 48px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); cursor: pointer; }
 .map-btn.active { background: var(--primary); color: #fff; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35); }
-.draw-bar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: var(--space-2); padding: 8px 16px; border-radius: 9999px; box-shadow: 0 4px 20px rgba(0,0,0,0.45); max-width: 92vw; flex-wrap: wrap; background: rgba(18,24,20,0.88); border: 1px solid var(--line-soft); }
-.draw-hint { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; margin-right: 4px; }
-.draw-vertex { width: 14px; height: 14px; border-radius: 50%; background: var(--primary, #10B981); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.15s ease; }
-.draw-vertex:hover { transform: scale(1.4); }
+.draw-bar {
+  position: absolute;
+  top: 88px;
+  left: calc(50% - 180px);
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 12px 8px 16px;
+  border-radius: var(--r-card, 20px);
+  background: var(--surface-2-white, #FFFFFF);
+  border: 1px solid rgba(13, 74, 43, 0.16);
+  box-shadow: 0 10px 30px -6px rgba(11, 26, 18, 0.22), 0 2px 6px rgba(11, 26, 18, 0.05);
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+.draw-bar-top {
+  display: flex;
+  align-items: center;
+}
+.draw-bar-top-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.draw-btn-cancel-mobile {
+  display: none;
+}
+.draw-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.draw-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.draw-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.draw-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface-1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-feature-settings: "tnum" 1;
+}
+.draw-count.ready {
+  background: rgba(13, 107, 58, 0.16);
+  color: var(--ok);
+  font-weight: 700;
+}
+.draw-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--line-soft);
+  flex: none;
+}
+.draw-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.draw-bar .btn-sm {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: var(--r-chip, 12px);
+  gap: 6px;
+}
+.draw-bar .btn-ghost {
+  color: var(--ink-3);
+  padding: 0 10px;
+}
+.draw-bar .btn-ghost:hover:not(:disabled) {
+  color: var(--signal);
+  background: rgba(181, 44, 8, 0.08);
+}
+.draw-vertex {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary, #0D4A2B);
+  border: 2.5px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.draw-vertex:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(13, 74, 43, 0.25), 0 3px 10px rgba(0,0,0,0.4);
+}
+.draw-vertex.first {
+  background: var(--primary);
+  border-color: #fff;
+}
+.draw-vertex.first.ready {
+  box-shadow: 0 0 0 3px rgba(13, 107, 58, 0.35), 0 2px 8px rgba(0,0,0,0.35);
+  animation: pulseFirst 1.5s ease-in-out infinite;
+}
+@keyframes pulseFirst {
+  0% { transform: scale(1); box-shadow: 0 0 0 2px rgba(13, 107, 58, 0.5); }
+  50% { transform: scale(1.25); box-shadow: 0 0 0 8px rgba(13, 107, 58, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(13, 107, 58, 0.5); }
+}
 .map-panel { position: absolute; z-index: 6; right: 20px; top: 76px; bottom: 20px; width: 360px; border-radius: 32px; display: flex; flex-direction: column; overflow: hidden; }
 .sheet-handle { display: none; }
 .panel-scroll { overflow-y: auto; padding: var(--space-5); display: grid; gap: var(--space-3); align-content: start; flex: 1; }
@@ -277,6 +391,44 @@ html[data-motion="on"] .amark.out { animation: ring 1.4s ease-out 3; }
   .sheet-handle { display: grid; place-items: center; min-height: 44px; border: 0; background: transparent; width: 100%; flex: none; }
   .sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--line); display: block; }
   .panel-scroll { padding-top: 0; }
+  .draw-bar {
+    top: 84px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    padding: 10px 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    border-radius: 16px;
+    white-space: normal;
+  }
+  .draw-bar-top {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .draw-btn-cancel-mobile {
+    display: inline-flex;
+    padding: 4px;
+    color: var(--ink-3);
+  }
+  .draw-divider {
+    display: none;
+  }
+  .draw-actions {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .draw-actions .btn {
+    flex: 1 1 50%;
+    justify-content: center;
+  }
+  .draw-actions .draw-btn-cancel {
+    display: none;
+  }
 }
 
 /* ---------- demo modes (pilot-modes P2): strip, tag, panel, marker shape ---------- */

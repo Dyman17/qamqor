@@ -88,7 +88,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       return html`<span class="badge badge-warn"><span class="dot"></span> ${t('a.animal.zoneWarn')}</span>`;
     }
     if (zone === 'ORANGE') {
-      return html`<span class="badge badge-warn" style="color:var(--warn-dark,#d97706);"><span class="dot"></span> ${t('a.animal.zoneCrit')}</span>`;
+      return html`<span class="badge badge-warn" style="color:var(--warning);"><span class="dot"></span> ${t('a.animal.zoneCrit')}</span>`;
     }
     if (zone === 'RED' || inFence === false) {
       return html`<span class="badge badge-danger"><span class="dot"></span> ${t('a.animal.zoneBreach')}</span>`;
@@ -148,7 +148,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <h2 class="title-2" id="h-pos" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('crosshair-simple', 20))} ${t('a.animal.position')}</h2>
           <p class="num" id="pos-val">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
           <p class="muted" id="pos-sub">${t('a.animal.accuracy')}: ${a.accuracyM != null ? `${Math.round(a.accuracyM)} m` : '—'} · ${timeEl(a.lastSeenAt)}</p>
-          <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid var(--border-subtle,#333);display:flex;justify-content:space-between;align-items:center;">
+          <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;">
             <span id="col-val"><strong>${t('a.animal.collar')}:</strong> ${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>${collar ? html` <span class="badge badge-sm ${collar.status === 'ONLINE' ? 'badge-online' : ''}">${collar.status}</span>` : ''}` : t('a.herd.noCollar')}</span>
             ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}
           </div>
@@ -164,7 +164,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
                 <p class="caption muted" style="margin-bottom:0.75rem;">${t('a.animal.pickFreeCollar')}</p>
                 <div class="row-actions" style="flex-wrap:wrap;gap:0.6rem;">
                   ${freeCollars.map((c) => html`
-                    <div style="display:inline-flex;align-items:center;gap:0.75rem;padding:0.5rem 0.85rem;background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border-subtle);">
+                    <div style="display:inline-flex;align-items:center;gap:0.75rem;padding:0.5rem 0.85rem;background:var(--surface-1);border-radius:var(--r-card);border:1px solid var(--line-soft);">
                       <span class="font-mono num" style="font-weight:700;font-size:1.05rem;">${c.code ?? c.deviceId}</span>
                       <span class="badge badge-sm ${c.status === 'ONLINE' ? 'badge-online' : ''}">${c.status}</span>
                       <button type="button" class="btn btn-primary btn-sm" data-assign-collar="${c.deviceId}">${t('a.animal.assignBtn')}</button>
@@ -197,7 +197,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
               <div id="zone-wrap">${zoneBadge(null, a.status !== 'danger')}</div>
               <div><strong>${t('a.animal.pen')}:</strong> ${pen ? html`<a href="/app/map?pen=${pen.id}">${pen.name}</a>` : t('a.herd.noPen')}</div>
             </div>
-            <div id="sig-limits" class="caption muted" style="padding-top:0.6rem;border-top:1px solid var(--border-subtle,#333);">
+            <div id="sig-limits" class="caption muted" style="padding-top:0.6rem;border-top:1px solid var(--line-soft);">
               ${sig ? html`<span>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)}) · ${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</span>` : html`<span>${t('a.animal.signals')}: —</span>`}
             </div>
           </div>

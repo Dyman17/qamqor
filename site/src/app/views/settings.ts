@@ -165,7 +165,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
           <!-- Селектор режимов -->
           <div class="chips" role="group" aria-label="${t('a.set.data.title')}" style="margin-bottom:1rem;">
             ${MODES.map((m) => html`
-              <button type="button" class="chip-btn ${m.v === s.dataMode ? 'active' : ''}" data-mode="${m.v}" ${locked ? raw('disabled') : ''} style="min-height:40px;padding:0.4rem 1rem;font-weight:600;border-radius:var(--radius-pill);cursor:pointer;background:${m.v === s.dataMode ? 'var(--primary)' : 'var(--surface-2)'};color:${m.v === s.dataMode ? '#fff' : 'inherit'};border:1px solid var(--border-subtle);">
+              <button type="button" class="chip-btn ${m.v === s.dataMode ? 'active' : ''}" data-mode="${m.v}" ${locked ? raw('disabled') : ''} style="min-height:40px;padding:0.4rem 1rem;font-weight:600;border-radius:var(--r-pill);cursor:pointer;background:${m.v === s.dataMode ? 'var(--primary)' : 'var(--surface-2-white)'};color:${m.v === s.dataMode ? '#fff' : 'inherit'};border:1px solid var(--line-soft);">
                 ${m.label}
               </button>
             `)}
@@ -178,7 +178,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
 
           <!-- Режим: AUTO (Автоматическая симуляция сценариев) -->
           ${s.dataMode === 'AUTO' ? html`
-            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--border-subtle);">
+            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--line-soft);">
               <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
                 <span class="badge ${s.running ? 'badge-online' : ''}"><span class="dot"></span> ${s.running ? t('a.demo.running') : t('a.demo.stopped')}</span>
                 <span class="caption muted">животных: <strong class="num">${s.demo.animals}</strong> · демо-оповещений: <strong class="num">${s.demo.alerts}</strong></span>
@@ -207,7 +207,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
 
           <!-- Режим: MANUAL (Пилотный - ручное управление и события) -->
           ${s.dataMode === 'MANUAL' ? html`
-            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--border-subtle);">
+            <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:0.5rem;border-top:1px solid var(--line-soft);">
               <div>
                 <label class="caption muted" style="display:block;margin-bottom:0.35rem;font-weight:600;">${t('a.demo.animal')}:</label>
                 <div class="chips" style="gap:0.4rem;flex-wrap:wrap;">
@@ -221,7 +221,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
               </div>
 
               ${current ? html`
-                <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:0.75rem;border:1px solid var(--border-subtle);">
+                <div style="background:var(--surface-1);border-radius:var(--r-card);padding:0.75rem;border:1px solid var(--line-soft);">
                   <p class="caption muted" style="margin-bottom:0.4rem;">
                     <strong>${current.name}</strong> · ${t('a.demo.pos')}:
                     <span class="font-mono num">${current.lat != null && current.lng != null ? `${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}` : 'не задана'}</span>
@@ -247,7 +247,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
                 </div>
 
                 ${last ? html`
-                  <p class="caption muted font-mono" style="background:var(--surface-0);padding:0.5rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <p class="caption muted font-mono" style="background:var(--surface-0);padding:0.5rem;border-radius:var(--r-chip);border:1px solid var(--line-soft);">
                     ${t('a.demo.r.prefix', { text: collarResponseText(last) })}
                   </p>
                 ` : ''}
