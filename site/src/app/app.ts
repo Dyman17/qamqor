@@ -207,9 +207,19 @@ async function buildShell(root: HTMLElement, dead: () => boolean, navCleanups: (
 
   $('#logout', root)!.addEventListener('click', logout);
   $('#logout2', root)!.addEventListener('click', logout);
-  $<HTMLSelectElement>('#farm-sel', root)?.addEventListener('change', (e) => { setFarmId((e.target as HTMLSelectElement).value); void navigate('/app/map'); });
+  const farmSel = $<HTMLSelectElement>('#farm-sel', root);
+  farmSel?.addEventListener('change', async () => {
+    const prev = getFarmId();
+    const next = farmSel.value;
+    setFarmId(next);
+    await navigate('/app/map');
+    // navigation refused (a leave guard said stay): the old shell is still on screen, so the old farm stays selected too
+    if (shell && shell.farmId !== next && prev) { setFarmId(prev); farmSel.value = prev; }
+  });
   const pm = $('#profile-menu', root)!;
-  $('#profile-btn', root)!.addEventListener('click', () => { const h = openModal(pm, { opener: $('#profile-btn', root) }); pm.addEventListener('click', (e) => { if (e.target === pm || (e.target as Element).closest('a, #profile-close, #logout2')) h.close(); }); });
+  let pmHandle: { close(): void } | null = null;
+  pm.addEventListener('click', (e) => { if (e.target === pm || (e.target as Element).closest('a, #profile-close, #logout2')) pmHandle?.close(); }); // bound once
+  $('#profile-btn', root)!.addEventListener('click', () => { pmHandle = openModal(pm, { opener: $('#profile-btn', root), onClose: () => { pmHandle = null; } }); });
 
   // ---- banners (most severe first, the rest as "+n") ----
   const banners = $('#banners', root)!;
@@ -235,7 +245,7 @@ async function buildShell(root: HTMLElement, dead: () => boolean, navCleanups: (
     if (!s || s.dataMode === 'REAL') { strip.hidden = true; strip.innerHTML = ''; document.body.classList.remove('is-demo'); return; }
     strip.hidden = false;
     document.body.classList.add('is-demo');
-    strip.innerHTML = html`${raw(icon('stack', 20))}<span class="demo-strip-tag">${t('a.demo.tag')}</span> <span aria-hidden="true">·</span> <span>${s.dataMode === 'MANUAL' ? t('a.demo.strip.MANUAL') : t('a.demo.strip.AUTO')}</span>`.s;
+    strip.innerHTML = html`${raw(icon('stack', 20))}<span class="demo-strip-tag">${t('a.demo.tag')}</span> <span class="demo-strip-dot" aria-hidden="true">·</span> <span>${s.dataMode === 'MANUAL' ? t('a.demo.strip.MANUAL') : t('a.demo.strip.AUTO')}</span>`.s;
     strip.setAttribute('aria-label', modeName(s.dataMode));
   };
   setSim(farm.dataMode ? { dataMode: farm.dataMode, running: false, speed: 1, herd: 8, until: null, demo: { animals: 0, alerts: 0 }, enabled: true } : null, farm.id);
@@ -245,11 +255,29 @@ async function buildShell(root: HTMLElement, dead: () => boolean, navCleanups: (
   const simTimer = window.setInterval(() => { if (!document.hidden) void refreshSim(farm.id); }, 15000);
   cleanups.push(() => { window.clearInterval(simTimer); document.body.classList.remove('is-demo'); });
 
+  // height of the sticky banner stack (offline banner + demo strip): the sidebar, the chrome and the map offset themselves by it (--strip-h-live)
+  const bannerStack = $('.banners', root)!;
+  const syncBannerH = () => root.style.setProperty('--strip-h-live', `${bannerStack.offsetHeight}px`);
+  syncBannerH();
+  if (typeof ResizeObserver !== 'undefined') {
+    const bro = new ResizeObserver(syncBannerH);
+    bro.observe(bannerStack);
+    cleanups.push(() => { bro.disconnect(); root.style.removeProperty('--strip-h-live'); });
+  }
+
   // ---- chrome: connection badge + alert counter ----
   const refreshChrome = async () => {
     try {
-      const [devs, stats] = await Promise.all([get<CollarDto[]>('/devices'), get<{ activeTotal: number }>('/alerts/stats').catch(() => null)]);
+      const [devs, stats, freshFarms] = await Promise.all([get<CollarDto[]>('/devices'), get<{ activeTotal: number }>('/alerts/stats').catch(() => null), get<FarmDto[]>('/farms', { farm: false }).catch(() => null)]);
       if (shellDead) return;
+      // a farm renamed elsewhere (settings, another device): keep the sidebar name and the farm selector in step
+      if (freshFarms?.length) {
+        farms = freshFarms;
+        const cur = freshFarms.find((f) => f.id === farm.id);
+        if (cur) Object.assign(farm, cur);
+        const nameEl = $('.side-farm', root); if (nameEl && cur) nameEl.textContent = cur.name;
+        $$<HTMLOptionElement>('#farm-sel option', root).forEach((o) => { const f = freshFarms.find((x) => x.id === o.value); if (f && o.textContent !== f.name) o.textContent = f.name; });
+      }
       const conn = $('#conn', root)!;
       if (devs.length) {
         const on = devs.filter((d) => d.status === 'ONLINE').length;
@@ -299,6 +327,7 @@ const view: View = {
     if (reusable) {
       sh = shell!;
       sh.setActive(active);
+      sh.refreshChrome(); // badge, connection counter and farm name follow the page change
       // a fresh element each time: the previous view's late callbacks see their own element detached (isConnected false)
       const fresh = document.createElement('main');
       fresh.id = 'main'; fresh.className = 'page'; fresh.tabIndex = -1;

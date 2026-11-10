@@ -40,6 +40,12 @@
   --warning: #7A4A00;
   --danger: #B52C08;
   --disabled-text: #586A5E;
+  --signal-tint: rgba(181, 44, 8, .08);
+  --signal-ring: rgba(181, 44, 8, .22);
+  --warning-tint: rgba(122, 74, 0, .08);
+  --ok-tint: rgba(13, 107, 58, .16);
+  --ok-ring: rgba(13, 107, 58, .4);
+  --primary-ring: rgba(13, 74, 43, .28);
   --text-muted: #46594D;
   --line: #5F7568;
   --line-soft: rgba(11, 26, 18, .10);

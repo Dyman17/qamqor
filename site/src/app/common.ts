@@ -2,7 +2,7 @@ import { esc, html, raw, type Safe } from '../dom';
 import { getLang, t } from '../i18n';
 import { openModal } from '../ui/dialog';
 import { icon } from '../ui/icons';
-import { ApiError, type AnimalDto, type CollarDto, type PulseThreatDto } from './api';
+import { ApiError, type AnimalDto, type CollarControlMode, type CollarDto, type PulseThreatDto } from './api';
 import { demoTag } from './demo';
 
 export function timeAgo(iso: string | null | undefined): string {
@@ -39,7 +39,7 @@ export function errText(e: unknown): string {
 export const skeleton = (rows = 4): Safe => html`<div class="skeleton-list" role="status" aria-label="${t('a.state.loading')}">${Array.from({ length: rows }, () => html`<div class="skeleton-row"></div>`)}</div>`;
 
 export function emptyState(title: string, text?: string, action?: Safe): Safe {
-  return html`<div class="state-block empty">${raw(icon('plant', 72, 'grass'))}<h2 class="title-2">${title}</h2>${text ? html`<p>${text}</p>` : ''}${action ?? ''}</div>`;
+  return html`<div class="state-block empty">${raw(icon('plant', 48, 'grass'))}<h2 class="title-2">${title}</h2>${text ? html`<p>${text}</p>` : ''}${action ?? ''}</div>`;
 }
 
 export function errorState(e: unknown, retryId = 'retry', backHref?: string, backLabel?: string): Safe {
@@ -70,21 +70,24 @@ function animalBadgeBase(a: AnimalDto): Safe {
   return a.collarId ? statusBadge('online', t('a.st.online')) : statusBadge('none', t('a.st.ok'));
 }
 
-export function pulseThreatBadge(t?: PulseThreatDto | null): Safe {
-  if (!t || t.level === 'UNKNOWN') return statusBadge('none', 'Нет данных');
-  const label = getLang() === 'en' ? t.labelEn : getLang() === 'kk' ? t.labelKk : t.labelRu;
-  const tip = t.sourceNoteRu ? `${label} (${t.source ?? 'Merck'}). ${t.sourceNoteRu}` : `${label} (${t.source ?? 'Merck'})`;
-  if (t.level === 'CRITICAL') {
+export function pulseThreatBadge(pt?: PulseThreatDto | null): Safe {
+  if (!pt || pt.level === 'UNKNOWN') return statusBadge('none', t('a.animal.noPulse'));
+  const label = getLang() === 'en' ? pt.labelEn : getLang() === 'kk' ? pt.labelKk : pt.labelRu;
+  const tip = pt.sourceNoteRu ? `${label} (${pt.source ?? 'Merck'}). ${pt.sourceNoteRu}` : `${label} (${pt.source ?? 'Merck'})`;
+  if (pt.level === 'CRITICAL') {
     return html`<span class="badge badge-danger pulse-crit-badge" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
   }
-  if (t.level === 'ELEVATED') {
-    return html`<span class="badge badge-warn" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
+  if (pt.level === 'ELEVATED') {
+    return html`<span class="badge badge-warning" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
   }
-  if (t.level === 'LOW') {
-    return html`<span class="badge badge-warn" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
+  if (pt.level === 'LOW') {
+    return html`<span class="badge badge-warning" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
   }
   return html`<span class="badge badge-online" title="${tip}"><span class="dot" aria-hidden="true"></span>${label}</span>`;
 }
+
+/** Human label of a collar control mode (never the raw enum). */
+export const controlModeLabel = (m: CollarControlMode): string => (m === 'GPS_MANUAL' ? t('a.animal.modeGpsManual') : m === 'MANUAL' ? t('a.animal.modeManual') : t('a.animal.modeAuto'));
 
 export function collarBadge(c: CollarDto): Safe {
   return html`${collarBadgeBase(c)}${demoTag(c.isDemo)}`;

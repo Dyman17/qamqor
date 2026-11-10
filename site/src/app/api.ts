@@ -111,6 +111,8 @@ export function authHeaders(): Record<string, string> {
 }
 
 export const REQUEST_TIMEOUT_MS = 20000;
+/** Writes get longer: a cold-started server can need most of a minute to answer a login. */
+export const WRITE_TIMEOUT_MS = 45000;
 
 export interface Res<T> { data: T; next: string | null }
 
@@ -122,7 +124,7 @@ export async function request<T>(method: string, path: string, body?: unknown, o
   // hard timeout so nothing hangs forever; the caller's own signal (if any) still aborts too
   const ctl = new AbortController();
   let timedOut = false;
-  const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, REQUEST_TIMEOUT_MS);
+  const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, method === 'GET' || method === 'DELETE' ? REQUEST_TIMEOUT_MS : WRITE_TIMEOUT_MS);
   const onCallerAbort = () => ctl.abort();
   if (opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener('abort', onCallerAbort, { once: true }); }
   const done = () => { window.clearTimeout(timer); opts.signal?.removeEventListener('abort', onCallerAbort); };
@@ -132,7 +134,12 @@ export async function request<T>(method: string, path: string, body?: unknown, o
     res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctl.signal, cache: 'no-store' });
     if (res.ok) setNet({ server: false, waking: false, offline: false, rateLimited: false, lastOk: Date.now() });
     else setNet({ rateLimited: res.status === 429, server: res.status >= 500, waking: false });
-    if (res.status !== 204) { try { json = await res.json(); } catch { /* empty or not JSON */ } }
+    if (res.status !== 204) {
+      try { json = await res.json(); } catch (e) {
+        // an aborted read (timeout or caller) is a failure, not an empty body; only an empty / non-JSON body is tolerated
+        if (ctl.signal.aborted || (e as Error).name === 'AbortError') throw e;
+      }
+    }
   } catch (e) {
     done();
     if ((e as Error).name === 'AbortError' && !timedOut) throw e;

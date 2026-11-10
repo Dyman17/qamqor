@@ -56,13 +56,13 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
 function farmTab(el: HTMLElement, ctx: AppCtx): void {
   const f = ctx.farm;
-  setHtml(el, html`<form class="form narrow-form" id="ff" novalidate>
+  setHtml(el, html`<section class="panel-block narrow-form"><form class="form" id="ff" novalidate>
     <div class="field"><label for="fn">${t('a.set.farmName')}</label><input class="input" id="fn" value="${f.name}" required></div>
     <div class="field"><label for="fd">${t('a.set.farmDesc')}</label><input class="input" id="fd" value="${f.description ?? ''}"></div>
     <div class="field"><label for="ftz">${t('a.set.tz')}</label><input class="input" id="ftz" value="${f.timezone}"></div>
     <label class="check"><input type="checkbox" id="fw" ${f.workerCanEditBoundaries ? raw('checked') : ''} aria-describedby="fw-h"><span>${t('a.set.workerEdit')}</span></label><p class="hint" id="fw-h">${t('a.set.workerEditHint')}</p>
     <p class="field-error" id="ferr" role="alert" hidden></p><p class="form-ok" id="fok" role="status" hidden></p>
-    <button class="btn btn-primary" type="submit" data-write>${t('a.set.save')}</button></form>`);
+    <button class="btn btn-primary btn-save" type="submit" data-write>${t('a.set.save')}</button></form></section>`);
   $<HTMLFormElement>('#ff', el)!.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('#ferr', el)!, ok = $('#fok', el)!;
@@ -165,7 +165,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
           <!-- Селектор режимов -->
           <div class="chips" role="group" aria-label="${t('a.set.data.title')}" style="margin-bottom:1rem;">
             ${MODES.map((m) => html`
-              <button type="button" class="chip-btn ${m.v === s.dataMode ? 'active' : ''}" data-mode="${m.v}" ${locked ? raw('disabled') : ''} style="min-height:40px;padding:0.4rem 1rem;font-weight:600;border-radius:var(--r-pill);cursor:pointer;background:${m.v === s.dataMode ? 'var(--primary)' : 'var(--surface-2-white)'};color:${m.v === s.dataMode ? '#fff' : 'inherit'};border:1px solid var(--line-soft);">
+              <button type="button" class="chip-btn" aria-pressed="${m.v === s.dataMode}" data-mode="${m.v}" ${locked ? raw('disabled') : ''}>
                 ${m.label}
               </button>
             `)}
@@ -189,7 +189,7 @@ function dataTab(el: HTMLElement, ctx: AppCtx): void {
                 <label class="caption muted" style="display:block;margin-bottom:0.35rem;font-weight:600;">${t('a.demo.speed')}:</label>
                 <div class="chips" style="gap:0.4rem;">
                   ${SPEEDS.map((sp) => html`
-                    <button type="button" class="btn btn-secondary btn-sm" data-speed="${sp}" style="${speed === sp ? 'background:var(--primary);color:#fff;border-color:var(--primary);' : ''}min-width:44px;font-weight:700;">
+                    <button type="button" class="chip-btn" aria-pressed="${speed === sp}" data-speed="${sp}">
                       x${sp}
                     </button>
                   `)}
@@ -423,12 +423,12 @@ function signalsTab(el: HTMLElement, ctx: AppCtx): void {
   void loadInto(el, () => get<SignalLimitDto[]>(`/farms/${fid}/signal-limits`), (all) => {
     const levels = [['SOUND', t('a.set.sound')], ['VIBRATION', t('a.set.vibration')]] as const;
     const find = (l: string) => all.find((x) => x.level === l);
-    setHtml(el, html`<form class="form narrow-form" id="sl" novalidate><h2 class="title-2">${t('a.set.limits')}</h2>
+    setHtml(el, html`<section class="panel-block narrow-form"><form class="form" id="sl" novalidate><h2 class="title-2">${t('a.set.limits')}</h2>
       ${levels.map(([lvl, name]) => { const x = find(lvl); const un = x?.unlimited ?? false; return html`<fieldset class="limit-row"><legend>${name}</legend>
         <div class="field"><label for="l-${lvl}">${t('a.set.limit')}</label><input class="input num" id="l-${lvl}" type="number" min="1" step="1" inputmode="numeric" value="${x?.dailyLimit ?? ''}" ${un ? raw('disabled') : ''} aria-describedby="e-${lvl}"><p class="field-error" id="e-${lvl}" hidden></p></div>
         <label class="check"><input type="checkbox" data-un="${lvl}" ${un ? raw('checked') : ''}><span>${t('a.set.unlimited')}</span></label></fieldset>`; })}
       <p class="field-error" id="serr" role="alert" hidden></p><p class="form-ok" id="sok" role="status" hidden></p>
-      <button class="btn btn-primary" type="submit" data-write>${t('a.set.save')}</button></form>`);
+      <button class="btn btn-primary btn-save" type="submit" data-write>${t('a.set.save')}</button></form></section>`);
     $$('[data-un]', el).forEach((c) => c.addEventListener('change', () => { $<HTMLInputElement>(`#l-${c.dataset.un}`, el)!.disabled = (c as HTMLInputElement).checked; }));
     $<HTMLFormElement>('#sl', el)!.addEventListener('submit', async (e) => {
       e.preventDefault();

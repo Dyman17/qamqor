@@ -42,6 +42,7 @@ export function isChunkError(e: unknown): boolean {
 /** Reload once for a chunk error (a new deploy replaced the hashed files). A timestamp in sessionStorage prevents reload loops. */
 export function reloadOnceOnChunkError(e: unknown): boolean {
   if (!isChunkError(e)) return false;
+  if (!navigator.onLine) return false; // offline: a reload would only show the browser's error page; the retry button stays
   const KEY = 'qamqor.chunkReload';
   const last = Number(ssGet(KEY) || 0);
   if (Date.now() - last < 30000) return false;
@@ -50,15 +51,17 @@ export function reloadOnceOnChunkError(e: unknown): boolean {
   return true;
 }
 
-function failPage(title: string, hint: string): string {
-  return `
+/** Renders the failure page. The reload button is bound here: the production CSP (script-src self) blocks inline onclick. */
+function showFail(title: string, hint: string): void {
+  rootEl.innerHTML = `
           <div style="min-height:100svh;display:grid;place-items:center;padding:24px;background:#F6FAF4;color:#0B1A12;font-family:system-ui,sans-serif;text-align:center;">
             <div style="max-width:420px;display:grid;gap:16px;">
               <h2 style="font-size:22px;margin:0;font-weight:700;">${esc(title)}</h2>
               <p style="margin:0;color:#46594D;font-size:15px;line-height:1.5;">${esc(hint)}</p>
-              <button onclick="location.reload()" style="min-height:48px;padding:0 24px;border-radius:16px;background:#0D4A2B;color:#fff;border:0;font-weight:600;font-size:16px;cursor:pointer;">${esc(t('a.route.reload'))}</button>
+              <button type="button" id="route-reload" style="min-height:48px;padding:0 24px;border-radius:16px;background:#0D4A2B;color:#fff;border:0;font-weight:600;font-size:16px;cursor:pointer;">${esc(t('a.route.reload'))}</button>
             </div>
           </div>`;
+  document.getElementById('route-reload')?.addEventListener('click', () => location.reload());
 }
 
 /** A view that holds unsaved, unrecoverable state (the device secret) installs a guard; return false to stay. */
@@ -95,7 +98,7 @@ async function render(moved: boolean): Promise<void> {
         if (my !== token) return;
         if (reloadOnceOnChunkError(e)) return;
         prevView?.dispose?.(); prevView = null;
-        rootEl.innerHTML = failPage(t('a.route.loadFail'), t('a.route.loadFailHint'));
+        showFail(t('a.route.loadFail'), t('a.route.loadFailHint'));
         return;
       }
       break;
@@ -126,7 +129,7 @@ async function render(moved: boolean): Promise<void> {
     console.error('Failed to mount view:', e);
     if (my !== token) return;
     prevView?.dispose?.(); prevView = null;
-    rootEl.innerHTML = failPage(t('a.route.renderFail'), t('a.route.renderFailHint'));
+    showFail(t('a.route.renderFail'), t('a.route.renderFailHint'));
     return;
   }
   if (moved) {

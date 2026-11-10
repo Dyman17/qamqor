@@ -48,8 +48,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
   }).catch(() => {});
 
   const rowsDesktop = (items: AnimalDto[]): Safe => html`
-    <table class="table herd-table"><thead><tr>${['tag', 'name', 'species', 'pen', 'collar', 'status', 'pulse', 'seen'].map((c) => html`<th scope="col">${t(`a.herd.c.${c}` as 'a.herd.c.tag')}</th>`)}</tr></thead>
-    <tbody>${items.map((a) => html`<tr class="row-link"><td class="num"><a class="row-a" href="/app/herd/${a.id}">${a.tag}</a></td><td>${a.name}</td><td>${speciesName(a.species)}</td><td>${penName(a.penId)}</td><td>${a.collarId ?? t('a.herd.noCollar')}</td><td>${animalBadge(a)}</td><td>${a.lastHeartRate != null ? html`<span class="num">${a.lastHeartRate}</span> ${pulseThreatBadge(a.pulseThreat)}` : '—'}</td><td>${timeEl(a.lastSeenAt)}</td></tr>`)}</tbody></table>`;
+    <div class="table-wrap herd-table-wrap"><table class="table herd-table"><thead><tr>${['tag', 'name', 'species', 'pen', 'collar', 'status', 'pulse', 'seen'].map((c) => html`<th scope="col">${t(`a.herd.c.${c}` as 'a.herd.c.tag')}</th>`)}</tr></thead>
+    <tbody>${items.map((a) => html`<tr class="row-link"><td class="num"><a class="row-a" href="/app/herd/${a.id}">${a.tag}</a></td><td>${a.name}</td><td>${speciesName(a.species)}</td><td>${penName(a.penId)}</td><td>${a.collarId ?? t('a.herd.noCollar')}</td><td>${animalBadge(a)}</td><td>${a.lastHeartRate != null ? html`<span class="num">${a.lastHeartRate}</span> ${pulseThreatBadge(a.pulseThreat)}` : '—'}</td><td>${timeEl(a.lastSeenAt)}</td></tr>`)}</tbody></table></div>`;
   const rowsCards = (items: AnimalDto[]): Safe => html`
     <ul class="cards herd-cards">${items.map((a) => html`<li><a class="card-row" href="/app/herd/${a.id}"><span class="card-main"><strong>${a.name}</strong><span class="caption muted">${speciesName(a.species)} · ${a.tag} · ${penName(a.penId)}${a.lastHeartRate != null ? ` · ${t('a.animal.bpm', { n: a.lastHeartRate })}` : ''}</span></span><span class="card-side">${pulseThreatBadge(a.pulseThreat)}</span></a></li>`)}</ul>`;
 

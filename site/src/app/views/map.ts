@@ -4,7 +4,7 @@ import { icon } from '../../ui/icons';
 import type { AppView } from '../app';
 import { collarControlApi, del, get, post, request, type AnimalDto, type PenDto, type PulseThreatDto } from '../api';
 import { demoTag } from '../demo';
-import { absTime, animalBadge, confirmDialog, emptyState, errorState, errText, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
+import { absTime, animalBadge, confirmDialog, controlModeLabel, emptyState, errorState, errText, offlineGuard, pulseThreatBadge, skeleton, speciesName, timeAgo, toast } from '../common';
 import { formModal } from '../forms';
 import { openAnimalForm } from './animal';
 import { getSim, onSim } from '../demo';
@@ -137,14 +137,14 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
           <h2 class="title-2" style="margin:0;">${sel.name} · ${sel.tag}</h2>
           ${isManualGps
-            ? html`<span class="badge badge-warn" title="${t('a.map.dragHintManual')}">${t('a.map.posSourceManual')}</span>`
+            ? html`<span class="badge badge-warning" title="${t('a.map.dragHintManual')}">${t('a.map.posSourceManual')}</span>`
             : html`<span class="badge badge-sm">${t('a.map.posSourceGps')}</span>`}
         </div>
         <p style="margin:0.25rem 0;">${animalBadge(sel)}</p>
         <p class="muted">${speciesName(sel.species)} · ${sel.penId ? pens.find((p) => p.id === sel.penId)?.name ?? '' : t('a.map.noPen')}</p>
         <p>${sel.lastHeartRate != null ? html`${pulseThreatBadge(sel.pulseThreat)} <span class="num">${t('a.animal.bpm', { n: sel.lastHeartRate })}</span> · ` : ''}<span class="muted">${sel.lat == null ? t('a.map.noPos') : `${timeAgo(sel.lastSeenAt)}`}</span></p>
-        ${sel.pulseThreat?.sourceNoteRu ? html`<p class="caption muted" style="font-size:0.78rem;background:var(--surface-1);padding:0.4rem 0.6rem;border-radius:var(--r-card);border:1px solid var(--line-soft);margin:0.4rem 0;">${sel.pulseThreat.sourceNoteRu}</p>` : ''}
-        ${isManualGps ? html`<p class="caption" style="color:var(--warning);font-weight:600;margin:0.4rem 0;">${t('a.map.dragHintManual')}</p>` : ''}
+        ${sel.pulseThreat?.sourceNoteRu ? html`<p class="caption muted pulse-source-note-box">${sel.pulseThreat.sourceNoteRu}</p>` : ''}
+        ${isManualGps ? html`<p class="caption manual-gps-note">${t('a.map.dragHintManual')}</p>` : ''}
         <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.5rem;">
           <a class="btn btn-primary btn-sm" href="/app/herd/${sel.id}">${t('a.map.openProfile')}</a>
           ${sel.collarId ? html`
@@ -163,13 +163,14 @@ export const mount: AppView['mount'] = async (el, ctx) => {
             sel.controlMode = 'AUTO';
             sel.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
             sel.positionSource = 'GPS';
-            toast(t('a.animal.modeChanged', { mode: 'AUTO' }));
+            toast(t('a.animal.modeChanged', { mode: controlModeLabel('AUTO') }));
           } else {
             const r = await enterGpsManual(sel, {
+              alive: () => !disposed,
               pens,
               mapCenter: () => { const c = map?.getCenter(); return c ? [c.lng, c.lat] : null; },
             });
-            if (!r.placed) toast(t('a.animal.modeChanged', { mode: 'GPS_MANUAL' }));
+            if (!r.placed && !r.skipped && !disposed) toast(t('a.animal.modeChanged', { mode: controlModeLabel('GPS_MANUAL') }));
             if (r.placed && map && r.lng != null && r.lat != null) map.flyTo({ center: [r.lng, r.lat], zoom: Math.max(map.getZoom(), 15), essential: false });
           }
           drawPanel();
@@ -206,10 +207,10 @@ export const mount: AppView['mount'] = async (el, ctx) => {
                 <span class="row-link" data-fit-pen="${p.id}" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:0.4rem;overflow:hidden;text-overflow:ellipsis;" title="${p.name}">
                   <span class="dot" style="background:${p.color || 'var(--primary)'};display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;"></span>
                   <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</strong>
-                  <span class="caption muted" style="white-space:nowrap;">· ${p.animalsCount} ж.${p.areaHa ? ` · ${p.areaHa.toFixed(1)} га` : ''}</span>
+                  <span class="caption muted" style="white-space:nowrap;">· ${t('a.map.penCount', { n: p.animalsCount })}${p.areaHa ? ` · ${t('a.map.penArea', { n: p.areaHa.toFixed(1) })}` : ''}</span>
                 </span>
                 ${!p.isDemo ? html`
-                  <button type="button" class="btn btn-ghost btn-sm" data-delete-pen="${p.id}" data-name="${p.name}" title="Удалить загон" style="padding:4px 6px;color:var(--danger, #dc2626);flex-shrink:0;">
+                  <button type="button" class="btn btn-ghost btn-sm" data-delete-pen="${p.id}" data-name="${p.name}" title="${t('a.map.penDeleteTitle')}" aria-label="${t('a.map.penDeleteTitle')}" style="padding:4px 6px;color:var(--danger);flex-shrink:0;">
                     ${raw(icon('trash', 16))}
                   </button>
                 ` : ''}
@@ -390,7 +391,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
 
   function updateDrawLayers(): void {
     if (!map || !mapReady) return;
-    const prim = cssVar('--primary') || '#10B981';
+    const prim = cssVar('--primary');
     const src = map.getSource('draw-temp') as import('maplibre-gl').GeoJSONSource | undefined;
     let feat: any = null;
     if (drawPoints.length >= 3) {
@@ -479,11 +480,6 @@ export const mount: AppView['mount'] = async (el, ctx) => {
     const bar = $('#draw-bar', el);
     if (bar) {
       bar.style.display = 'flex';
-      const chromeEl = document.querySelector('.chrome');
-      if (chromeEl) {
-        const rect = chromeEl.getBoundingClientRect();
-        bar.style.top = `${Math.round(rect.bottom + 12)}px`;
-      }
     }
     map.getCanvas().style.cursor = 'crosshair';
     updateDrawLayers();
@@ -519,13 +515,12 @@ export const mount: AppView['mount'] = async (el, ctx) => {
       body: html`
         <div class="field">
           <label for="pen-name">${t('a.map.penName')}</label>
-          <input class="input" id="pen-name" name="name" required placeholder="Например, Северный выпас" autocomplete="off">
+          <input class="input" id="pen-name" name="name" required placeholder="${t('a.map.penNamePh')}" autocomplete="off">
         </div>
         <div class="field">
           <label for="pen-color">${t('a.map.penColor')}</label>
           <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.35rem;">
-            <input type="color" id="pen-color" name="color" value="#0D4A2B" style="width:48px;height:40px;padding:2px;border-radius:var(--r-chip,12px);cursor:pointer;border:1px solid var(--line-soft);background:var(--surface-2-white);">
-            <span class="caption muted">${t('a.map.penColor')}</span>
+            <input type="color" id="pen-color" name="color" value="${cssVar('--primary')}" style="width:48px;height:40px;padding:2px;border-radius:var(--r-chip,12px);cursor:pointer;border:1px solid var(--line-soft);background:var(--surface-2-white);">
           </div>
         </div>
         ${animals.length > 0 ? html`
@@ -533,9 +528,9 @@ export const mount: AppView['mount'] = async (el, ctx) => {
             <label>${t('a.map.penAnimals')}</label>
             <div style="max-height:160px;overflow-y:auto;border:1px solid var(--line-soft);border-radius:var(--r-field,16px);padding:0.75rem;background:var(--surface-0);display:flex;flex-direction:column;gap:0.4rem;">
               ${animals.map((a) => html`
-                <label class="check" style="margin:0;font-size:0.9rem;">
+                <label class="check" style="margin:0;font-size:14px;">
                   <input type="checkbox" name="animalId" value="${a.id}">
-                  <span><strong>${a.name}</strong> · Бирка ${a.tag} (${speciesName(a.species)})</span>
+                  <span><strong>${a.name}</strong> · ${t('a.map.penAnimalTag', { tag: a.tag })} (${speciesName(a.species)})</span>
                 </label>
               `)}
             </div>
@@ -546,7 +541,7 @@ export const mount: AppView['mount'] = async (el, ctx) => {
         const v = (n: string) => (form.elements.namedItem(n) as HTMLInputElement)?.value?.trim();
         const name = v('name');
         if (!name) return t('a.err.required');
-        const color = v('color') || '#10B981';
+        const color = v('color') || cssVar('--primary');
         const animalCheckboxes = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="animalId"]:checked'));
         const animalIds = animalCheckboxes.map((cb) => cb.value);
 

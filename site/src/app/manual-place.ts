@@ -7,7 +7,12 @@ export interface ManualPlaceResult {
   lat?: number;
   lng?: number;
   source?: 'browser' | 'pen' | 'farm' | 'map';
+  /** The call did nothing: the collar is already in GPS_MANUAL or a switch is in flight (the dragged point must not move). */
+  skipped?: boolean;
 }
+
+// collars whose switch to GPS_MANUAL is running right now
+const inflight = new Set<string>();
 
 function penCentre(p: PenDto): [number, number] | null {
   const ring = p.polygon.coordinates[0] ?? [];
@@ -18,7 +23,9 @@ function penCentre(p: PenDto): [number, number] | null {
 
 function browserPosition(): Promise<[number, number] | null> {
   if (!('geolocation' in navigator) || !navigator.geolocation) return Promise.resolve(null);
-  return new Promise((resolve) => {
+  // hard 10 s cap for the whole lookup: some browsers never call back (permission prompt left open)
+  const limit = new Promise<null>((resolve) => { window.setTimeout(() => resolve(null), 10000); });
+  const lookup = new Promise<[number, number] | null>((resolve) => {
     try {
       navigator.geolocation.getCurrentPosition(
         (p) => resolve(Number.isFinite(p.coords.latitude) && Number.isFinite(p.coords.longitude) ? [p.coords.longitude, p.coords.latitude] : null),
@@ -29,6 +36,7 @@ function browserPosition(): Promise<[number, number] | null> {
       resolve(null);
     }
   });
+  return Promise.race([lookup, limit]);
 }
 
 /**
@@ -37,9 +45,21 @@ function browserPosition(): Promise<[number, number] | null> {
  * animal's pen, else of any pen, else the map centre. Throws only when the mode switch itself fails; a failed placement
  * is reported in a toast and returned as `placed: false`.
  */
-export async function enterGpsManual(a: AnimalDto, opts: { pens?: PenDto[]; mapCenter?: () => [number, number] | null } = {}): Promise<ManualPlaceResult> {
+export async function enterGpsManual(a: AnimalDto, opts: { pens?: PenDto[]; mapCenter?: () => [number, number] | null; alive?: () => boolean } = {}): Promise<ManualPlaceResult> {
   if (!a.collarId) return { placed: false };
-  const res = await collarControlApi.setMode(a.collarId, 'GPS_MANUAL');
+  if (a.controlMode === 'GPS_MANUAL' || inflight.has(a.collarId)) return { placed: false, skipped: true };
+  const collarId = a.collarId;
+  inflight.add(collarId);
+  try {
+    return await enter(a, collarId, opts);
+  } finally {
+    inflight.delete(collarId);
+  }
+}
+
+async function enter(a: AnimalDto, collarId: string, opts: { pens?: PenDto[]; mapCenter?: () => [number, number] | null; alive?: () => boolean }): Promise<ManualPlaceResult> {
+  const gone = (): boolean => (opts.alive ? !opts.alive() : false); // the view was left meanwhile: no toasts
+  const res = await collarControlApi.setMode(collarId, 'GPS_MANUAL');
   const mode: CollarControlMode = 'GPS_MANUAL';
   a.controlMode = mode;
   a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
@@ -61,14 +81,14 @@ export async function enterGpsManual(a: AnimalDto, opts: { pens?: PenDto[]; mapC
     }
   }
   if (!point) {
-    toast(t('a.map.manualNoPoint'));
+    if (!gone()) toast(t('a.map.manualNoPoint'));
     return { placed: false };
   }
   const [lng, lat] = point;
   try {
-    await collarControlApi.setManualPosition(a.collarId, lat, lng);
+    await collarControlApi.setManualPosition(collarId, lat, lng);
   } catch (e) {
-    toast(`${t('a.map.manualPlaceFail')} ${errText(e)}`);
+    if (!gone()) toast(`${t('a.map.manualPlaceFail')} ${errText(e)}`);
     return { placed: false };
   }
   a.lat = lat;
@@ -76,6 +96,6 @@ export async function enterGpsManual(a: AnimalDto, opts: { pens?: PenDto[]; mapC
   a.controlMode = mode;
   a.positionSource = 'MANUAL';
   a.lastSeenAt = new Date().toISOString();
-  toast(t(source === 'browser' ? 'a.map.manualPlacedBrowser' : source === 'pen' ? 'a.map.manualPlacedPen' : source === 'farm' ? 'a.map.manualPlacedFarm' : 'a.map.manualPlacedMap'));
+  if (!gone()) toast(t(source === 'browser' ? 'a.map.manualPlacedBrowser' : source === 'pen' ? 'a.map.manualPlacedPen' : source === 'farm' ? 'a.map.manualPlacedFarm' : 'a.map.manualPlacedMap'));
   return { placed: true, lat, lng, source };
 }

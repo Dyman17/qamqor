@@ -32,12 +32,12 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <p>${t('a.co.seen')}: ${timeEl(c.lastSeenAt)}</p><p>${t('a.co.signal')}: <span class="num">${rssi(c)}</span></p>${c.firmwareVersion ? html`<p>${t('a.co.fw')}: ${c.firmwareVersion}</p>` : ''}
           <p class="caption muted">${t('a.co.offlineRule')}</p></section>
       </div>
-      <section class="panel-block"><div class="row-actions">
+      <section class="panel-block"><h2 class="title-2">${t('a.co.testTitle')}</h2><div class="row-actions">
         <button type="button" class="btn btn-secondary" id="t-spk" data-write>${t('a.co.testSpeaker')}</button>
         <button type="button" class="btn btn-secondary" id="t-buz" data-write>${t('a.co.testBuzzer')}</button>
         <button type="button" class="btn btn-secondary" id="t-vib" data-write>${t('a.co.testVib')}</button></div>
         <p class="muted" id="queued" role="status"></p></section>
-      ${ctx.isOwner ? html`<section class="panel-block danger-zone"><div class="row-actions"><button type="button" class="btn btn-secondary" id="rotate" data-write>${t('a.co.rotate')}</button><button type="button" class="btn btn-danger" id="remove" data-write>${t('a.co.delete')}</button></div></section>` : ''}`);
+      ${ctx.isOwner ? html`<section class="panel-block danger-zone"><h2 class="title-2">${t('a.co.dangerTitle')}</h2><div class="row-actions"><button type="button" class="btn btn-secondary" id="rotate" data-write>${t('a.co.rotate')}</button><button type="button" class="btn btn-danger" id="remove" data-write>${t('a.co.delete')}</button></div></section>` : ''}`);
 
     $('#unassign', el)?.addEventListener('click', async () => { try { await patch(`/devices/${encodeURIComponent(id)}`, { animalId: null }); reload(); } catch (e) { toast(errText(e)); } });
     $('#assign', el)?.addEventListener('click', async () => {

@@ -70,6 +70,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       st.next = r.next; st.loaded = true;
       lastHash = hashOf(st.items, st.next);
       draw();
+      if (reset && st.status === 'ACTIVE' && !st.type) ctx.refreshChrome(); // nav badge = the same ACTIVE count the list just showed
     } catch (e) {
       if (my !== seq || !el.isConnected) return;
       list.innerHTML = errorState(e).s;

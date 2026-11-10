@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { navigate } from '../../router';
 import type { AppCtx, AppView } from '../app';
 import { ApiError, collarControlApi, del, get, patch, post, type AlertDto, type AnimalDto, type CollarControlMode, type CollarDto, type EventsDto, type PenDto } from '../api';
-import { animalBadge, confirmDialog, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
+import { animalBadge, collarBadge, confirmDialog, controlModeLabel, errText, loadInto, offlineGuard, pulseThreatBadge, SPECIES, speciesName, timeEl, toast } from '../common';
 import { formModal } from '../forms';
 import { icon } from '../../ui/icons';
 import { enterGpsManual } from '../manual-place';
@@ -60,12 +60,12 @@ const alertLabel = (a: AlertDto) => t(`a.al.t.${a.type}` as 'a.al.t.GPS_LOST');
 function formatTtl(iso?: string | null): string {
   if (!iso) return '';
   const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return '0 мин';
+  if (ms <= 0) return t('a.units.min', { n: 0 });
   const min = Math.ceil(ms / 60000);
-  if (min < 60) return `${min} мин`;
+  if (min < 60) return t('a.units.min', { n: min });
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+  return m > 0 ? t('a.units.hmin', { h, m }) : t('a.units.h', { n: h });
 }
 
 export const mount: AppView['mount'] = (el, ctx) => {
@@ -83,7 +83,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const isLive = at ? Date.now() - new Date(at).getTime() < 15000 : false;
     const val = hr != null ? t('a.animal.bpm', { n: hr }) : '—';
     const sub = at
-      ? html`${timeEl(at)} ${isLive ? html`<span class="badge badge-online"><span class="dot"></span> ${t('a.animal.livePulse')}</span>` : html`<span class="muted">(${t('a.animal.noFinger')})</span>`}`
+      ? html`${timeEl(at)} ${isLive ? html`<span class="badge badge-online" title="${t('a.animal.streamTitle')}"><span class="dot"></span> ${t('a.animal.livePulse')}</span>` : html`<span class="muted">(${t('a.animal.noFinger')})</span>`}`
       : html`${t('a.animal.noPulse')}`;
     return { val, sub, isLive };
   };
@@ -94,25 +94,25 @@ export const mount: AppView['mount'] = (el, ctx) => {
       return html`
         <div class="pulse-source-box">
           <div class="pulse-source-head">
-            <span>Норма вида (${speciesName(a.species)}): <strong>${pt?.normalMin ?? '—'}–${pt?.normalMax ?? '—'} уд/мин</strong></span>
+            <span>${t('a.animal.normSpecies', { species: speciesName(a.species) })} <strong>${pt?.normalMin ?? '—'}–${pt?.normalMax ?? '—'} ${t('a.animal.bpmUnit')}</strong></span>
             <span class="pulse-source-tag">${pt?.source ?? 'Merck'}</span>
           </div>
-          <span class="caption muted">Физиологические показатели покоя (Merck Veterinary Manual).</span>
+          <span class="caption muted">${t('a.animal.restNote')}</span>
         </div>`;
     }
     const sign = pt.deltaPercent > 0 ? '+' : '';
     const isCrit = pt.level === 'CRITICAL';
     const isElev = pt.level === 'ELEVATED';
     return html`
-      <div class="pulse-source-box" style="${isCrit ? 'border-color:#fca5a5;background:#fff5f5;' : isElev ? 'border-color:#fed7aa;background:#fffaf0;' : ''}">
+      <div class="pulse-source-box ${isCrit ? 'is-crit' : isElev ? 'is-elev' : ''}">
         <div class="pulse-source-head">
-          <span>Норма: <strong class="num">${pt.normalMin}–${pt.normalMax}</strong> уд/мин · База: <strong class="num">${pt.baseline}</strong> (${sign}${pt.deltaPercent}%)</span>
+          <span>${t('a.animal.normPlain')} <strong class="num">${pt.normalMin}–${pt.normalMax}</strong> ${t('a.animal.bpmUnit')} · ${t('a.animal.baseline')} <strong class="num">${pt.baseline}</strong> (${sign}${pt.deltaPercent}%)</span>
           <span class="pulse-source-tag ${pt.isAssumption ? 'is-assumption' : ''}">
-            ${pt.source ?? 'Merck Veterinary Manual'}${pt.isAssumption ? ' (допущение)' : ''}
+            ${pt.source ?? 'Merck Veterinary Manual'}${pt.isAssumption ? ` (${t('a.animal.pulseAssumption')})` : ''}
           </span>
         </div>
-        ${pt.sourceNoteRu ? html`<p class="caption muted" style="margin:0.25rem 0 0 0;font-size:0.8rem;">${pt.sourceNoteRu}</p>` : ''}
-        ${isCrit ? html`<div style="margin-top:0.4rem;font-weight:600;color:#991b1b;display:flex;align-items:center;gap:0.35rem;font-size:0.84rem;">${raw(icon('warning-circle', 16))} Острый стресс / угроза хищника или бегство! Проверьте животное на пастбище!</div>` : ''}
+        ${pt.sourceNoteRu ? html`<p class="caption muted pulse-source-note">${pt.sourceNoteRu}</p>` : ''}
+        ${isCrit ? html`<div class="pulse-crit-msg">${raw(icon('warning-circle', 16))} ${t('a.animal.pulseCritMsg')}</div>` : ''}
       </div>`;
   };
 
@@ -121,16 +121,16 @@ export const mount: AppView['mount'] = (el, ctx) => {
       return html`<span class="badge badge-online"><span class="dot"></span> ${t('a.animal.zoneSafe')}</span>`;
     }
     if (zone === 'YELLOW') {
-      return html`<span class="badge badge-warn"><span class="dot"></span> ${t('a.animal.zoneWarn')}</span>`;
+      return html`<span class="badge badge-warning"><span class="dot"></span> ${t('a.animal.zoneWarn')}</span>`;
     }
     if (zone === 'ORANGE') {
-      return html`<span class="badge badge-warn" style="color:var(--warning);"><span class="dot"></span> ${t('a.animal.zoneCrit')}</span>`;
+      return html`<span class="badge badge-warning"><span class="dot"></span> ${t('a.animal.zoneCrit')}</span>`;
     }
     if (zone === 'RED' || inFence === false) {
       return html`<span class="badge badge-danger"><span class="dot"></span> ${t('a.animal.zoneBreach')}</span>`;
     }
     if (zone === 'ESCAPE') {
-      return html`<span class="badge badge-danger" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;"><span class="dot" style="background:#dc2626;"></span> ${t('a.animal.zoneEscape')}</span>`;
+      return html`<span class="badge badge-danger pulse-crit-badge"><span class="dot"></span> ${t('a.animal.zoneEscape')}</span>`;
     }
     return html`<span class="caption muted">${t('a.st.ok')}</span>`;
   };
@@ -144,7 +144,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
     ]);
     return { animal, ev, pens, collars };
   }, ({ animal: a, ev, pens, collars }) => {
-    ctx.setTitle(`${a.name} · ${a.tag}`);
+    if (alive()) document.title = `${a.name} · ${a.tag} | Qamqor`; // the top bar keeps the short page title; the full name is the page heading
     ctx.setActions(html`<button type="button" class="btn btn-secondary btn-sm" id="edit" data-write>${t('a.animal.edit')}</button><button type="button" class="btn btn-danger btn-sm" id="remove" data-write>${t('a.animal.delete')}</button>`);
     const pen = pens.find((p) => p.id === a.penId);
     const sig = ev?.signals;
@@ -156,14 +156,13 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
     setHtml(el, html`
       <p><a href="/app/herd">${t('a.animal.back')}</a></p>
-      <div class="profile-head" style="align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
-        <div style="flex:1;min-width:240px;">
-          <div id="badge-wrap" style="margin-bottom:0.4rem;">${animalBadge(a)}</div>
-          <h1 class="title-1" style="font-size:1.85rem;margin:0 0 0.25rem 0;">${a.name} ${a.isDemo ? html`<span class="badge" style="font-size:0.75rem;">${t('a.demo.tag')}</span>` : ''}</h1>
-          <p class="muted" style="margin:0;font-size:1rem;">${a.breed ? html`<strong>${a.breed}</strong> · ` : ''}${t('a.animal.f.tag')} <strong class="num">${a.tag}</strong> · ${speciesName(a.species)}</p>
+      <div class="profile-head animal-head">
+        <div class="animal-head-main">
+          <div id="badge-wrap">${animalBadge(a)}</div>
+          <h2 class="title-1 animal-name">${a.name} ${a.isDemo ? html`<span class="demo-tag">${t('a.demo.tag')}</span>` : ''}</h2>
+          <p class="muted animal-meta">${a.breed ? html`<strong>${a.breed}</strong> · ` : ''}${t('a.animal.f.tag')} <strong class="num">${a.tag}</strong> · ${speciesName(a.species)}</p>
         </div>
         <div class="row-actions">
-          <span class="badge badge-online" id="stream-indicator" title="Server-Sent Events active"><span class="dot"></span> ${t('a.animal.streamLive')}</span>
           <a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}">${t('a.map.showOnMap')}</a>
         </div>
       </div>
@@ -171,39 +170,39 @@ export const mount: AppView['mount'] = (el, ctx) => {
       <div class="grid-2">
         <!-- 1. Мониторинг здоровья и пульса (Live) -->
         <section class="panel-block" aria-labelledby="h-pulse">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <h2 class="title-2" id="h-pulse" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('heartbeat', 20))} ${t('a.animal.pulse')}</h2>
+          <div class="card-head">
+            <h2 class="title-2 with-icon" id="h-pulse">${raw(icon('heartbeat', 20))} ${t('a.animal.pulse')}</h2>
             <div id="pulse-threat-wrap">${pulseThreatBadge(a.pulseThreat)}</div>
           </div>
-          <p class="num font-mono" id="pulse-val" style="font-size:2.8rem;font-weight:700;letter-spacing:-0.03em;margin:0.25rem 0;">${pi.val}</p>
+          <p class="num font-mono pulse-val-xl" id="pulse-val">${pi.val}</p>
           <p class="muted" id="pulse-sub">${pi.sub}</p>
           <div id="pulse-details">${threatDetails(a)}</div>
         </section>
 
         <!-- 2. Положение и привязка ошейника (GPS & Device) -->
         <section class="panel-block" aria-labelledby="h-pos">
-          <h2 class="title-2" id="h-pos" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('crosshair-simple', 20))} ${t('a.animal.position')}</h2>
+          <h2 class="title-2 with-icon" id="h-pos">${raw(icon('crosshair-simple', 20))} ${t('a.animal.position')}</h2>
           <p class="num" id="pos-val">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</p>
-          <p class="muted" id="pos-sub">${t('a.animal.accuracy')}: ${a.accuracyM != null ? `${Math.round(a.accuracyM)} m` : '—'} · ${timeEl(a.lastSeenAt)}</p>
-          <div style="margin-top:0.6rem;padding-top:0.4rem;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;">
-            <span id="col-val"><strong>${t('a.animal.collar')}:</strong> ${a.collarId ? html`<a href="/app/collars/${a.collarId}">${a.collarId}</a>${collar ? html` <span class="badge badge-sm ${collar.status === 'ONLINE' ? 'badge-online' : ''}">${collar.status}</span>` : ''}` : t('a.herd.noCollar')}</span>
+          <p class="muted" id="pos-sub">${t('a.animal.accuracy')}: ${a.accuracyM != null ? t('a.units.m', { n: Math.round(a.accuracyM) }) : '—'} · ${timeEl(a.lastSeenAt)}</p>
+          <div class="collar-row">
+            <span id="col-val"><span class="muted">${t('a.animal.collar')}:</span> ${a.collarId ? html`<a class="num collar-id" href="/app/collars/${a.collarId}">${a.collarId}</a>${collar ? html` ${collarBadge(collar)}` : ''}` : t('a.herd.noCollar')}</span>
             ${a.collarId ? html`<button type="button" class="btn btn-secondary btn-sm" id="unlink" data-write>${t('a.animal.unlink')}</button>` : ''}
           </div>
         </section>
 
         <!-- 3. Если ошейник не привязан — блок быстрой привязки (как в приложении) -->
         ${!a.collarId ? html`
-          <section class="panel-block" id="assign-card" style="grid-column: 1 / -1; border-left: 4px solid var(--primary);">
-            <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;">${raw(icon('cpu', 20))} ${t('a.animal.assignCollarTitle')}</h2>
+          <section class="panel-block span-all assign-card" id="assign-card">
+            <h2 class="title-2 with-icon">${raw(icon('cpu', 20))} ${t('a.animal.assignCollarTitle')}</h2>
             ${freeCollars.length === 0
               ? html`<p class="caption muted">${t('a.animal.noFreeCollars')}</p>`
               : html`
-                <p class="caption muted" style="margin-bottom:0.75rem;">${t('a.animal.pickFreeCollar')}</p>
-                <div class="row-actions" style="flex-wrap:wrap;gap:0.6rem;">
+                <p class="caption muted">${t('a.animal.pickFreeCollar')}</p>
+                <div class="row-actions">
                   ${freeCollars.map((c) => html`
-                    <div style="display:inline-flex;align-items:center;gap:0.75rem;padding:0.5rem 0.85rem;background:var(--surface-1);border-radius:var(--r-card);border:1px solid var(--line-soft);">
-                      <span class="font-mono num" style="font-weight:700;font-size:1.05rem;">${c.code ?? c.deviceId}</span>
-                      <span class="badge badge-sm ${c.status === 'ONLINE' ? 'badge-online' : ''}">${c.status}</span>
+                    <div class="free-collar">
+                      <span class="font-mono num free-collar-id">${c.code ?? c.deviceId}</span>
+                      ${collarBadge(c)}
                       <button type="button" class="btn btn-primary btn-sm" data-assign-collar="${c.deviceId}">${t('a.animal.assignBtn')}</button>
                     </div>
                   `)}
@@ -213,25 +212,25 @@ export const mount: AppView['mount'] = (el, ctx) => {
         ` : ''}
 
         <!-- 4. Единый блок управления: СМЕНА РЕЖИМОВ (AUTO / GPS_MANUAL / MANUAL) -->
-        <section class="panel-block" id="ctrl-mode-card" style="grid-column: 1 / -1;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-2);">
-            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
-              <h2 class="title-2" style="display:flex;align-items:center;gap:0.4rem;margin:0;">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
+        <section class="panel-block span-all" id="ctrl-mode-card">
+          <div class="card-head mode-head">
+            <div class="mode-head-title">
+              <h2 class="title-2 with-icon">${raw(icon('gear-six', 20))} ${t('a.animal.modeTitle')}</h2>
               <div id="mode-ttl-wrap">
                 ${a.controlModeExpiresAt && currentMode !== 'AUTO' ? html`
-                  <span class="mode-ttl-badge" title="Срок действия">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>
+                  <span class="mode-ttl-badge" title="${t('a.animal.modeTtlTitle')}">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>
                 ` : ''}
               </div>
             </div>
             <!-- Переключатель 3 режимов -->
-            <div class="tabs" role="tablist" style="margin:0;gap:4px;flex-wrap:wrap;">
-              <button type="button" class="tab" id="mode-tab-auto" role="tab" aria-current="${currentMode === 'AUTO' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+            <div class="tabs mode-tabs" role="tablist" aria-label="${t('a.animal.modeTitle')}">
+              <button type="button" class="tab" id="mode-tab-auto" role="tab" aria-selected="${currentMode === 'AUTO'}">
                 ${raw(icon('map-trifold', 18))} ${t('a.animal.modeAuto')}
               </button>
-              <button type="button" class="tab" id="mode-tab-gps-manual" role="tab" aria-current="${currentMode === 'GPS_MANUAL' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+              <button type="button" class="tab" id="mode-tab-gps-manual" role="tab" aria-selected="${currentMode === 'GPS_MANUAL'}">
                 ${raw(icon('crosshair-simple', 18))} ${t('a.animal.modeGpsManual')}
               </button>
-              <button type="button" class="tab" id="mode-tab-manual" role="tab" aria-current="${currentMode === 'MANUAL' ? 'true' : 'false'}" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;cursor:pointer;">
+              <button type="button" class="tab" id="mode-tab-manual" role="tab" aria-selected="${currentMode === 'MANUAL'}">
                 ${raw(icon('speaker-high', 18))} ${t('a.animal.modeManual')}
               </button>
             </div>
@@ -240,11 +239,11 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <!-- Режим 1: Автоматический (Геозона) -->
           <div id="mode-content-auto" style="display:${currentMode === 'AUTO' ? 'block' : 'none'};">
             <p class="caption muted">${t('a.animal.modeAutoHint')}</p>
-            <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin:0.75rem 0;">
+            <div class="mode-row">
               <div id="zone-wrap">${zoneBadge(null, a.status !== 'danger')}</div>
               <div><strong>${t('a.animal.pen')}:</strong> ${pen ? html`<a href="/app/map?pen=${pen.id}">${pen.name}</a>` : t('a.herd.noPen')}</div>
             </div>
-            <div id="sig-limits" class="caption muted" style="padding-top:0.6rem;border-top:1px solid var(--line-soft);">
+            <div id="sig-limits" class="caption muted mode-limits">
               ${sig ? html`<span>${t('a.animal.sound')}: <strong class="num">${sig.sound.used}</strong> (${lim(sig.sound.limit)}) · ${t('a.animal.vibration')}: <strong class="num">${sig.vibration.used}</strong> (${lim(sig.vibration.limit)})</span>` : html`<span>${t('a.animal.signals')}: —</span>`}
             </div>
           </div>
@@ -252,8 +251,8 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <!-- Режим 2: GPS вручную (Перетаскивание точки оператором) -->
           <div id="mode-content-gps-manual" style="display:${currentMode === 'GPS_MANUAL' ? 'block' : 'none'};">
             <p class="caption muted">${t('a.animal.modeGpsManualHint')}</p>
-            <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin:0.75rem 0;">
-              <a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}&drag=1" style="display:inline-flex;align-items:center;gap:0.4rem;min-height:44px;">
+            <div class="mode-row">
+              <a class="btn btn-primary btn-sm" href="/app/map?animal=${a.id}&drag=1">
                 ${raw(icon('crosshair-simple', 18))} ${t('a.animal.dragOnMap')}
               </a>
               <span class="caption muted">${a.lat != null && a.lng != null ? t('a.animal.coords', { lat: a.lat.toFixed(5), lng: a.lng.toFixed(5) }) : '—'}</span>
@@ -263,12 +262,12 @@ export const mount: AppView['mount'] = (el, ctx) => {
           <!-- Режим 3: Ручной стимул (Оператор) -->
           <div id="mode-content-manual" style="display:${currentMode === 'MANUAL' ? 'block' : 'none'};">
             <p class="caption muted">${t('a.animal.modeManualHint')}</p>
-            <div class="row-actions" style="margin-top:0.75rem;flex-wrap:wrap;">
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-spk" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('speaker-high', 18))} ${t('a.animal.spkBtn')}</button>
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-buz" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('bell-ringing', 18))} ${t('a.animal.buzBtn')}</button>
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-vib" ${!a.collarId ? raw('disabled') : ''} data-write style="min-height:48px;padding:0 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:0.5rem;">${raw(icon('vibrate', 18))} ${t('a.animal.vibBtn')}</button>
+            <div class="row-actions mode-row">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-spk" ${!a.collarId ? raw('disabled') : ''} data-write>${raw(icon('speaker-high', 18))} ${t('a.animal.spkBtn')}</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-buz" ${!a.collarId ? raw('disabled') : ''} data-write>${raw(icon('bell-ringing', 18))} ${t('a.animal.buzBtn')}</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-vib" ${!a.collarId ? raw('disabled') : ''} data-write>${raw(icon('vibrate', 18))} ${t('a.animal.vibBtn')}</button>
             </div>
-            <p class="caption muted font-mono" id="cmd-status" role="status" style="margin-top:0.5rem;min-height:1.2rem;"></p>
+            <p class="caption muted font-mono cmd-status" id="cmd-status" role="status"></p>
           </div>
         </section>
       </div>
@@ -297,7 +296,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         pVal.textContent = String(pFresh.val);
         // Микро-анимация пульса при поступлении нового значения
         pVal.style.transition = 'color 0.2s ease';
-        pVal.style.color = pFresh.isLive ? 'var(--ok, #16a34a)' : 'inherit';
+        pVal.style.color = pFresh.isLive ? 'var(--ok)' : 'inherit';
         setTimeout(() => { if (pVal) pVal.style.color = 'inherit'; }, 400);
       }
       if (pSub) setHtml(pSub, pFresh.sub);
@@ -306,7 +305,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
       if (bWrap) setHtml(bWrap, animalBadge(fresh as AnimalDto));
 
       if (posVal) posVal.textContent = fresh.lat != null && fresh.lng != null ? t('a.animal.coords', { lat: fresh.lat.toFixed(5), lng: fresh.lng.toFixed(5) }) : '—';
-      if (posSub) setHtml(posSub, html`${t('a.animal.accuracy')}: ${fresh.accuracyM != null ? `${Math.round(fresh.accuracyM)} m` : '—'} · ${timeEl(fresh.lastSeenAt)}`);
+      if (posSub) setHtml(posSub, html`${t('a.animal.accuracy')}: ${fresh.accuracyM != null ? t('a.units.m', { n: Math.round(fresh.accuracyM) }) : '—'} · ${timeEl(fresh.lastSeenAt)}`);
       if (zWrap && (zone !== undefined || inFence !== undefined)) {
         setHtml(zWrap, zoneBadge(zone, inFence));
       }
@@ -376,7 +375,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         if ('vibrate' in navigator) { try { navigator.vibrate([20, 60, 20]); } catch {} }
         if (statusEl) {
           statusEl.textContent = t('a.animal.cmdSent');
-          statusEl.style.color = 'var(--ok, #16a34a)';
+          statusEl.style.color = 'var(--ok)';
         }
         setTimeout(() => {
           if (statusEl && statusEl.textContent === t('a.animal.cmdSent')) statusEl.textContent = '';
@@ -388,7 +387,7 @@ export const mount: AppView['mount'] = (el, ctx) => {
         toast(err);
         if (statusEl) {
           statusEl.textContent = err;
-          statusEl.style.color = 'var(--danger, #dc2626)';
+          statusEl.style.color = 'var(--danger)';
         }
       }
     };
@@ -411,9 +410,9 @@ export const mount: AppView['mount'] = (el, ctx) => {
     const ttlWrap = $('#mode-ttl-wrap', el);
 
     const updateModeUi = (m: CollarControlMode) => {
-      tabAuto?.setAttribute('aria-current', m === 'AUTO' ? 'true' : 'false');
-      tabGpsManual?.setAttribute('aria-current', m === 'GPS_MANUAL' ? 'true' : 'false');
-      tabManual?.setAttribute('aria-current', m === 'MANUAL' ? 'true' : 'false');
+      ([[tabAuto, 'AUTO'], [tabGpsManual, 'GPS_MANUAL'], [tabManual, 'MANUAL']] as const).forEach(([b, v]) => {
+        b?.setAttribute('aria-selected', String(m === v));
+      });
 
       if (contentAuto) contentAuto.style.display = m === 'AUTO' ? 'block' : 'none';
       if (contentGpsManual) contentGpsManual.style.display = m === 'GPS_MANUAL' ? 'block' : 'none';
@@ -421,25 +420,29 @@ export const mount: AppView['mount'] = (el, ctx) => {
 
       if (ttlWrap) {
         if (m !== 'AUTO' && a.controlModeExpiresAt) {
-          setHtml(ttlWrap, html`<span class="mode-ttl-badge" title="Срок действия">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>`);
+          setHtml(ttlWrap, html`<span class="mode-ttl-badge" title="${t('a.animal.modeTtlTitle')}">${raw(icon('clock', 14))} ${t('a.animal.modeAutoTtl', { time: formatTtl(a.controlModeExpiresAt) })}</span>`);
         } else {
           ttlWrap.innerHTML = '';
         }
       }
     };
 
+    let modeBusy = false;
     const setMode = async (m: CollarControlMode) => {
       if (!a.collarId) {
         toast(t('a.animal.noCollarNotice'));
         return;
       }
+      if (modeBusy || (m === 'GPS_MANUAL' && (a.controlMode ?? currentMode) === 'GPS_MANUAL')) return; // re-entering must not move the dragged point
+      modeBusy = true;
       if ('vibrate' in navigator) { try { navigator.vibrate([18]); } catch {} }
       try {
         if (m === 'GPS_MANUAL') {
           // switch the mode and put the animal's point on the map (browser geolocation, else pen centre) so it can be dragged there
-          const r = await enterGpsManual(a);
+          const r = await enterGpsManual(a, { alive });
+          if (r.skipped) return;
           updateModeUi('GPS_MANUAL');
-          if (!r.placed) toast(t('a.animal.modeChanged', { mode: m }));
+          if (!r.placed && alive()) toast(t('a.animal.modeChanged', { mode: controlModeLabel(m) }));
           return;
         }
         const res = await collarControlApi.setMode(a.collarId, m);
@@ -447,9 +450,11 @@ export const mount: AppView['mount'] = (el, ctx) => {
         a.controlModeExpiresAt = res.collar.controlModeExpiresAt ?? null;
         a.positionSource = res.collar.positionSource ?? 'GPS';
         updateModeUi(m);
-        toast(t('a.animal.modeChanged', { mode: m }));
+        toast(t('a.animal.modeChanged', { mode: controlModeLabel(m) }));
       } catch (e) {
         toast(errText(e));
+      } finally {
+        modeBusy = false;
       }
     };
 
